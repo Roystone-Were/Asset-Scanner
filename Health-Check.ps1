@@ -99,7 +99,12 @@ if ($noTag.Count -gt 0) {
 # --- Empty serials ---
 $noSerial = @($rows | Where-Object { -not $_.serial.Trim() })
 if ($noSerial.Count -gt 0) {
-  $ids = ($noSerial | ForEach-Object { "Asset #$($_.id) ($($_.tag))" }) -join ', '
+  $ids = ($noSerial | ForEach-Object {
+    $bits = @()
+    if ($_.tag.Trim()) { $bits += $_.tag.Trim() }
+    if ($_.model.Trim()) { $bits += "model $($_.model.Trim())" }
+    if ($bits.Count -gt 0) { "Asset #$($_.id) ($($bits -join ' · '))" } else { "Asset #$($_.id)" }
+  }) -join ', '
   Add-Issue "Assets with no serial number" "$($noSerial.Count) assets have no serial: $ids"
 } else {
   [void]$sb.AppendLine("All assets have a serial number. :white_check_mark:")
@@ -112,7 +117,11 @@ $stale = @($rows | Where-Object { -not $_.verified -or $_.verified -lt $cutoff }
 if ($stale.Count -gt 0) {
   $lines = foreach ($s in $stale) {
     $v = if ($s.verified) { $s.verified.ToString('yyyy-MM-dd') } else { 'never' }
-    "- Asset #$($s.id) ($($s.tag)) - last verified $v"
+    $bits = @()
+    if ($s.tag.Trim()) { $bits += $s.tag.Trim() }
+    if ($s.serial.Trim()) { $bits += "serial $($s.serial.Trim())" }
+    $ident = if ($bits.Count -gt 0) { "Asset #$($s.id) ($($bits -join ' · '))" } else { "Asset #$($s.id)" }
+    "- $ident - last verified $v"
   }
   Add-Issue "Assets not verified in the last $StaleDays days" "$($stale.Count) assets - `n$($lines -join "`n")"
 } else {
