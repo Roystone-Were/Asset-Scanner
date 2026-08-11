@@ -272,9 +272,12 @@
       }
 
       // ---------- Graph ----------
-      async function graphGet(token, url) {
+      async function graphGet(token, url, extraHeaders) {
         const res = await fetch(url, {
-          headers: { Authorization: "Bearer " + token },
+          headers: Object.assign(
+            { Authorization: "Bearer " + token },
+            extraHeaders || {},
+          ),
         });
         if (!res.ok)
           throw new Error(
@@ -306,6 +309,21 @@
         if (!list) throw new Error("List '" + LIST_NAME + "' not found");
         LIST_ID = list.id;
       }
+      // Returns the matched field key if `fields` matches the cleaned value
+      // against any lookup column, otherwise null.
+      function matchFields(f, clean) {
+        for (const key of Object.keys(f || {})) {
+          const k = key.toLowerCase().replace(/[^a-z]/g, "");
+          const isKey =
+            k === "assettag" ||
+            k === "title" ||
+            k === "serialnumber" ||
+            k === "serial";
+          if (isKey && String(f[key]).toLowerCase() === clean) return key;
+        }
+        return null;
+      }
+
       async function lookup(code) {
         const result = document.getElementById("result");
         result.innerHTML =
@@ -315,32 +333,64 @@
         try {
           const token = await getToken();
           if (!SITE_ID) await resolveSite(token);
-          const url =
+          const base =
             "https://graph.microsoft.com/v1.0/sites/" +
             SITE_ID +
             "/lists/" +
             LIST_ID +
-            "/items?expand=fields&$top=999";
-          const data = await graphGet(token, url);
+            "/items?expand=fields";
           const clean = (code || "").trim().toLowerCase();
           let item = null;
           let matchedField = "";
-          for (const it of data.value) {
-            const f = it.fields || {};
-            for (const key of Object.keys(f)) {
-              const k = key.toLowerCase().replace(/[^a-z]/g, "");
-              const isKey =
-                k === "assettag" ||
-                k === "title" ||
-                k === "serialnumber" ||
-                k === "serial";
-              if (isKey && String(f[key]).toLowerCase() === clean) {
-                item = f;
-                matchedField = key;
-                break;
+
+          // Fast path: let SharePoint filter server-side so the lookup cost
+          // stays constant as the list grows. Custom columns must be indexed
+          // for this to work (see Index-LookupFields.ps1); an unindexed or
+          // missing field errors out and we just try the next candidate.
+          const raw = (code || "").trim();
+          for (const fname of ["Title", "SerialNumber", "AssetTag"]) {
+            try {
+              const q = encodeURIComponent(
+                "fields/" + fname + " eq '" + raw.replace(/'/g, "''") + "'",
+              );
+              // SharePoint only allows $filter on indexed columns; this header
+              // permits it on unindexed ones too (fine for small lists - the
+              // paged fallback below covers the rare failure).
+              const data = await graphGet(token, base + "&$filter=" + q, {
+                Prefer:
+                  "HonorNonIndexedQueriesWarningMayFailRandomly",
+              });
+              for (const it of data.value) {
+                const key = matchFields(it.fields, clean);
+                if (key) {
+                  item = it.fields;
+                  matchedField = key;
+                  break;
+                }
               }
+              if (item) break;
+            } catch (e) {
+              // Field not present or not indexed - try the next one.
             }
-            if (item) break;
+          }
+
+          // Fallback: fetch everything with paging (no $top ceiling) and
+          // match client-side, same as before.
+          if (!item) {
+            let url = base + "&$top=200";
+            while (url) {
+              const data = await graphGet(token, url);
+              for (const it of data.value) {
+                const key = matchFields(it.fields, clean);
+                if (key) {
+                  item = it.fields;
+                  matchedField = key;
+                  break;
+                }
+              }
+              if (item) break;
+              url = data["@odata.nextLink"] || null;
+            }
           }
           if (!item) {
             result.innerHTML =
