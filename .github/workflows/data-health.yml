@@ -63,6 +63,10 @@ jobs:
         run: |
           $report = Get-Content "$env:GITHUB_WORKSPACE\health-report.md" -Raw
           if ($report -match "## Issues found") {
+            # @mention the owner so a notification is guaranteed even with
+            # default watch settings (bell + email to the GitHub account).
+            $report = "cc @Roystone-Were`n`n" + $report
+            Set-Content "$env:GITHUB_WORKSPACE\health-report.md" $report -Encoding UTF8
             gh issue create --title "Monthly asset data health report" --body-file "$env:GITHUB_WORKSPACE\health-report.md"
           } else {
             Write-Host "All checks passed - no issue filed."
