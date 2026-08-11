@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Xana Asset Lookup</title>
+    <!-- MSAL.js v2 (auth code + PKCE) - local copy -->
+    <script src="lib/msal-browser.min.js"></script>
+    <!-- html5-qrcode (camera barcode/QR scanner) - local copy -->
+    <script src="lib/html5-qrcode.min.js"></script>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #1e293b;
+        --card2: #273449;
+        --accent: #3b82f6;
+        --green: #107c10;
+        --orange: #ff8c00;
+        --red: #d13438;
+        --grey: #605e5c;
+        --blue: #0078d4;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 20px;
+      }
+      .wrap {
+        max-width: 460px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.3rem;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      p.sub {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-bottom: 18px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        flex: 1;
+      }
+      button.secondary {
+        background: var(--card2);
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        background: var(--card);
+        color: var(--text);
+        font-size: 1rem;
+        margin-bottom: 10px;
+      }
+      #qr-reader {
+        width: 100%;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #000;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid #334155;
+        border-radius: 16px;
+        padding: 18px;
+        margin-top: 16px;
+      }
+      .card h2 {
+        font-size: 1.05rem;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .badge {
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.75rem;
+        padding: 5px 12px;
+        border-radius: 999px;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        padding: 9px 0;
+        border-bottom: 1px solid #2b3850;
+        font-size: 0.92rem;
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .row span:first-child {
+        color: var(--muted);
+      }
+      .row span:last-child {
+        font-weight: 600;
+        text-align: right;
+      }
+      .msg {
+        margin-top: 14px;
+        padding: 12px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 0.9rem;
+      }
+      .err {
+        background: rgba(209, 52, 56, 0.15);
+        color: #fca5a5;
+      }
+      .ok {
+        background: rgba(16, 124, 16, 0.15);
+        color: #86efac;
+      }
+      .info {
+        background: rgba(59, 130, 246, 0.12);
+        color: #93c5fd;
+      }
+      #authState {
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>📦 Xana Asset Lookup</h1>
+      <p class="sub">
+        Scan the vendor barcode on a device (or type its Serial No.) to pull the
+        asset's details from SharePoint.
+      </p>
+      <div id="authState">Signing in…</div>
+
+      <div id="app" class="hidden">
+        <div class="toolbar">
+          <button id="btnScan">📷 Scan Tag</button>
+          <button id="btnStop" class="secondary hidden">⏹ Stop</button>
+        </div>
+        <div id="qr-reader" class="hidden"></div>
+        <input
+          type="text"
+          id="manual"
+          placeholder="Type asset tag or serial e.g. MICL0045"
+          autocomplete="off"
+        />
+        <button id="btnLookup" class="secondary">Look up</button>
+        <div id="result"></div>
+      </div>
+    </div>
+    <script>
+      "use strict";
+
+      // ---------- Config ----------
+      const CLIENT_ID = "7caa51af-9f32-42d8-8264-da5b97c2f8eb";
+      const AUTHORITY =
+        "https://login.microsoftonline.com/refrontiergroup.onmicrosoft.com";
+      const LIST_NAME = "Xana Asset Inventory";
+      const GRAPH_SCOPES = ["https://graph.microsoft.com/Sites.Read.All"];
+
+      // ---------- MSAL ----------
+      const msalConfig = {
+        auth: {
+          clientId: CLIENT_ID,
+          authority: AUTHORITY,
+          redirectUri: "https://xana-asset-lookup.vercel.app",
+        },
+        cache: { cacheLocation: "localStorage" },
+      };
+      const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+      let account = null;
+
+      async function initAuth() {
+        await msalInstance.initialize();
+        const state = document.getElementById("authState");
+
+        // NOTE: do NOT manually clear MSAL's own sessionStorage keys here.
+        // MSAL sets an "interaction.status" flag before redirecting away and
+        // clears it itself once handleRedirectPromise() below successfully
+        // matches the returning response. Deleting it ourselves on every load
+        // was breaking that match on the exact load that mattered, which is
+        // what caused the sign-in loop.
+
+        // Process an authorization response if we just came back from Entra
+        try {
+          const resp = await msalInstance.handleRedirectPromise();
+          if (resp && resp.account) {
+            account = resp.account;
+            sessionStorage.setItem("xana_redirects", "0");
+            state.textContent = "✅ Signed in as " + account.username;
+            return true;
+          }
+        } catch (err) {
+          console.error("MSAL redirect error:", err && err.errorCode, err);
+          state.textContent =
+            "🚫 Sign-in error: " +
+            (err &&
+              (err.errorCodes
+                ? err.errorCodes.join(",")
+                : err.errorMessage || err.message || err));
+          return false; // stop and show it - do NOT loop
+        }
+
+        const all = msalInstance.getAllAccounts();
+        if (all.length > 0) {
+          account = all[0];
+          sessionStorage.setItem("xana_redirects", "0");
+          state.textContent = "✅ Signed in as " + account.username;
+          return true;
+        }
+
+        // No session yet - redirect to Microsoft, but cap attempts to prevent an endless loop
+        let n =
+          parseInt(sessionStorage.getItem("xana_redirects") || "0", 10) + 1;
+        sessionStorage.setItem("xana_redirects", String(n));
+        if (n > 2) {
+          state.textContent =
+            "⚠️ Sign-in looped " +
+            n +
+            " times without completing. Try clearing site data (Application tab > Clear site data) and reloading fresh.";
+          return false;
+        }
+        state.textContent = "Taking you to sign in… (redirect #" + n + ")";
+        msalInstance.loginRedirect({ scopes: GRAPH_SCOPES });
+        return false;
+      }
+
+      async function getToken() {
+        const request = { scopes: GRAPH_SCOPES, account: account };
+        try {
+          const res = await msalInstance.acquireTokenSilent(request);
+          return res.accessToken;
+        } catch (e) {
+          console.error("silent token failed, doing redirect:", e);
+          msalInstance.acquireTokenRedirect(request);
+          throw new Error("refreshing session…");
+        }
+      }
+
+      // ---------- Graph ----------
+      async function graphGet(token, url) {
+        const res = await fetch(url, {
+          headers: { Authorization: "Bearer " + token },
+        });
+        if (!res.ok)
+          throw new Error(
+            "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
+          );
+        return res.json();
+      }
+
+      let SITE_ID = null;
+      let LIST_ID = null;
+
+      async function resolveSite(token) {
+        const encoded = encodeURIComponent(
+          "refrontiergroup.sharepoint.com:/sites/xanalifeTechData",
+        );
+        const site = await graphGet(
+          token,
+          "https://graph.microsoft.com/v1.0/sites/" + encoded,
+        );
+        SITE_ID = site.id;
+        const lists = await graphGet(
+          token,
+          "https://graph.microsoft.com/v1.0/sites/" + SITE_ID + "/lists",
+        );
+        const list = lists.value.find(
+          (l) =>
+            (l.displayName || "").toLowerCase() === LIST_NAME.toLowerCase(),
+        );
+        if (!list) throw new Error("List '" + LIST_NAME + "' not found");
+        LIST_ID = list.id;
+      }
+      async function lookup(code) {
+        const result = document.getElementById("result");
+        result.innerHTML =
+          '<div class="msg info">Searching for "' +
+          escapeHtml(code) +
+          '"…</div>';
+        try {
+          const token = await getToken();
+          if (!SITE_ID) await resolveSite(token);
+          const url =
+            "https://graph.microsoft.com/v1.0/sites/" +
+            SITE_ID +
+            "/lists/" +
+            LIST_ID +
+            "/items?expand=fields&$top=999";
+          const data = await graphGet(token, url);
+          const clean = (code || "").trim().toLowerCase();
+          let item = null;
+          let matchedField = "";
+          for (const it of data.value) {
+            const f = it.fields || {};
+            for (const key of Object.keys(f)) {
+              const k = key.toLowerCase().replace(/[^a-z]/g, "");
+              const isKey =
+                k === "assettag" ||
+                k === "title" ||
+                k === "serialnumber" ||
+                k === "serial";
+              if (isKey && String(f[key]).toLowerCase() === clean) {
+                item = f;
+                matchedField = key;
+                break;
+              }
+            }
+            if (item) break;
+          }
+          if (!item) {
+            result.innerHTML =
+              '<div class="msg err">No asset found for "' +
+              escapeHtml(code) +
+              '". No asset has that tag/serial in the list. Ask IT to register it.</div>';
+            return;
+          }
+
+          const g = (v) => {
+            if (v === undefined || v === null) return "—";
+            if (typeof v === "string") return v;
+            if (typeof v === "object") {
+              const s = Object.values(v).join(", ");
+              return s !== "" ? s : "—";
+            }
+            const s = String(v);
+            return s !== "" ? s : "—";
+          };
+          const status = g(item["Status"]);
+          const color = statusColor(status);
+          const scanKey =
+            g(fieldV(item, "Serial Number") || fieldV(item, "Serial")) ||
+            (matchedField ? g(item[matchedField]) : "");
+
+          result.innerHTML =
+            '<div class="card">' +
+            '<div class="msg ok">Scanned "<b>' +
+            escapeHtml(code) +
+            '</b>" → matched Asset #' +
+            escapeHtml(g(fieldV(item, "Title"))) +
+            "</div>" +
+            "<h2>📦 " +
+            escapeHtml(g(fieldV(item, "Asset Tag") || fieldV(item, "Title"))) +
+            '<span class="badge" style="background:' +
+            color +
+            '">' +
+            escapeHtml(status) +
+            "</span></h2>" +
+            '<div class="row"><span>Serial No.</span><span>' +
+            escapeHtml(scanKey) +
+            "</span></div>" +
+            '<div class="row"><span>Asset Type</span><span>' +
+            escapeHtml(g(fieldV(item, "Asset Type") || fieldV(item, "Asset"))) +
+            "</span></div>" +
+            '<div class="row"><span>Model</span><span>' +
+            escapeHtml(g(fieldV(item, "Model"))) +
+            "</span></div>" +
+            '<div class="row"><span>Department</span><span>' +
+            escapeHtml(g(fieldV(item, "Department"))) +
+            "</span></div>" +
+            '<div class="row"><span>Employee</span><span>' +
+            escapeHtml(g(fieldV(item, "Employee Name"))) +
+            "</span></div>" +
+            '<div class="row"><span>Location</span><span>' +
+            escapeHtml(g(fieldV(item, "Location"))) +
+            "</span></div>" +
+            "</div>";
+        } catch (e) {
+          console.error(e);
+          result.innerHTML =
+            '<div class="msg err">Error: ' +
+            escapeHtml(e.message || e) +
+            "</div>";
+        }
+      }
+
+      function statusColor(status) {
+        const s = (status || "").toLowerCase();
+        if (s.includes("repair") || s.includes("broken")) return "#d13438";
+        if (s.includes("lost")) return "#c50f1f";
+        if (s.includes("available")) return "#ff8c00";
+        if (s.includes("retired")) return "#605e5c";
+        if (s.includes("left")) return "#5c2d91";
+        return "#107c10";
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      }
+
+      // Normalize a SharePoint field name: decode _xNNNN_ hex escapes (e.g.
+      // "Asset_x0020_Type" -> "Asset Type"), lowercase, drop non-alphanumerics.
+      function normKey(s) {
+        return s
+          .toLowerCase()
+          .replace(/_x([0-9a-f]{4})_/gi, (m, hex) =>
+            String.fromCharCode(parseInt(hex, 16)),
+          )
+          .replace(/[^a-z0-9]/g, "");
+      }
+
+      // Look up a Graph field by display name, ignoring internal-name
+      // variations ("Asset Type" may come back as "AssetType" or
+      // "Asset_x0020_Type").
+      function fieldV(fields, name) {
+        const want = normKey(name);
+        for (const k of Object.keys(fields || {})) {
+          if (normKey(k) === want) return fields[k];
+        }
+        return undefined;
+      }
+
+      // ---------- Camera scanning ----------
+      let qr = null;
+      function startScan() {
+        qr = new Html5Qrcode("qr-reader");
+        document.getElementById("qr-reader").classList.remove("hidden");
+        document.getElementById("btnStop").classList.remove("hidden");
+        document.getElementById("btnScan").classList.add("hidden");
+        qr.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 240 },
+          (decoded) => {
+            qr.stop()
+              .then(() => qr.clear())
+              .catch(() => {});
+            qr = null;
+            document.getElementById("qr-reader").classList.add("hidden");
+            document.getElementById("btnStop").classList.add("hidden");
+            document.getElementById("btnScan").classList.remove("hidden");
+            document.getElementById("manual").value = decoded;
+            lookup(decoded);
+          },
+          () => {},
+        ).catch((e) => {
+          alert(
+            "Could not start camera:\n" +
+              e +
+              "\n\nEnable camera permission, or type the tag manually.",
+          );
+          stopScan();
+        });
+      }
+      function stopScan() {
+        if (qr) {
+          qr.stop()
+            .then(() => qr.clear())
+            .catch(() => {});
+          qr = null;
+        }
+        document.getElementById("qr-reader").classList.add("hidden");
+        document.getElementById("btnStop").classList.add("hidden");
+        document.getElementById("btnScan").classList.remove("hidden");
+      }
+
+      // ---------- Boot ----------
+      document.getElementById("btnScan").addEventListener("click", startScan);
+      document.getElementById("btnStop").addEventListener("click", stopScan);
+      document.getElementById("btnLookup").addEventListener("click", () => {
+        const v = (document.getElementById("manual").value || "").trim();
+        if (v) lookup(v);
+      });
+      document.getElementById("manual").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          const v = e.target.value.trim();
+          if (v) lookup(v);
+        }
+      });
+
+      (async function boot() {
+        window.addEventListener("error", (e) => {
+          const el = document.getElementById("authState");
+          if (el && !el.textContent.startsWith("✅"))
+            el.textContent = "⚠️ Script error: " + (e.message || e.error);
+        });
+        const ok = await initAuth();
+        if (ok) document.getElementById("app").classList.remove("hidden");
+      })();
+    </script>
+  </body>
+</html>

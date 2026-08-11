@@ -1,0 +1,16 @@
+# Vercel
+.vercel/
+.env.local
+
+# Certificates & secrets — DO NOT COMMIT
+*.pfx
+*.cer
+pnp-cert-thumb.txt
+
+# Tooling
+.freebuff/
+.DS_Store
+*.tmp
+
+# Node
+node_modules/
