@@ -10,17 +10,28 @@
     <script src="lib/html5-qrcode.min.js"></script>
     <style>
       :root {
-        --bg: #0f172a;
-        --card: #1e293b;
-        --card2: #273449;
-        --accent: #3b82f6;
-        --green: #107c10;
-        --orange: #ff8c00;
+        /* Xana official palette (dark theme) */
+        --bg: #121212;
+        --card: #1e1e1e;
+        --card2: #242424;
+        --border: #2b2b2b;
+        --accent: #16a34a; /* XanaLife brand green */
+        --accent-soft: rgba(22, 163, 74, 0.14);
+        --green: #22c55e;
+        --orange: #f59e0b;
         --red: #d13438;
-        --grey: #605e5c;
-        --blue: #0078d4;
-        --text: #e2e8f0;
-        --muted: #94a3b8;
+        --grey: #6b7280;
+        --text: #f3f4f6;
+        --muted: #9ca3af;
+      }
+      .brand-x {
+        color: var(--text);
+      }
+      .brand {
+        background: linear-gradient(90deg, var(--green), var(--orange));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
       }
       * {
         box-sizing: border-box;
@@ -77,11 +88,15 @@
         width: 100%;
         padding: 12px;
         border-radius: 10px;
-        border: 1px solid #334155;
-        background: var(--card);
+        border: 1px solid var(--border);
+        background: #181818;
         color: var(--text);
         font-size: 1rem;
         margin-bottom: 10px;
+      }
+      input[type="text"]:focus {
+        outline: none;
+        border-color: var(--accent);
       }
       #qr-reader {
         width: 100%;
@@ -91,8 +106,8 @@
       }
       .card {
         background: var(--card);
-        border: 1px solid #334155;
-        border-radius: 16px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
         padding: 18px;
         margin-top: 16px;
       }
@@ -113,9 +128,14 @@
       .row {
         display: flex;
         justify-content: space-between;
+        gap: 14px;
         padding: 9px 0;
-        border-bottom: 1px solid #2b3850;
+        border-bottom: 1px solid #262626;
         font-size: 0.92rem;
+      }
+      .row span:last-child {
+        text-align: right;
+        word-break: break-word;
       }
       .row:last-child {
         border-bottom: 0;
@@ -139,12 +159,12 @@
         color: #fca5a5;
       }
       .ok {
-        background: rgba(16, 124, 16, 0.15);
+        background: rgba(34, 197, 94, 0.12);
         color: #86efac;
       }
       .info {
-        background: rgba(59, 130, 246, 0.12);
-        color: #93c5fd;
+        background: rgba(22, 163, 74, 0.12);
+        color: #86efac;
       }
       #authState {
         font-size: 0.75rem;
@@ -158,7 +178,7 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>📦 Xana Asset Lookup</h1>
+      <h1>📦 <span class="brand-x">X</span><span class="brand">ana</span> Asset Lookup</h1>
       <p class="sub">
         Scan the vendor barcode on a device (or type its Serial No.) to pull the
         asset's details from SharePoint.
