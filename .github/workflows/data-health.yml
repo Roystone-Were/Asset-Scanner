@@ -10,6 +10,13 @@
 #   SP_THUMBPRINT  - B4437765C89E84AE84B813194E6BD0D54EB3F430
 # Generate the base64 locally with:
 #   [Convert]::ToBase64String([IO.File]::ReadAllBytes("pnp-cert.pfx"))
+#
+# Optional direct email of the report (independent of GitHub notifications):
+#   SMTP_HOST   - e.g. smtp.gmail.com (skip all SMTP_* + MAIL_TO to disable)
+#   SMTP_PORT   - e.g. 587
+#   SMTP_USER   - the sending account, e.g. me@gmail.com
+#   SMTP_PASS   - app password (Gmail: needs 2FA, see myaccount.google.com/apppasswords)
+#   MAIL_TO     - the address that receives the report (any address)
 
 name: data-health
 
@@ -70,4 +77,26 @@ jobs:
             gh issue create --title "Monthly asset data health report" --body-file "$env:GITHUB_WORKSPACE\health-report.md"
           } else {
             Write-Host "All checks passed - no issue filed."
+          }
+
+      - name: Email the report directly
+        shell: pwsh
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: |
+          if (-not $env:SMTP_HOST) {
+            Write-Host "No SMTP secrets configured - skipping email."
+            exit 0
+          }
+          $report = Get-Content "$env:GITHUB_WORKSPACE\health-report.md" -Raw
+          if ($report -match "## Issues found") {
+            ./Send-HealthEmail.ps1 -ReportPath "$env:GITHUB_WORKSPACE\health-report.md" `
+              -SmtpHost $env:SMTP_HOST -SmtpPort ([int]$env:SMTP_PORT) `
+              -SmtpUser $env:SMTP_USER -SmtpPass $env:SMTP_PASS -MailTo $env:MAIL_TO
+          } else {
+            Write-Host "All checks passed - no email sent."
           }
