@@ -168,6 +168,35 @@
         color: var(--muted);
         margin-bottom: 10px;
       }
+      #recent {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      #recent.hidden {
+        display: none;
+      }
+      #recent .recent-label {
+        font-size: 0.7rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .chip {
+        background: var(--card2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .chip:hover {
+        border-color: var(--accent);
+      }
       .hidden {
         display: none;
       }
@@ -195,6 +224,7 @@
           placeholder="Type asset tag or serial e.g. MICL0045"
           autocomplete="off"
         />
+        <div id="recent" class="hidden"></div>
         <button id="btnLookup" class="secondary">Look up</button>
         <div id="result"></div>
       </div>
@@ -306,8 +336,21 @@
 
       let SITE_ID = null;
       let LIST_ID = null;
+      const SITE_CACHE_KEY = "xana_site_ids";
 
       async function resolveSite(token) {
+        // Site/list ids are stable - reuse them across loads to skip two
+        // Graph calls on every visit.
+        try {
+          const c = JSON.parse(localStorage.getItem(SITE_CACHE_KEY) || "");
+          if (c && c.site && c.list) {
+            SITE_ID = c.site;
+            LIST_ID = c.list;
+            return;
+          }
+        } catch (e) {
+          /* cache corrupt - ignore */
+        }
         const encoded = encodeURIComponent(
           "refrontiergroup.sharepoint.com:/sites/xanalifeTechData",
         );
@@ -326,6 +369,14 @@
         );
         if (!list) throw new Error("List '" + LIST_NAME + "' not found");
         LIST_ID = list.id;
+        try {
+          localStorage.setItem(
+            SITE_CACHE_KEY,
+            JSON.stringify({ site: SITE_ID, list: LIST_ID }),
+          );
+        } catch (e) {
+          /* storage full/blocked - ignore */
+        }
       }
       // Returns the matched field key if `fields` matches the cleaned value
       // against any lookup column, otherwise null.
@@ -342,7 +393,27 @@
         return null;
       }
 
+      // Normalize whatever was scanned or typed: uppercase, trim, and strip
+      // vendor barcode prefixes like "METROCARE IMAGING CENTER LIMITED — MICL0045"
+      // (a spaced hyphen is treated as a separator too, but mid-code hyphens
+      // like CN-09094X are left alone).
+      function cleanScanInput(s) {
+        let v = String(s || "").trim().toUpperCase();
+        const parts = v.split(/[—–]/);
+        if (parts.length > 1) v = parts[parts.length - 1].trim();
+        else {
+          const c = v.split(/:/);
+          if (c.length > 1) v = c[c.length - 1].trim();
+          else {
+            const h = v.split(/\s+-\s+/);
+            if (h.length > 1) v = h[h.length - 1].trim();
+          }
+        }
+        return v;
+      }
+
       async function lookup(code) {
+        code = cleanScanInput(code);
         const result = document.getElementById("result");
         result.innerHTML =
           '<div class="msg info">Searching for "' +
@@ -418,6 +489,8 @@
             return;
           }
 
+          saveHistory(code);
+
           const g = (v) => {
             if (v === undefined || v === null) return "—";
             if (typeof v === "string") return v;
@@ -465,6 +538,12 @@
             "</span></div>" +
             '<div class="row"><span>Location</span><span>' +
             escapeHtml(g(fieldV(item, "Location"))) +
+            "</span></div>" +
+            '<div class="row"><span>Region</span><span>' +
+            escapeHtml(g(fieldV(item, "Region"))) +
+            "</span></div>" +
+            '<div class="row"><span>Condition</span><span>' +
+            escapeHtml(g(fieldV(item, "Condition"))) +
             "</span></div>" +
             "</div>";
         } catch (e) {
@@ -520,6 +599,52 @@
           if (normKey(k) === want) return fields[k];
         }
         return undefined;
+      }
+
+      // ---------- Recent scans ----------
+      const HISTORY_KEY = "xana_history";
+      const HISTORY_MAX = 6;
+      function getHistory() {
+        try {
+          const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+          return Array.isArray(h) ? h : [];
+        } catch (e) {
+          return [];
+        }
+      }
+      function saveHistory(code) {
+        const c = cleanScanInput(code);
+        if (!c) return;
+        const h = [c]
+          .concat(getHistory().filter((x) => x !== c))
+          .slice(0, HISTORY_MAX);
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+        } catch (e) {
+          /* ignore */
+        }
+        renderHistory();
+      }
+      function renderHistory() {
+        const el = document.getElementById("recent");
+        if (!el) return;
+        const h = getHistory();
+        if (h.length === 0) {
+          el.classList.add("hidden");
+          el.innerHTML = "";
+          return;
+        }
+        el.classList.remove("hidden");
+        el.innerHTML =
+          '<span class="recent-label">Recent</span>' +
+          h.map(
+            (c) =>
+              '<button type="button" class="chip" data-code="' +
+              escapeHtml(c) +
+              '">' +
+              escapeHtml(c) +
+              "</button>",
+          ).join("");
       }
 
       // ---------- Camera scanning ----------
@@ -578,6 +703,13 @@
           if (v) lookup(v);
         }
       });
+      document.getElementById("manual").addEventListener("input", (e) => {
+        e.target.value = e.target.value.toUpperCase();
+      });
+      document.getElementById("recent").addEventListener("click", (e) => {
+        const chip = e.target.closest(".chip");
+        if (chip) lookup(chip.dataset.code);
+      });
 
       (async function boot() {
         window.addEventListener("error", (e) => {
@@ -586,7 +718,10 @@
             el.textContent = "⚠️ Script error: " + (e.message || e.error);
         });
         const ok = await initAuth();
-        if (ok) document.getElementById("app").classList.remove("hidden");
+        if (ok) {
+          document.getElementById("app").classList.remove("hidden");
+          renderHistory();
+        }
       })();
     </script>
   </body>
