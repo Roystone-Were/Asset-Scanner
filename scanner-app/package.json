@@ -1,0 +1,9 @@
+{
+  "name": "xana-asset-lookup",
+  "private": true,
+  "version": "1.0.0",
+  "description": "XanaLife asset scanner web app (static)",
+  "scripts": {
+    "test": "node --test"
+  }
+}

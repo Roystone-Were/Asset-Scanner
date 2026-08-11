@@ -8,6 +8,8 @@
     <script src="lib/msal-browser.min.js"></script>
     <!-- html5-qrcode (camera barcode/QR scanner) - local copy -->
     <script src="lib/html5-qrcode.min.js"></script>
+    <!-- Pure lookup/display logic (unit-tested) -->
+    <script src="logic.js"></script>
     <link rel="manifest" href="manifest.webmanifest" />
     <meta name="theme-color" content="#121212" />
     <link rel="apple-touch-icon" href="icon-180.png" />
@@ -235,6 +237,19 @@
     <script>
       "use strict";
 
+      // Pure lookup/display logic (see logic.js - unit-tested).
+      const {
+        g,
+        escapeHtml,
+        statusColor,
+        fieldV,
+        cleanScanInput,
+        matchFields,
+        collectCandidates,
+        suggestMatch,
+        filterHistory,
+      } = Xana;
+
       // ---------- Config ----------
       const CLIENT_ID = "7caa51af-9f32-42d8-8264-da5b97c2f8eb";
       const AUTHORITY =
@@ -397,40 +412,6 @@
           /* storage full/blocked - ignore */
         }
       }
-      // Returns the matched field key if `fields` matches the cleaned value
-      // against any lookup column, otherwise null.
-      function matchFields(f, clean) {
-        for (const key of Object.keys(f || {})) {
-          const k = key.toLowerCase().replace(/[^a-z]/g, "");
-          const isKey =
-            k === "assettag" ||
-            k === "title" ||
-            k === "serialnumber" ||
-            k === "serial";
-          if (isKey && String(f[key]).toLowerCase() === clean) return key;
-        }
-        return null;
-      }
-
-      // Normalize whatever was scanned or typed: uppercase, trim, and strip
-      // vendor barcode prefixes like "METROCARE IMAGING CENTER LIMITED — MICL0045"
-      // (a spaced hyphen is treated as a separator too, but mid-code hyphens
-      // like CN-09094X are left alone).
-      function cleanScanInput(s) {
-        let v = String(s || "").trim().toUpperCase();
-        const parts = v.split(/[—–]/);
-        if (parts.length > 1) v = parts[parts.length - 1].trim();
-        else {
-          const c = v.split(/:/);
-          if (c.length > 1) v = c[c.length - 1].trim();
-          else {
-            const h = v.split(/\s+-\s+/);
-            if (h.length > 1) v = h[h.length - 1].trim();
-          }
-        }
-        return v;
-      }
-
       async function lookup(code) {
         code = cleanScanInput(code);
         const result = document.getElementById("result");
@@ -485,12 +466,15 @@
           }
 
           // Fallback: fetch everything with paging (no $top ceiling) and
-          // match client-side, same as before.
+          // match client-side, same as before. Also collect candidate values
+          // so we can offer a fuzzy "did you mean" when nothing matches.
+          const candidates = [];
           if (!item) {
             let url = base + "&$top=200";
             while (url) {
               const data = await graphGet(token, url);
               for (const it of data.value) {
+                candidates.push.apply(candidates, collectCandidates(it.fields));
                 const key = matchFields(it.fields, clean);
                 if (key) {
                   item = it.fields;
@@ -504,26 +488,25 @@
             }
           }
           if (!item) {
+            const suggestion = suggestMatch(raw, candidates);
             result.innerHTML =
               '<div class="msg err">No asset found for "' +
               escapeHtml(code) +
-              '". No asset has that tag/serial in the list. Ask IT to register it.</div>';
+              '". No asset has that tag/serial in the list. Ask IT to register it.' +
+              (suggestion
+                ? '<br/><button type="button" class="chip suggest" data-code="' +
+                  escapeHtml(suggestion) +
+                  '">Did you mean ' +
+                  escapeHtml(suggestion) +
+                  "?</button>"
+                : "") +
+              "</div>";
             return;
           }
 
           saveHistory(code);
           verifyWriteback(itemId);
 
-          const g = (v) => {
-            if (v === undefined || v === null) return "—";
-            if (typeof v === "string") return v;
-            if (typeof v === "object") {
-              const s = Object.values(v).join(", ");
-              return s !== "" ? s : "—";
-            }
-            const s = String(v);
-            return s !== "" ? s : "—";
-          };
           const status = g(item["Status"]);
           const color = statusColor(status);
           const scanKey =
@@ -581,51 +564,7 @@
         }
       }
 
-      function statusColor(status) {
-        const s = (status || "").toLowerCase();
-        if (s.includes("repair") || s.includes("broken")) return "#d13438";
-        if (s.includes("lost")) return "#c50f1f";
-        if (s.includes("available")) return "#ff8c00";
-        if (s.includes("retired")) return "#605e5c";
-        if (s.includes("left")) return "#5c2d91";
-        return "#107c10";
-      }
 
-      function escapeHtml(s) {
-        return String(s).replace(
-          /[&<>"']/g,
-          (c) =>
-            ({
-              "&": "&amp;",
-              "<": "&lt;",
-              ">": "&gt;",
-              '"': "&quot;",
-              "'": "&#39;",
-            })[c],
-        );
-      }
-
-      // Normalize a SharePoint field name: decode _xNNNN_ hex escapes (e.g.
-      // "Asset_x0020_Type" -> "Asset Type"), lowercase, drop non-alphanumerics.
-      function normKey(s) {
-        return s
-          .toLowerCase()
-          .replace(/_x([0-9a-f]{4})_/gi, (m, hex) =>
-            String.fromCharCode(parseInt(hex, 16)),
-          )
-          .replace(/[^a-z0-9]/g, "");
-      }
-
-      // Look up a Graph field by display name, ignoring internal-name
-      // variations ("Asset Type" may come back as "AssetType" or
-      // "Asset_x0020_Type").
-      function fieldV(fields, name) {
-        const want = normKey(name);
-        for (const k of Object.keys(fields || {})) {
-          if (normKey(k) === want) return fields[k];
-        }
-        return undefined;
-      }
 
       // ---------- Last verified writeback ----------
       // Every successful scan stamps a timestamp on the asset row so the list
@@ -670,17 +609,7 @@
         } catch (e) {
           return [];
         }
-        const now = Date.now();
-        const fresh = [];
-        for (const x of raw) {
-          if (typeof x === "string") {
-            // legacy entry without a timestamp - keep it from now on
-            fresh.push({ c: x, t: now });
-          } else if (x && typeof x === "object" && x.c) {
-            const t = x.t || now;
-            if (now - t < HISTORY_TTL) fresh.push({ c: x.c, t: t });
-          }
-        }
+        const fresh = filterHistory(raw, Date.now(), HISTORY_TTL);
         // Persist the pruned list so expired entries don't linger.
         try {
           localStorage.setItem(HISTORY_KEY, JSON.stringify(fresh));
@@ -786,6 +715,10 @@
       document.getElementById("recent").addEventListener("click", (e) => {
         const chip = e.target.closest(".chip");
         if (chip) lookup(chip.dataset.code);
+      });
+      document.getElementById("result").addEventListener("click", (e) => {
+        const b = e.target.closest(".suggest");
+        if (b) lookup(b.dataset.code);
       });
 
       (async function boot() {
