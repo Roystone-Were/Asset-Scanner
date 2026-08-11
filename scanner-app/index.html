@@ -604,19 +604,40 @@
       // ---------- Recent scans ----------
       const HISTORY_KEY = "xana_history";
       const HISTORY_MAX = 6;
+      const HISTORY_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
       function getHistory() {
+        let raw = [];
         try {
-          const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-          return Array.isArray(h) ? h : [];
+          const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+          raw = Array.isArray(parsed) ? parsed : [];
         } catch (e) {
           return [];
         }
+        const now = Date.now();
+        const fresh = [];
+        for (const x of raw) {
+          if (typeof x === "string") {
+            // legacy entry without a timestamp - keep it from now on
+            fresh.push({ c: x, t: now });
+          } else if (x && typeof x === "object" && x.c) {
+            const t = x.t || now;
+            if (now - t < HISTORY_TTL) fresh.push({ c: x.c, t: t });
+          }
+        }
+        // Persist the pruned list so expired entries don't linger.
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(fresh));
+        } catch (e) {
+          /* ignore */
+        }
+        return fresh;
       }
       function saveHistory(code) {
         const c = cleanScanInput(code);
         if (!c) return;
-        const h = [c]
-          .concat(getHistory().filter((x) => x !== c))
+        const h = [{ c: c, t: Date.now() }]
+          .concat(getHistory().filter((x) => x.c !== c))
           .slice(0, HISTORY_MAX);
         try {
           localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
@@ -638,11 +659,11 @@
         el.innerHTML =
           '<span class="recent-label">Recent</span>' +
           h.map(
-            (c) =>
+            (e) =>
               '<button type="button" class="chip" data-code="' +
-              escapeHtml(c) +
+              escapeHtml(e.c) +
               '">' +
-              escapeHtml(c) +
+              escapeHtml(e.c) +
               "</button>",
           ).join("");
       }
@@ -722,6 +743,8 @@
           document.getElementById("app").classList.remove("hidden");
           renderHistory();
         }
+        // Re-check every minute so chips expire even with the page left open.
+        setInterval(renderHistory, 60 * 1000);
       })();
     </script>
   </body>
