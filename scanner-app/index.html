@@ -24,19 +24,11 @@
         --text: #f3f4f6;
         --muted: #9ca3af;
       }
-      .brand-x {
-        color: var(--text);
-      }
-      h1 img.logo {
-        height: 36px;
-        width: auto;
+      .logo {
         display: block;
-      }
-      .brand {
-        background: linear-gradient(90deg, var(--green), var(--orange));
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        height: 64px;
+        width: auto;
+        margin: 0 auto 16px;
       }
       * {
         box-sizing: border-box;
@@ -183,10 +175,8 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>
-        <img src="xana-logo.png" alt="Xana" class="logo" />
-        <span class="brand-x">X</span><span class="brand">ana</span> Asset Lookup
-      </h1>
+      <img src="xana-logo.png" alt="Xana" class="logo" />
+      <h1>Xana Asset Lookup</h1>
       <p class="sub">
         Scan the vendor barcode on a device (or type its Serial No.) to pull the
         asset's details from SharePoint.
