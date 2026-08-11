@@ -1,7 +1,15 @@
 <#
 .SYNOPSIS
-  Add a "Barcode" column to the Xana Asset Inventory list (scan key) and set
-  a test value on the Xana001 row so we can prove scanning -> metadata works.
+  Add a "Barcode" column to the Xana Asset Inventory list. This is the
+  register-on-scan target: when the app finds no match for a scanned vendor
+  barcode, staff tap "Register this barcode", pick the device, and the app
+  writes the barcode into this column. The next scan then matches it.
+
+  (The earlier version of this script also planted a test barcode on item 1;
+  the app now writes barcodes itself, so this only creates the column.)
+
+.EXAMPLE
+  pwsh -NoProfile -File .\Add-BarcodeColumn.ps1
 #>
 param(
   [string]$SiteUrl       = "https://refrontiergroup.sharepoint.com/sites/xanalifeTechData",
@@ -9,9 +17,7 @@ param(
   [string]$ClientId      = "7caa51af-9f32-42d8-8264-da5b97c2f8eb",
   [string]$Tenant        = "refrontiergroup.onmicrosoft.com",
   [string]$Thumbprint    = "B4437765C89E84AE84B813194E6BD0D54EB3F430",
-  [string]$BarcodeColumn = "Barcode",
-  [string]$TestBarcode   = "MICL0045",
-  [int]$TestItemId       = 1
+  [string]$BarcodeColumn = "Barcode"
 )
 $ErrorActionPreference = 'Stop'
 Import-Module PnP.PowerShell
@@ -28,13 +34,5 @@ if (-not $field) {
   Write-Host "Column '$BarcodeColumn' already exists." -ForegroundColor Yellow
 }
 
-$item = Get-PnPListItem -List $ListTitle -Id $TestItemId
-if ($item) {
-  Set-PnPListItem -List $ListTitle -Identity $TestItemId -Values @{ "Barcode" = $TestBarcode }
-  Write-Host "Set Barcode = '$TestBarcode' on item Id $TestItemId ($($item.FieldValues['Title']))." -ForegroundColor Green
-} else {
-  Write-Host "Item Id $TestItemId not found." -ForegroundColor Yellow
-}
-
-Write-Host "DONE. Scanning '$TestBarcode' will now match that asset." -ForegroundColor Green
 Disconnect-PnPOnline
+Write-Host "DONE. The app's register-on-scan flow will write barcodes into '$BarcodeColumn'." -ForegroundColor Green

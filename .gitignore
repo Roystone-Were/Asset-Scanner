@@ -5,7 +5,9 @@
 # Certificates & secrets — DO NOT COMMIT
 *.pfx
 *.cer
+*.b64
 pnp-cert-thumb.txt
+health-report.md
 
 # Tooling
 .freebuff/

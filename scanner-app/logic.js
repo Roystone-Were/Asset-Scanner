@@ -93,14 +93,15 @@
         k === "assettag" ||
         k === "title" ||
         k === "serialnumber" ||
-        k === "serial";
+        k === "serial" ||
+        k === "barcode";
       if (isKey && String(f[key]).toLowerCase() === clean) return key;
     }
     return null;
   }
 
-  // Candidate values (titles/tags/serials) from a fields object, for fuzzy
-  // "did you mean" suggestions.
+  // Candidate values (titles/tags/serials/barcodes) from a fields object, for
+  // fuzzy "did you mean" suggestions.
   function collectCandidates(fields) {
     const out = [];
     for (const key of Object.keys(fields || {})) {
@@ -109,7 +110,8 @@
         k === "assettag" ||
         k === "title" ||
         k === "serialnumber" ||
-        k === "serial";
+        k === "serial" ||
+        k === "barcode";
       if (isKey) {
         const v = String(fields[key] || "").trim();
         if (v) out.push(v);
@@ -161,6 +163,37 @@
     return null;
   }
 
+  // SharePoint Choice-column values (ground truth from the list schema). The
+  // app's edit dropdowns must only offer these - Choice columns reject values
+  // that aren't in the list.
+  const STATUS_CHOICES = ["In Use", "Available", "Retired", "Left With", "Lost"];
+  const LOCATION_CHOICES = [
+    "Syokimau",
+    "Katani",
+    "Ruiru",
+    "Githurai",
+    "Lumumba Dr",
+    "TRM Dr",
+  ];
+  const REGION_CHOICES = ["Nairobi", "Kiambu"];
+
+  // Find serial numbers that appear on more than one asset row. `rows` are
+  // normalized records ({ id, serial, ... }); returns [{ serial, ids }] sorted.
+  function findDuplicateSerials(rows) {
+    const seen = new Map();
+    for (const r of rows || []) {
+      const s = String((r && r.serial) || "").trim().toUpperCase();
+      if (!s) continue;
+      if (!seen.has(s)) seen.set(s, []);
+      seen.get(s).push(r.id);
+    }
+    const dups = [];
+    for (const [serial, ids] of seen) {
+      if (ids.length > 1) dups.push({ serial: serial, ids: ids.slice() });
+    }
+    return dups.sort((a, b) => a.serial.localeCompare(b.serial));
+  }
+
   // Filter history entries to those newer than ttl ms. Legacy string entries
   // (no timestamp) are treated as fresh from `now`.
   function filterHistory(raw, now, ttl) {
@@ -188,5 +221,9 @@
     levenshtein,
     suggestMatch,
     filterHistory,
+    STATUS_CHOICES,
+    LOCATION_CHOICES,
+    REGION_CHOICES,
+    findDuplicateSerials,
   };
 });

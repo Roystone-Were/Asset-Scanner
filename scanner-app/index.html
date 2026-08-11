@@ -202,6 +202,75 @@
       .chip:hover {
         border-color: var(--accent);
       }
+      .editbtn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        border-radius: 6px;
+        padding: 1px 8px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-left: 6px;
+        vertical-align: middle;
+      }
+      .editbtn:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      select.fieldpick {
+        background: #181818;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 0.85rem;
+      }
+      .regrow {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: var(--card2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 6px;
+        font-size: 0.85rem;
+        cursor: pointer;
+      }
+      .regrow:hover {
+        border-color: var(--accent);
+      }
+      #regList {
+        max-height: 230px;
+        overflow-y: auto;
+        margin-top: 8px;
+      }
+      #regSearch {
+        margin-bottom: 10px;
+      }
+      .confirmbar {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .confirmbar button {
+        flex: 1;
+      }
+      .confirmtext {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin: 4px 0;
+      }
+      .savedtip {
+        color: #86efac;
+        font-size: 0.75rem;
+        margin-left: 6px;
+      }
+      .regcode {
+        color: var(--green);
+      }
       .hidden {
         display: none;
       }
@@ -248,7 +317,14 @@
         collectCandidates,
         suggestMatch,
         filterHistory,
+        STATUS_CHOICES,
+        LOCATION_CHOICES,
       } = Xana;
+
+      // State shared across lookup / edit / register handlers.
+      let lastItem = null; // { id, fields } of the last matched asset
+      let allItems = []; // [{ id, fields }] fetched by the fallback path
+      let currentCode = ""; // last cleaned scan value
 
       // ---------- Config ----------
       const CLIENT_ID = "7caa51af-9f32-42d8-8264-da5b97c2f8eb";
@@ -414,6 +490,7 @@
       }
       async function lookup(code) {
         code = cleanScanInput(code);
+        currentCode = code;
         const result = document.getElementById("result");
         result.innerHTML =
           '<div class="msg info">Searching for "' +
@@ -438,7 +515,7 @@
           // for this to work (see Index-LookupFields.ps1); an unindexed or
           // missing field errors out and we just try the next candidate.
           const raw = (code || "").trim();
-          for (const fname of ["Title", "SerialNumber", "AssetTag"]) {
+          for (const fname of ["Title", "SerialNumber", "AssetTag", "Barcode"]) {
             try {
               const q = encodeURIComponent(
                 "fields/" + fname + " eq '" + raw.replace(/'/g, "''") + "'",
@@ -467,13 +544,16 @@
 
           // Fallback: fetch everything with paging (no $top ceiling) and
           // match client-side, same as before. Also collect candidate values
-          // so we can offer a fuzzy "did you mean" when nothing matches.
+          // (for the fuzzy "did you mean") and the full item list (for the
+          // register-on-scan picker) when nothing matches.
           const candidates = [];
+          allItems = [];
           if (!item) {
             let url = base + "&$top=200";
             while (url) {
               const data = await graphGet(token, url);
               for (const it of data.value) {
+                allItems.push({ id: it.id, fields: it.fields });
                 candidates.push.apply(candidates, collectCandidates(it.fields));
                 const key = matchFields(it.fields, clean);
                 if (key) {
@@ -488,11 +568,12 @@
             }
           }
           if (!item) {
+            lastItem = null;
             const suggestion = suggestMatch(raw, candidates);
             result.innerHTML =
               '<div class="msg err">No asset found for "' +
               escapeHtml(code) +
-              '". No asset has that tag/serial in the list. Ask IT to register it.' +
+              '". No asset has that tag/serial/barcode in the list.' +
               (suggestion
                 ? '<br/><button type="button" class="chip suggest" data-code="' +
                   escapeHtml(suggestion) +
@@ -500,9 +581,25 @@
                   escapeHtml(suggestion) +
                   "?</button>"
                 : "") +
+              (allItems.length
+                ? '<br/><button type="button" class="chip" data-action="register" data-code="' +
+                  escapeHtml(code) +
+                  '">➕ Register this barcode</button>'
+                : "") +
+              "</div>" +
+              '<div id="registerPanel" class="card hidden">' +
+              "<h2>Register <span class=\"regcode\">" +
+              escapeHtml(code) +
+              "</span></h2>" +
+              '<input type="text" id="regSearch" placeholder="Search by tag, serial or model…" autocomplete="off" />' +
+              '<div id="regList"></div>' +
+              '<div id="regConfirm" class="hidden"><p class="confirmtext"></p>' +
+              '<div class="confirmbar"><button id="regSave">Save barcode</button>' +
+              '<button id="regCancel" class="secondary">Cancel</button></div></div>' +
               "</div>";
             return;
           }
+          lastItem = { id: itemId, fields: item };
 
           saveHistory(code);
           verifyWriteback(itemId);
@@ -522,11 +619,14 @@
             "</div>" +
             "<h2>📦 " +
             escapeHtml(g(fieldV(item, "Asset Tag") || fieldV(item, "Title"))) +
-            '<span class="badge" style="background:' +
+            '<span class="badge" id="statusBadge" style="background:' +
             color +
             '">' +
             escapeHtml(status) +
             "</span></h2>" +
+            '<div class="row"><span>Status</span><span><span id="statusVal">' +
+            escapeHtml(status) +
+            '</span><button type="button" class="editbtn" data-edit="Status" title="Change status">✎</button></span></div>' +
             '<div class="row"><span>Serial No.</span><span>' +
             escapeHtml(scanKey) +
             "</span></div>" +
@@ -542,9 +642,9 @@
             '<div class="row"><span>Employee</span><span>' +
             escapeHtml(g(fieldV(item, "Employee Name"))) +
             "</span></div>" +
-            '<div class="row"><span>Location</span><span>' +
+            '<div class="row"><span>Location</span><span><span id="locVal">' +
             escapeHtml(g(fieldV(item, "Location"))) +
-            "</span></div>" +
+            '</span><button type="button" class="editbtn" data-edit="Location" title="Change location">✎</button></span></div>' +
             '<div class="row"><span>Region</span><span>' +
             escapeHtml(g(fieldV(item, "Region"))) +
             "</span></div>" +
@@ -593,6 +693,198 @@
           if (el) el.textContent = "Just now";
         } catch (e) {
           console.warn("last-verified writeback failed:", e);
+        }
+      }
+
+      // ---------- Inline field editing (Status / Location) ----------
+      // Both are SharePoint Choice columns; only the choices the column
+      // actually allows are offered (Choice columns reject other values).
+      // One PATCH per save; failures surface inline (a read-only staff
+      // member simply can't save).
+      function fieldsUrl(id) {
+        return (
+          "https://graph.microsoft.com/v1.0/sites/" +
+          SITE_ID +
+          "/lists/" +
+          LIST_ID +
+          "/items/" +
+          id +
+          "/fields"
+        );
+      }
+
+      function editField(field) {
+        const choices =
+          field === "Status" ? STATUS_CHOICES : LOCATION_CHOICES;
+        const id = field === "Status" ? "statusVal" : "locVal";
+        const valEl = document.getElementById(id);
+        if (!valEl) return;
+        const cur = valEl.textContent;
+        const cell = valEl.parentNode;
+        cell.innerHTML =
+          '<select class="fieldpick" id="fieldpick">' +
+          choices
+            .map(
+              (c) =>
+                '<option value="' +
+                escapeHtml(c) +
+                '"' +
+                (c === cur ? " selected" : "") +
+                ">" +
+                escapeHtml(c) +
+                "</option>",
+            )
+            .join("") +
+          "</select> " +
+          '<button type="button" class="editbtn" data-save="' +
+          field +
+          '">Save</button> ' +
+          '<button type="button" class="editbtn" data-cancel="1">Cancel</button>';
+      }
+
+      async function saveFieldEdit(field) {
+        const pick = document.getElementById("fieldpick");
+        if (!pick) return;
+        const value = pick.value;
+        const cell = pick.parentNode;
+        cell.textContent = "Saving…";
+        try {
+          if (!lastItem || !lastItem.id) throw new Error("No active asset");
+          const token = await getToken();
+          const body = {};
+          body[field] = value;
+          await graphPatch(token, fieldsUrl(lastItem.id), body);
+          lastItem.fields[field] = value;
+          if (field === "Status") {
+            const sv = document.getElementById("statusVal");
+            if (sv) sv.textContent = value;
+            const badge = document.getElementById("statusBadge");
+            if (badge) {
+              badge.textContent = value;
+              badge.style.background = statusColor(value);
+            }
+          }
+          cell.innerHTML =
+            '<span id="' +
+            (field === "Status" ? "statusVal" : "locVal") +
+            '">' +
+            escapeHtml(value) +
+            '</span><button type="button" class="editbtn" data-edit="' +
+            field +
+            '" title="Change ' +
+            field.toLowerCase() +
+            '">✎</button><span class="savedtip">Saved ✓</span>';
+        } catch (e) {
+          console.warn("field save failed:", e);
+          cell.innerHTML =
+            '<span class="savedtip">' +
+            escapeHtml((e && e.message) || e) +
+            '</span><button type="button" class="editbtn" data-edit="' +
+            field +
+            '">✎</button>';
+        }
+      }
+
+      // ---------- Register on scan ----------
+      // When a scan misses, staff can attach the scanned barcode to an asset
+      // from the list. The value is written into the list's Barcode column
+      // (which the app also matches on), so the next scan finds the device.
+      function renderRegisterPanel(code) {
+        const panel = document.getElementById("registerPanel");
+        if (!panel) return;
+        panel.classList.remove("hidden");
+        const norm = (s) => String(s || "").toUpperCase();
+        const searchEl = document.getElementById("regSearch");
+        const listEl = document.getElementById("regList");
+        const confirmEl = document.getElementById("regConfirm");
+        const saveBtn = document.getElementById("regSave");
+        const cancelBtn = document.getElementById("regCancel");
+
+        function renderList(q) {
+          const needle = norm(q);
+          const rows = allItems.filter((it) => {
+            if (!needle) return true;
+            const hay = [
+              it.fields.Title,
+              fieldV(it.fields, "Serial Number"),
+              fieldV(it.fields, "Model"),
+            ];
+            return hay.some((v) => norm(v).includes(needle));
+          });
+          listEl.innerHTML =
+            rows
+              .map(
+                (it) =>
+                  '<button type="button" class="regrow" data-id="' +
+                  it.id +
+                  '" data-title="' +
+                  escapeHtml(String(fieldV(it.fields, "Title") || "")) +
+                  '">Asset #' +
+                  it.id +
+                  " — " +
+                  escapeHtml(
+                    g(
+                      fieldV(it.fields, "Asset Tag") ||
+                        fieldV(it.fields, "Title"),
+                    ),
+                  ) +
+                  " · " +
+                  escapeHtml(g(fieldV(it.fields, "Model"))) +
+                  " · " +
+                  escapeHtml(g(fieldV(it.fields, "Serial Number"))) +
+                  "</button>",
+              )
+              .join("") ||
+            '<div class="msg info">No matching assets.</div>';
+        }
+
+        renderList("");
+        searchEl.value = "";
+        confirmEl.classList.add("hidden");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save barcode";
+
+        searchEl.oninput = (e) => renderList(e.target.value);
+        listEl.onclick = (e) => {
+          const row = e.target.closest(".regrow");
+          if (!row) return;
+          confirmEl.classList.remove("hidden");
+          confirmEl.querySelector(".confirmtext").textContent =
+            "Save '" +
+            code +
+            "' to Asset #" +
+            row.dataset.id +
+            " (" +
+            row.dataset.title +
+            ")?";
+          confirmEl.dataset.id = row.dataset.id;
+        };
+        cancelBtn.onclick = () => confirmEl.classList.add("hidden");
+        saveBtn.onclick = () => registerBarcode(code, confirmEl.dataset.id);
+      }
+
+      async function registerBarcode(code, itemId) {
+        if (!itemId) return;
+        const saveBtn = document.getElementById("regSave");
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving…";
+        try {
+          const token = await getToken();
+          await graphPatch(token, fieldsUrl(itemId), { Barcode: code });
+          // Re-run the lookup: it now matches via Barcode and stamps Last
+          // Verified exactly like a normal scan.
+          lookup(code);
+        } catch (e) {
+          console.warn("register failed:", e);
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Save barcode";
+          const confirmEl = document.getElementById("regConfirm");
+          confirmEl.insertAdjacentHTML(
+            "beforeend",
+            '<div class="msg err">' +
+              escapeHtml((e && e.message) || e) +
+              "</div>",
+          );
         }
       }
 
@@ -717,8 +1009,27 @@
         if (chip) lookup(chip.dataset.code);
       });
       document.getElementById("result").addEventListener("click", (e) => {
-        const b = e.target.closest(".suggest");
-        if (b) lookup(b.dataset.code);
+        const b = e.target.closest("button");
+        if (!b) return;
+        if (b.dataset.action === "register") {
+          renderRegisterPanel(b.dataset.code);
+          return;
+        }
+        if (b.dataset.edit) {
+          editField(b.dataset.edit);
+          return;
+        }
+        if (b.dataset.save) {
+          saveFieldEdit(b.dataset.save);
+          return;
+        }
+        if (b.dataset.cancel) {
+          if (currentCode) lookup(currentCode);
+          return;
+        }
+        if (b.dataset.code) {
+          lookup(b.dataset.code);
+        }
       });
 
       (async function boot() {

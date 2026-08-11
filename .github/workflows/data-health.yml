@@ -1,0 +1,68 @@
+# Monthly data-health check for the Xana Asset Inventory list.
+# Runs Health-Check.ps1 against SharePoint and files a GitHub issue whenever
+# the report contains issues (duplicate serials, missing tags/serials, assets
+# not verified in 90 days). No issue is filed on a clean month.
+#
+# One-time setup (Settings -> Secrets and variables -> Actions):
+#   SP_TENANT      - e.g. refrontiergroup.onmicrosoft.com
+#   SP_CLIENT_ID   - the app registration client id (7caa51af-...)
+#   SP_CERT_B64    - base64 of pnp-cert.pfx (the private key, never committed)
+#   SP_THUMBPRINT  - B4437765C89E84AE84B813194E6BD0D54EB3F430
+# Generate the base64 locally with:
+#   [Convert]::ToBase64String([IO.File]::ReadAllBytes("pnp-cert.pfx"))
+
+name: data-health
+
+on:
+  schedule:
+    # 1st of every month, 06:00 UTC
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  health:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore client certificate
+        shell: pwsh
+        env:
+          SP_CERT_B64: ${{ secrets.SP_CERT_B64 }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\sp.pfx", [Convert]::FromBase64String($env:SP_CERT_B64))
+          # The pfx password (pnp123) is the one used by generate-cert.ps1 -
+          # useless on its own without the pfx file, which only ever exists
+          # as this secret in CI.
+          Import-PfxCertificate -FilePath "$env:RUNNER_TEMP\sp.pfx" -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString "pnp123" -AsPlainText -Force) | Out-Null
+
+      - name: Install PnP.PowerShell
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PnP.PowerShell -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber
+
+      - name: Run data health check
+        shell: pwsh
+        env:
+          SP_TENANT: ${{ secrets.SP_TENANT }}
+          SP_CLIENT_ID: ${{ secrets.SP_CLIENT_ID }}
+          SP_THUMBPRINT: ${{ secrets.SP_THUMBPRINT }}
+        run: |
+          ./Health-Check.ps1 -Tenant $env:SP_TENANT -ClientId $env:SP_CLIENT_ID -Thumbprint $env:SP_THUMBPRINT -OutReport "$env:GITHUB_WORKSPACE\health-report.md"
+
+      - name: File an issue with the report
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $report = Get-Content "$env:GITHUB_WORKSPACE\health-report.md" -Raw
+          if ($report -match "## Issues found") {
+            gh issue create --title "Monthly asset data health report" --body-file "$env:GITHUB_WORKSPACE\health-report.md"
+          } else {
+            Write-Host "All checks passed - no issue filed."
+          }

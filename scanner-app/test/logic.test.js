@@ -25,9 +25,16 @@ test("cleanScanInput preserves mid-code hyphens", () => {
 });
 
 test("matchFields matches lookup columns only", () => {
-  const f = { Title: "MICL0045", SerialNumber: "PW0MGGLA", Asset: "Laptop" };
+  const f = {
+    Title: "MICL0045",
+    SerialNumber: "PW0MGGLA",
+    Barcode: "VENDOR-99",
+    Asset: "Laptop",
+  };
   assert.strictEqual(X.matchFields(f, "micl0045"), "Title");
   assert.strictEqual(X.matchFields(f, "pw0mggla"), "SerialNumber");
+  // Registered barcodes are matchable too (register-on-scan target).
+  assert.strictEqual(X.matchFields(f, "vendor-99"), "Barcode");
   // Asset (Asset Type) must NOT be matchable - typing "Laptop" is not a scan.
   assert.strictEqual(X.matchFields(f, "laptop"), null);
 });
@@ -92,11 +99,48 @@ test("collectCandidates gathers lookup values only", () => {
   const f = {
     Title: "MICL0045",
     SerialNumber: "PW0MGGLA",
+    Barcode: "VENDOR-99",
     Asset: "Laptop", // excluded - not a lookup column
     Model: "Lenovo L13", // excluded
   };
   const c = X.collectCandidates(f);
-  assert.deepStrictEqual(c.sort(), ["MICL0045", "PW0MGGLA"]);
+  assert.deepStrictEqual(c.sort(), ["MICL0045", "PW0MGGLA", "VENDOR-99"]);
+});
+
+test("findDuplicateSerials flags serials on multiple rows", () => {
+  const rows = [
+    { id: 1, serial: "A1" },
+    { id: 2, serial: "a1" },
+    { id: 3, serial: "B2" },
+    { id: 4, serial: "  B2 " },
+    { id: 5, serial: "" },
+    { id: 6, serial: null },
+  ];
+  assert.deepStrictEqual(X.findDuplicateSerials(rows), [
+    { serial: "A1", ids: [1, 2] },
+    { serial: "B2", ids: [3, 4] },
+  ]);
+});
+
+test("findDuplicateSerials handles empty lists and blank serials", () => {
+  assert.deepStrictEqual(X.findDuplicateSerials([]), []);
+  assert.deepStrictEqual(
+    X.findDuplicateSerials([{ id: 1, serial: "" }, { id: 2 }]),
+    [],
+  );
+});
+
+test("choice constants match the SharePoint columns", () => {
+  assert.deepStrictEqual(X.STATUS_CHOICES, [
+    "In Use",
+    "Available",
+    "Retired",
+    "Left With",
+    "Lost",
+  ]);
+  assert.ok(X.LOCATION_CHOICES.includes("Syokimau"));
+  assert.ok(X.LOCATION_CHOICES.includes("TRM Dr"));
+  assert.ok(X.REGION_CHOICES.includes("Nairobi"));
 });
 
 test("filterHistory expires old entries and keeps legacy strings", () => {
