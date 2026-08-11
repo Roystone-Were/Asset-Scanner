@@ -34,7 +34,8 @@ jobs:
         env:
           SP_CERT_B64: ${{ secrets.SP_CERT_B64 }}
         run: |
-          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\sp.pfx", [Convert]::FromBase64String($env:SP_CERT_B64))
+          # Trim in case the secret was pasted with a trailing newline.
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\sp.pfx", [Convert]::FromBase64String($env:SP_CERT_B64.Trim()))
           # The pfx password (pnp123) is the one used by generate-cert.ps1 -
           # useless on its own without the pfx file, which only ever exists
           # as this secret in CI.
