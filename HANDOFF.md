@@ -32,10 +32,12 @@
   assets unverified 90+ days. Last local run: no dup serials, 33 untagged,
   4 missing serials, 34 unverified.
 - **Scalability fixed:** the app now queries Graph with server-side `$filter`
-  (with the `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly` header, since
-  list columns are unindexed) and falls back to a **paged** full fetch
-  (`@odata.nextLink`-aware, no `$top=999` ceiling). Verified: `$filter` on
-  Title/SerialNumber/Asset returns correct results.
+  and falls back to a **paged** full fetch (`@odata.nextLink`-aware, no
+  `$top=999` ceiling). The lookup columns **SerialNumber, Barcode and Title are
+  now indexed** (`Index-LookupFields.ps1`), so `$filter` works without the
+  `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly` workaround — that
+  header remains only as a safety net. Verified against the live list: `$filter`
+  on Title/SerialNumber returns correct results with no Prefer header.
 
 ## 2. Goal
 
@@ -104,18 +106,20 @@
   `Asset Type` → internal `Asset`).
 - Scanner app deployed; MSAL sign-in works; live Graph lookup works.
 - **Graph `$filter` on list fields requires an index** (verified): returns
-  `400 invalidRequest "Field 'X' ... is not indexed"`. The `Prefer:
-  HonorNonIndexedQueriesWarningMayFailRandomly` header bypasses it (works for
-  Title/SerialNumber/Asset; the app sends it on filter queries). Attempts to
-  index via the `vti_IndexableFieldXML` root-folder property bag did NOT take
-  effect — do NOT rely on that trick. If the list grows large, index the
-  columns in List Settings → Indexed columns.
+  `400 invalidRequest "Field 'X' ... is not indexed"` on unindexed columns.
+  **Done:** `SerialNumber`, `Barcode` and `Title` are indexed via
+  `Index-LookupFields.ps1` (uses `Set-PnPField -Values @{ Indexed = $true }`,
+  verified to take effect — the old `vti_IndexableFieldXML` property-bag trick
+  does NOT work, don't use it). Run the script with `-Verify` to see the
+  current index state without changing anything; add any future lookup column
+  to the `$LookupFields` list in the script.
 
 ## 7. Files inventory
 
 - `scanner-app/index.html` — single-file app (MSAL v2 + html5-qrcode vendored in
-  `lib/`). Lookup: server-side `$filter` on Title/SerialNumber/AssetTag with
-  Prefer header → paged full-fetch fallback → client-side `matchFields()`.
+  `lib/`). Lookup: server-side `$filter` on Title/SerialNumber/AssetTag/Barcode
+  (columns are indexed; Prefer header kept as a safety net) → paged full-fetch
+  fallback → client-side `matchFields()`.
   `fieldV()`/`normKey()` normalize `_x0020_` internal names.
 - `Export-AssetLabels.ps1` — cert-auth CSV/JSON export (now with AssetType+Location).
 - `Xana-Asset-Format.ps1` — Status column + row formatting.

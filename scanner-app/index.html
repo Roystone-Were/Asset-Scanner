@@ -543,9 +543,9 @@
               const q = encodeURIComponent(
                 "fields/" + fname + " eq '" + raw.replace(/'/g, "''") + "'",
               );
-              // SharePoint only allows $filter on indexed columns; this header
-              // permits it on unindexed ones too (fine for small lists - the
-              // paged fallback below covers the rare failure).
+              // Lookup columns (SerialNumber / Barcode / Title) are indexed
+              // via Index-LookupFields.ps1. This header is only a safety net
+              // for any unindexed column - harmless when the query is indexed.
               const data = await graphGet(token, base + "&$filter=" + q, {
                 Prefer:
                   "HonorNonIndexedQueriesWarningMayFailRandomly",
