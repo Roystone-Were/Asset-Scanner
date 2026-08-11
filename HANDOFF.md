@@ -128,8 +128,13 @@
 3. **Data hygiene:** "Procuement" typo (item 34), trailing spaces in Employee/Model
    values, empty Serial on items 14/33/37/38.
 4. **CI auto-deploy** from GitHub (see §8).
-5. Nice-to-haves: Region + Condition rows in the results card, Export button
-   downloads the list, scanned-history, light theme.
+5. Done since last update: Region + Condition rows, scanned-history (24h TTL
+   chips), site-id caching, smart input (uppercase + vendor-prefix stripping),
+   `Last Verified` writeback (every scan stamps the asset row - audit log),
+   PWA install (manifest + service worker + icons), CI auto-deploy from GitHub
+   (rootDirectory=scanner-app). Remaining nice-to-haves: Export button,
+   register-on-scan flow (the real fix for the 35 missing tags), fuzzy
+   "did you mean" matching + unit tests.
 
 ## 10. Notes / gotchas
 

@@ -8,6 +8,9 @@
     <script src="lib/msal-browser.min.js"></script>
     <!-- html5-qrcode (camera barcode/QR scanner) - local copy -->
     <script src="lib/html5-qrcode.min.js"></script>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#121212" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
     <style>
       :root {
         /* Xana official palette (dark theme) */
@@ -237,7 +240,7 @@
       const AUTHORITY =
         "https://login.microsoftonline.com/refrontiergroup.onmicrosoft.com";
       const LIST_NAME = "Xana Asset Inventory";
-      const GRAPH_SCOPES = ["https://graph.microsoft.com/Sites.Read.All"];
+      const GRAPH_SCOPES = ["https://graph.microsoft.com/Sites.ReadWrite.All"];
 
       // ---------- MSAL ----------
       const msalConfig = {
@@ -320,6 +323,22 @@
       }
 
       // ---------- Graph ----------
+      async function graphPatch(token, url, body) {
+        const res = await fetch(url, {
+          method: "PATCH",
+          headers: {
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok)
+          throw new Error(
+            "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
+          );
+        return res.json();
+      }
+
       async function graphGet(token, url, extraHeaders) {
         const res = await fetch(url, {
           headers: Object.assign(
@@ -430,6 +449,7 @@
             "/items?expand=fields";
           const clean = (code || "").trim().toLowerCase();
           let item = null;
+          let itemId = null;
           let matchedField = "";
 
           // Fast path: let SharePoint filter server-side so the lookup cost
@@ -453,6 +473,7 @@
                 const key = matchFields(it.fields, clean);
                 if (key) {
                   item = it.fields;
+                  itemId = it.id;
                   matchedField = key;
                   break;
                 }
@@ -473,6 +494,7 @@
                 const key = matchFields(it.fields, clean);
                 if (key) {
                   item = it.fields;
+                  itemId = it.id;
                   matchedField = key;
                   break;
                 }
@@ -490,6 +512,7 @@
           }
 
           saveHistory(code);
+          verifyWriteback(itemId);
 
           const g = (v) => {
             if (v === undefined || v === null) return "—";
@@ -545,6 +568,9 @@
             '<div class="row"><span>Condition</span><span>' +
             escapeHtml(g(fieldV(item, "Condition"))) +
             "</span></div>" +
+            '<div class="row"><span>Last Verified</span><span id="lastVerifiedVal">' +
+            escapeHtml(g(fieldV(item, "Last Verified"))) +
+            "</span></div>" +
             "</div>";
         } catch (e) {
           console.error(e);
@@ -599,6 +625,36 @@
           if (normKey(k) === want) return fields[k];
         }
         return undefined;
+      }
+
+      // ---------- Last verified writeback ----------
+      // Every successful scan stamps a timestamp on the asset row so the list
+      // doubles as an inventory audit. Throttled to one write per item per
+      // minute; failures are silent (a read-only staff member just won't write).
+      const lastWrite = {};
+      async function verifyWriteback(itemId) {
+        if (!itemId || !SITE_ID || !LIST_ID) return;
+        const now = Date.now();
+        if (lastWrite[itemId] && now - lastWrite[itemId] < 60 * 1000) return;
+        lastWrite[itemId] = now;
+        try {
+          const token = await getToken();
+          await graphPatch(
+            token,
+            "https://graph.microsoft.com/v1.0/sites/" +
+              SITE_ID +
+              "/lists/" +
+              LIST_ID +
+              "/items/" +
+              itemId +
+              "/fields",
+            { LastVerified: new Date().toISOString() },
+          );
+          const el = document.getElementById("lastVerifiedVal");
+          if (el) el.textContent = "Just now";
+        } catch (e) {
+          console.warn("last-verified writeback failed:", e);
+        }
       }
 
       // ---------- Recent scans ----------
@@ -733,6 +789,11 @@
       });
 
       (async function boot() {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("sw.js").catch((e) => {
+            console.warn("SW registration failed:", e);
+          });
+        }
         window.addEventListener("error", (e) => {
           const el = document.getElementById("authState");
           if (el && !el.textContent.startsWith("✅"))
