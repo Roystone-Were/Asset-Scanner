@@ -85,7 +85,9 @@
   }
 
   // Returns the matched field key if `fields` matches the cleaned value
-  // against any lookup column, otherwise null.
+  // against any lookup column, otherwise null. Both sides are trimmed:
+  // SharePoint values sometimes carry trailing spaces (e.g. "4P09PF3 "), and
+  // an untrimmed stored value would silently miss a scan.
   function matchFields(f, clean) {
     for (const key of Object.keys(f || {})) {
       const k = key.toLowerCase().replace(/[^a-z]/g, "");
@@ -95,7 +97,7 @@
         k === "serialnumber" ||
         k === "serial" ||
         k === "barcode";
-      if (isKey && String(f[key]).toLowerCase() === clean) return key;
+      if (isKey && String(f[key]).toLowerCase().trim() === clean) return key;
     }
     return null;
   }

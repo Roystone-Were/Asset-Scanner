@@ -39,6 +39,24 @@ test("matchFields matches lookup columns only", () => {
   assert.strictEqual(X.matchFields(f, "laptop"), null);
 });
 
+test("matchFields trims stored values so trailing spaces can't miss", () => {
+  // SharePoint rust: "4P09PF3 " with a trailing space must still match a scan.
+  assert.strictEqual(
+    X.matchFields({ SerialNumber: "PW0MGGLA " }, "pw0mggla"),
+    "SerialNumber",
+  );
+  assert.strictEqual(
+    X.matchFields({ Barcode: " VENDOR-99" }, "vendor-99"),
+    "Barcode",
+  );
+  assert.strictEqual(
+    X.matchFields({ Title: " MICL0045 " }, "micl0045"),
+    "Title",
+  );
+  // Padding still can't make a non-match match.
+  assert.strictEqual(X.matchFields({ SerialNumber: "PW0MGGLAX " }, "pw0mggla"), null);
+});
+
 test("matchFields returns null for empty fields", () => {
   assert.strictEqual(X.matchFields(null, "micl0045"), null);
   assert.strictEqual(X.matchFields({}, "micl0045"), null);

@@ -29,8 +29,19 @@
 - **Data health automation (needs 4 GitHub secrets — pending):**
   `Health-Check.ps1` + `.github/workflows/data-health.yml` (monthly cron) file a
   GitHub issue when the list has duplicate serials, missing tags/serials, or
-  assets unverified 90+ days. Last local run: no dup serials, 33 untagged,
-  4 missing serials, 34 unverified.
+  assets unverified 90+ days; the issue @mentions the owner. The report is also
+  **optionally emailed** via SMTP (`Send-HealthEmail.ps1`, off by default — add
+  the `SMTP_*` secrets to enable). Unverified assets are listed in a **Markdown
+  table** (Asset / Tag / Model / Serial / Last verified) so the report reads
+  well for leadership — the next report is going to the **CEO and manager**.
+  Last local run: no dup serials, 33 untagged, 4 missing serials, 34 unverified.
+- **Hardening pass (session):** `matchFields` now trims stored values too
+  (trailing-space serial/barcode no longer silently misses); Graph calls retry
+  429/5xx with exponential backoff + jitter; MSAL falls back to sessionStorage
+  when localStorage is blocked (in-app browsers); the health report now also
+  flags **duplicate barcodes**, warns when the **client cert has < 90 days**
+  left, and validates **expected columns still exist**; the pfx password moved
+  to an optional `SP_CERT_PASS` secret instead of plaintext in the workflow.
 - **Scalability fixed:** the app now queries Graph with server-side `$filter`
   and falls back to a **paged** full fetch (`@odata.nextLink`-aware, no
   `$top=999` ceiling). The lookup columns **SerialNumber, Barcode and Title are
@@ -122,9 +133,20 @@
   fallback → client-side `matchFields()`.
   `fieldV()`/`normKey()` normalize `_x0020_` internal names.
 - `Export-AssetLabels.ps1` — cert-auth CSV/JSON export (now with AssetType+Location).
+- `Export-AssetsJson.ps1` — cert-auth export → `scanner-app/test/fixtures/assets.json`
+  for the golden test suite (commit the new fixture after bulk list changes).
+- `Health-Check.ps1` — monthly data-health report: duplicate serials, missing
+  tags/serials, unverified 90+ days (unverified assets in a Markdown table),
+  status summary. Fired by `.github/workflows/data-health.yml` (monthly cron).
+- `Send-HealthEmail.ps1` — optional SMTP delivery of the report (STARTTLS;
+  needs `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_TO` secrets; off by default).
+- `Index-LookupFields.ps1` — indexes the lookup columns `SerialNumber`/`Barcode`/`Title`;
+  `-Verify` reports state without changing anything.
+- `Add-LastVerifiedColumn.ps1` — adds the `Last Verified` date column the app
+  writes on every scan (idempotent).
 - `Xana-Asset-Format.ps1` — Status column + row formatting.
-- `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` — historical (Barcode
-  column added then removed; app no longer uses it).
+- `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` — add/remove the `Barcode`
+  column (currently present — the register-on-scan target).
 - `generate-cert.ps1` — created the client cert. `ocr.ps1` — Windows OCR helper.
 - `labels/` — deprecated QR label generator (backup only).
 - `README.md` — current setup/deploy docs. `HANDOFF.md` — this file.
@@ -134,7 +156,8 @@
 - Vercel project `xana-asset-lookup` (scope `roystoneweres-projects`), linked in
   `scanner-app/.vercel/` (not committed).
 - Manual deploy: `cd scanner-app && npx vercel deploy --prod --yes`.
-- **Open:** wire GitHub → Vercel auto-deploy (Project Settings → Git).
+- GitHub → Vercel auto-deploy is wired (Project Settings → Git, rootDirectory
+  `scanner-app`): every push to `main` deploys itself (see §1).
 - Local dev: `py -m http.server 8100 --directory scanner-app`; for local
   sign-in temporarily set `redirectUri` to `http://localhost:8100` in
   `index.html` (restore before deploying).
@@ -152,22 +175,51 @@
    that a push whose tests fail is rejected, so Vercel only ever deploys green
    commits. (`gh` CLI isn't installed here; the rule can also be set via REST
    with a PAT.)
-3. **Monthly data-health scheduling needs 4 secrets** in GitHub (Settings →
+3. **Monthly data-health scheduling needs 5 secrets** in GitHub (Settings →
    Secrets and variables → Actions): `SP_TENANT`, `SP_CLIENT_ID`, `SP_CERT_B64`
-   (contents of the gitignored `sp-cert.b64`), `SP_THUMBPRINT`. The workflow is
-   committed; it starts filing monthly issue reports once the secrets exist.
+   (contents of the gitignored `sp-cert.b64`), `SP_THUMBPRINT`, and optional
+   `SP_CERT_PASS` (pfx password — unset falls back to the original so existing
+   setups keep working). The workflow is committed; it starts filing monthly
+   issue reports once the secrets exist. Optional direct email: `SMTP_HOST`,
+   `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_TO` (see the workflow header /
+   `Send-HealthEmail.ps1`).
 4. **Data hygiene (minor):** trailing spaces in some values (Condition has "New "
    variants), empty serials on 14/33/37/38.
 5. Done since last update: register-on-scan + inline Status/Location editing,
    fuzzy "did you mean", 24 unit + golden tests, Barcode column back, Last
    Verified writeback, PWA install, CI auto-deploy, 24h scanned-history, site-id
    caching, smart input. Nice-to-haves: Export button, cache-first offline lookup.
+6. **Report polish before the CEO/manager presentation (brainstorm, not built):**
+   lead the report with a headline health score + exec summary; add
+   month-over-month deltas (needs a committed `health-history.json` + `contents:
+   write` in the workflow); send the email as styled HTML instead of raw markdown.
 
 ## 10. Notes / gotchas
 
 - Re-export after list changes: `pwsh -NoProfile -File Export-AssetLabels.ps1`
   (labels) and `pwsh -NoProfile -File Export-AssetsJson.ps1` (golden-test
   fixture — commit the new `assets.json`).
+- `health-report.md` is gitignored — it's a generated artifact (regenerated by
+  `Health-Check.ps1`); the monthly report lives in a GitHub issue + optional
+  email, never in git.
 - Cert files + `.vercel/` + `.env.local` are gitignored; keep secrets out of git.
 - The app reads live from Graph — `assets.json/csv` are snapshots for labels only.
 - git identity (repo-local): `Roystone-Were <patorankingquavo100@gmail.com>`.
+
+## 11. Manual hardening steps (GitHub UI / tenant — can't be done from the repo)
+
+- **CI deploy gate (2 min):** Settings → Branches → Add rule → branch `main` →
+  enable **Require status checks to pass before merging** → select `test` →
+  **Do not allow bypassing** → Create. Without it, a red push still deploys.
+- **Verify site sharing grants scanning staff edit rights.** The app requests
+  `Sites.ReadWrite.All` (delegated), but that can't exceed the user's own
+  SharePoint permission — a Read-only scanner gets loud 403s on register/edit
+  (lookup still works). Give scanning staff **Contribute** on the list if they
+  should register barcodes / edit Status & Location.
+- **Revoke the orphan client secret** (`MP8Q8…`, legacy ACS, unused) in the
+  Entra app registration — it's a credential that exists but is never used.
+- **Cron self-disable:** GitHub disables scheduled workflows after 60 days of
+  repo inactivity. The monthly report is the only thing on that cron — any push
+  resets the clock, but if the repo goes quiet, re-enable via Actions →
+  `data-health` → Enable, or trigger manually with **Run workflow**
+  (`workflow_dispatch` is wired).

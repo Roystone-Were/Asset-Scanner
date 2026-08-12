@@ -357,13 +357,30 @@
       const GRAPH_SCOPES = ["https://graph.microsoft.com/Sites.ReadWrite.All"];
 
       // ---------- MSAL ----------
+      // In-app browsers / private modes sometimes block localStorage (MSAL's
+      // default cache), which caused sign-in loops. Detect it once, before
+      // MSAL initializes, and fall back to sessionStorage so sign-in still
+      // works there.
+      function pickCacheLocation() {
+        try {
+          const k = "__xana_cache_test__";
+          localStorage.setItem(k, "1");
+          localStorage.removeItem(k);
+          return "localStorage";
+        } catch (e) {
+          console.warn(
+            "localStorage blocked - falling back to sessionStorage for MSAL cache",
+          );
+          return "sessionStorage";
+        }
+      }
       const msalConfig = {
         auth: {
           clientId: CLIENT_ID,
           authority: AUTHORITY,
           redirectUri: "https://xana-asset-lookup.vercel.app",
         },
-        cache: { cacheLocation: "localStorage" },
+        cache: { cacheLocation: pickCacheLocation() },
       };
       const msalInstance = new msal.PublicClientApplication(msalConfig);
 
@@ -437,15 +454,44 @@
       }
 
       // ---------- Graph ----------
+      // Graph throttles with 429 and throws transient 5xx; retry those with
+      // exponential backoff + jitter (or Retry-After when provided) so a
+      // throttled lookup succeeds instead of failing. Never retries 4xx
+      // (permission errors must surface immediately).
+      async function graphFetch(url, options, tries) {
+        let attempt = 0;
+        for (;;) {
+          const res = await fetch(url, options);
+          if (
+            (res.status === 429 || res.status >= 500) &&
+            attempt < (tries || 3) - 1
+          ) {
+            const retryAfter = parseFloat(res.headers.get("Retry-After"));
+            const delay =
+              retryAfter > 0
+                ? retryAfter * 1000
+                : 500 * Math.pow(2, attempt) + Math.random() * 250;
+            await new Promise((r) => setTimeout(r, delay));
+            attempt++;
+            continue;
+          }
+          return res;
+        }
+      }
+
       async function graphPatch(token, url, body) {
-        const res = await fetch(url, {
-          method: "PATCH",
-          headers: {
-            Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
+        const res = await graphFetch(
+          url,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: "Bearer " + token,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
           },
-          body: JSON.stringify(body),
-        });
+          3,
+        );
         if (!res.ok)
           throw new Error(
             "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
@@ -454,12 +500,16 @@
       }
 
       async function graphGet(token, url, extraHeaders) {
-        const res = await fetch(url, {
-          headers: Object.assign(
-            { Authorization: "Bearer " + token },
-            extraHeaders || {},
-          ),
-        });
+        const res = await graphFetch(
+          url,
+          {
+            headers: Object.assign(
+              { Authorization: "Bearer " + token },
+              extraHeaders || {},
+            ),
+          },
+          3,
+        );
         if (!res.ok)
           throw new Error(
             "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
