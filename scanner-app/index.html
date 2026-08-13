@@ -830,37 +830,34 @@
         if (!valEl) return;
         const cur = (valEl.textContent || "").trim();
         const cell = valEl.parentNode; // the <span> cell wrapping the value
+        // Native <select> -> on Android/WebView this opens the system picker.
         cell.innerHTML =
-          '<div class="fieldedit" id="fieldedit">' +
-          '<div class="fe-title">' +
-          (field === "Status" ? "Change status" : "Change location") +
-          "</div>" +
+          '<select class="fieldpick" id="fieldpick">' +
           choices
             .map(
               (c) =>
-                '<button type="button" class="fe-opt" data-cho="' +
+                '<option value="' +
                 escapeHtml(c) +
-                '" data-save="' +
-                field +
-                '">' +
+                '"' +
+                (c === cur ? " selected" : "") +
+                ">" +
                 escapeHtml(c) +
-                (c === cur ? "  ✓" : "") +
-                "</button>",
+                "</option>",
             )
             .join("") +
-          '<button type="button" class="fe-cancel" data-cancel="1">Cancel</button>' +
-          "</div>";
+          "</select> " +
+          '<button type="button" class="editbtn" data-save="' +
+          field +
+          '">Save</button> ' +
+          '<button type="button" class="editbtn" data-cancel="1">Cancel</button>';
       }
 
-      async function saveFieldEdit(field, value) {
-        const box = document.getElementById("fieldedit");
-        const cell = box ? box.parentNode : null;
-        if (value == null) {
-          const pick = document.getElementById("fieldpick"); // legacy select fallback
-          if (pick) value = pick.value;
-        }
-        if (value == null) return;
-        if (cell) cell.textContent = "Saving…";
+      async function saveFieldEdit(field) {
+        const pick = document.getElementById("fieldpick");
+        if (!pick) return;
+        const value = pick.value;
+        const cell = pick.parentNode;
+        cell.textContent = "Saving…";
         try {
           if (!lastItem || !lastItem.id) throw new Error("No active asset");
           const token = await getToken();
@@ -868,12 +865,9 @@
           body[field] = value;
           await graphPatch(token, fieldsUrl(lastItem.id), body);
           lastItem.fields[field] = value;
-          if (cell)
-            cell.innerHTML =
-              renderValueCell(field, value) + '<span class="savedtip">Saved ✓</span>';
+          cell.innerHTML =
+            renderValueCell(field, value) + '<span class="savedtip">Saved ✓</span>';
           if (field === "Status") {
-            const sv = document.getElementById("statusVal");
-            if (sv) sv.textContent = value;
             const badge = document.getElementById("statusBadge");
             if (badge) {
               badge.textContent = value;
@@ -883,12 +877,11 @@
         } catch (e) {
           console.warn("field save failed:", e);
           const current = lastItem && lastItem.fields ? lastItem.fields[field] : value;
-          if (cell)
-            cell.innerHTML =
-              '<span class="savedtip">' +
-              escapeHtml((e && e.message) || e) +
-              "</span>" +
-              renderValueCell(field, current);
+          cell.innerHTML =
+            '<span class="savedtip">' +
+            escapeHtml((e && e.message) || e) +
+            "</span>" +
+            renderValueCell(field, current);
         }
       }
 
@@ -1120,10 +1113,6 @@
         if (!b) return;
         if (b.dataset.action === "register") {
           renderRegisterPanel(b.dataset.code);
-          return;
-        }
-        if (b.dataset.cho) {
-          saveFieldEdit(b.dataset.save, b.dataset.cho);
           return;
         }
         if (b.dataset.edit) {
