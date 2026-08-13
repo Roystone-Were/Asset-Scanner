@@ -226,28 +226,32 @@
         border-color: var(--accent);
       }
       .editbtn {
-        background: transparent;
-        border: 1px solid var(--border);
-        color: var(--muted);
-        border-radius: 6px;
-        padding: 1px 8px;
-        font-size: 0.72rem;
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 16px;
+        font-size: .85rem;
         font-weight: 600;
         cursor: pointer;
-        margin-left: 6px;
-        vertical-align: middle;
+        margin-left: 8px;
+        min-height: 40px;
+        line-height: 1;
       }
-      .editbtn:hover {
+      .editbtn[data-cancel] {
+        background: transparent;
         color: var(--text);
-        border-color: var(--accent);
+        border: 1px solid var(--border);
       }
+      .editbtn:hover { filter: brightness(1.08); }
       select.fieldpick {
         background: #181818;
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 8px;
-        padding: 6px 8px;
-        font-size: 0.85rem;
+        padding: 8px 12px;
+        font-size: .9rem;
+        min-height: 40px;
       }
       button.valpick {
         display: inline-flex; align-items: center; gap: 6px;
