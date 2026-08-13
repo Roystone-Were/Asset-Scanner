@@ -249,6 +249,22 @@
         padding: 6px 8px;
         font-size: 0.85rem;
       }
+      button.valpick {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: transparent; border: 1px dashed var(--border);
+        color: var(--text); border-radius: 8px;
+        padding: 8px 10px; font-size: .9rem; max-width: 100%;
+      }
+      button.valpick .editglyph { color: var(--accent); }
+      .fieldedit { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+      .fieldedit .fe-title { color: var(--muted); font-size: .8rem; margin-bottom: 2px; }
+      button.fe-opt {
+        background: var(--card2); color: var(--text);
+        border: 1px solid var(--border); border-radius: 8px;
+        padding: 11px 12px; font-size: .9rem; text-align: left;
+      }
+      button.fe-opt:hover { border-color: var(--accent); }
+      button.fe-cancel { background: transparent; color: var(--muted); border: 0; padding: 8px; font-size: .85rem; }
       .regrow {
         display: block;
         width: 100%;
@@ -702,9 +718,9 @@
             '">' +
             escapeHtml(status) +
             "</span></h2>" +
-            '<div class="row"><span>Status</span><span><span id="statusVal">' +
-            escapeHtml(status) +
-            '</span><button type="button" class="editbtn" data-edit="Status" title="Change status">✎</button></span></div>' +
+            '<div class="row"><span>Status</span><span>' +
+            renderValueCell("Status", status) +
+            "</span></div>" +
             '<div class="row"><span>Serial No.</span><span>' +
             escapeHtml(scanKey) +
             "</span></div>" +
@@ -720,9 +736,9 @@
             '<div class="row"><span>Employee</span><span>' +
             escapeHtml(g(fieldV(item, "Employee Name"))) +
             "</span></div>" +
-            '<div class="row"><span>Location</span><span><span id="locVal">' +
-            escapeHtml(g(fieldV(item, "Location"))) +
-            '</span><button type="button" class="editbtn" data-edit="Location" title="Change location">✎</button></span></div>' +
+            '<div class="row"><span>Location</span><span>' +
+            renderValueCell("Location", g(fieldV(item, "Location"))) +
+            "</span></div>" +
             '<div class="row"><span>Region</span><span>' +
             escapeHtml(g(fieldV(item, "Region"))) +
             "</span></div>" +
@@ -791,41 +807,60 @@
         );
       }
 
+      function renderValueCell(field, value) {
+        const id = field === "Status" ? "statusVal" : "locVal";
+        const v = value === undefined || value === null ? "" : value;
+        return (
+          '<button type="button" class="valpick" data-edit="' +
+          field +
+          '" title="Change ' +
+          field.toLowerCase() +
+          '"><span id="' +
+          id +
+          '">' +
+          escapeHtml(v) +
+          '</span> <span class="editglyph">✎</span></button>'
+        );
+      }
+
       function editField(field) {
-        const choices =
-          field === "Status" ? STATUS_CHOICES : LOCATION_CHOICES;
+        const choices = field === "Status" ? STATUS_CHOICES : LOCATION_CHOICES;
         const id = field === "Status" ? "statusVal" : "locVal";
         const valEl = document.getElementById(id);
         if (!valEl) return;
-        const cur = valEl.textContent;
-        const cell = valEl.parentNode;
+        const cur = (valEl.textContent || "").trim();
+        const cell = valEl.parentNode; // the <span> cell wrapping the value
         cell.innerHTML =
-          '<select class="fieldpick" id="fieldpick">' +
+          '<div class="fieldedit" id="fieldedit">' +
+          '<div class="fe-title">' +
+          (field === "Status" ? "Change status" : "Change location") +
+          "</div>" +
           choices
             .map(
               (c) =>
-                '<option value="' +
+                '<button type="button" class="fe-opt" data-cho="' +
                 escapeHtml(c) +
-                '"' +
-                (c === cur ? " selected" : "") +
-                ">" +
+                '" data-save="' +
+                field +
+                '">' +
                 escapeHtml(c) +
-                "</option>",
+                (c === cur ? "  ✓" : "") +
+                "</button>",
             )
             .join("") +
-          "</select> " +
-          '<button type="button" class="editbtn" data-save="' +
-          field +
-          '">Save</button> ' +
-          '<button type="button" class="editbtn" data-cancel="1">Cancel</button>';
+          '<button type="button" class="fe-cancel" data-cancel="1">Cancel</button>' +
+          "</div>";
       }
 
-      async function saveFieldEdit(field) {
-        const pick = document.getElementById("fieldpick");
-        if (!pick) return;
-        const value = pick.value;
-        const cell = pick.parentNode;
-        cell.textContent = "Saving…";
+      async function saveFieldEdit(field, value) {
+        const box = document.getElementById("fieldedit");
+        const cell = box ? box.parentNode : null;
+        if (value == null) {
+          const pick = document.getElementById("fieldpick"); // legacy select fallback
+          if (pick) value = pick.value;
+        }
+        if (value == null) return;
+        if (cell) cell.textContent = "Saving…";
         try {
           if (!lastItem || !lastItem.id) throw new Error("No active asset");
           const token = await getToken();
@@ -833,6 +868,9 @@
           body[field] = value;
           await graphPatch(token, fieldsUrl(lastItem.id), body);
           lastItem.fields[field] = value;
+          if (cell)
+            cell.innerHTML =
+              renderValueCell(field, value) + '<span class="savedtip">Saved ✓</span>';
           if (field === "Status") {
             const sv = document.getElementById("statusVal");
             if (sv) sv.textContent = value;
@@ -842,24 +880,15 @@
               badge.style.background = statusColor(value);
             }
           }
-          cell.innerHTML =
-            '<span id="' +
-            (field === "Status" ? "statusVal" : "locVal") +
-            '">' +
-            escapeHtml(value) +
-            '</span><button type="button" class="editbtn" data-edit="' +
-            field +
-            '" title="Change ' +
-            field.toLowerCase() +
-            '">✎</button><span class="savedtip">Saved ✓</span>';
         } catch (e) {
           console.warn("field save failed:", e);
-          cell.innerHTML =
-            '<span class="savedtip">' +
-            escapeHtml((e && e.message) || e) +
-            '</span><button type="button" class="editbtn" data-edit="' +
-            field +
-            '">✎</button>';
+          const current = lastItem && lastItem.fields ? lastItem.fields[field] : value;
+          if (cell)
+            cell.innerHTML =
+              '<span class="savedtip">' +
+              escapeHtml((e && e.message) || e) +
+              "</span>" +
+              renderValueCell(field, current);
         }
       }
 
@@ -1091,6 +1120,10 @@
         if (!b) return;
         if (b.dataset.action === "register") {
           renderRegisterPanel(b.dataset.code);
+          return;
+        }
+        if (b.dataset.cho) {
+          saveFieldEdit(b.dataset.save, b.dataset.cho);
           return;
         }
         if (b.dataset.edit) {
