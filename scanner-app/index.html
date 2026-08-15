@@ -265,6 +265,7 @@
         margin-left: 8px;
         min-height: 40px;
         line-height: 1;
+        white-space: nowrap;
       }
       .editbtn[data-cancel] {
         background: transparent;
@@ -272,6 +273,24 @@
         border: 1px solid var(--border);
       }
       .editbtn:hover { filter: brightness(1.08); }
+      .editrow {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+      }
+      .editrow select.fieldpick {
+        width: 100%;
+      }
+      .editactions {
+        display: flex;
+        gap: 8px;
+      }
+      .editactions .editbtn {
+        flex: 1;
+        margin-left: 0;
+        width: 100%;
+      }
       select.fieldpick {
         background: #181818;
         color: var(--text);
@@ -1184,9 +1203,11 @@
         if (!valEl) return;
         const cur = (valEl.textContent || "").trim();
         const cell = valEl.parentNode; // the <span> cell wrapping the value
-        // Native <select> -> on Android/WebView this opens the system picker.
+        // Stacked edit layout: the dropdown gets the full row width, then
+        // Save/Cancel sit side by side under it (on narrow phones a single
+        // inline row squeezed "Cancel" into wrapping mid-word).
         cell.innerHTML =
-          '<select class="fieldpick" id="fieldpick">' +
+          '<div class="editrow"><select class="fieldpick" id="fieldpick">' +
           choices
             .map(
               (c) =>
@@ -1199,11 +1220,12 @@
                 "</option>",
             )
             .join("") +
-          "</select> " +
+          '</select><div class="editactions">' +
           '<button type="button" class="editbtn" data-save="' +
           field +
-          '">Save</button> ' +
-          '<button type="button" class="editbtn" data-cancel="1">Cancel</button>';
+          '">Save</button>' +
+          '<button type="button" class="editbtn" data-cancel="1">Cancel</button>' +
+          "</div></div>";
       }
 
       async function saveFieldEdit(field) {
