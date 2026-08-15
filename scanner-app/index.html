@@ -435,6 +435,45 @@
       .hidden {
         display: none;
       }
+      #kbdHint {
+        display: none;
+        color: var(--muted);
+        font-size: 0.7rem;
+        text-align: center;
+        margin: 10px 0 0;
+      }
+      /* ---------- Desktop tier (>=768px) ----------
+         One responsive UI: the phone layout is untouched below this query.
+         On wide screens the column widens, the result card's field rows flow
+         into two balanced columns, and the scroll panels get more room. */
+      @media (min-width: 768px) {
+        .wrap {
+          max-width: 640px;
+        }
+        .card {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          column-gap: 28px;
+        }
+        /* Full-width card children: the match banner, heading, match caption
+           and history area; everything else (the .row fields) pairs up. */
+        .card > .msg,
+        .card > .matchvia,
+        .card > h2,
+        .card > .histbar,
+        .card > #historyPanel {
+          grid-column: 1 / -1;
+        }
+        .hlist {
+          max-height: 480px;
+        }
+        #regList {
+          max-height: 420px;
+        }
+        #kbdHint {
+          display: block;
+        }
+      }
     </style>
   </head>
   <body>
@@ -480,6 +519,7 @@
           </div>
         </div>
         <div id="result"></div>
+        <p id="kbdHint">W walk mode · / search · Esc exit walk</p>
       </div>
     </div>
     <script>
@@ -1677,6 +1717,48 @@
       let keyLastT = 0;
       window.addEventListener("keydown", (e) => {
         const t = performance.now();
+        const ae = document.activeElement;
+        const inField =
+          ae &&
+          (ae.tagName === "INPUT" ||
+              ae.tagName === "TEXTAREA" ||
+              ae.tagName === "SELECT");
+        const appReady = !document
+          .getElementById("app")
+          .classList.contains("hidden");
+
+        // Keyboard shortcuts (desktop): W toggles walk, / focuses the input,
+        // Esc exits walk. Guarded by the same "cold stream" rule as the
+        // burst detector (no key in 400ms) so a wedge scanner bursting a code
+        // containing these characters can't trigger them mid-scan.
+        if (e.key === "Escape") {
+          if (inField) ae.blur();
+          else if (walkMode) exitWalk();
+          KEY_QUEUE.length = 0;
+          return;
+        }
+        if (
+          e.key === "/" &&
+          !inField &&
+          appReady &&
+          t - keyLastT > 400
+        ) {
+          e.preventDefault(); // don't type the "/" into the focused input
+          document.getElementById(walkMode ? "walkInput" : "manual").focus();
+          return;
+        }
+        if (
+          (e.key === "w" || e.key === "W") &&
+          !inField &&
+          appReady &&
+          t - keyLastT > 400
+        ) {
+          if (walkMode) exitWalk();
+          else enterWalk();
+          KEY_QUEUE.length = 0;
+          return;
+        }
+
         if (t - keyLastT > 400) KEY_QUEUE.length = 0;
         keyLastT = t;
         if (e.key && e.key.length === 1) {
@@ -1689,12 +1771,6 @@
           const burst = classifyKeyBurst(KEY_QUEUE.slice());
           KEY_QUEUE.length = 0;
           if (!burst.isScan) return;
-          const ae = document.activeElement;
-          const inField =
-            ae &&
-            (ae.tagName === "INPUT" ||
-              ae.tagName === "TEXTAREA" ||
-              ae.tagName === "SELECT");
           if (inField) return; // the focused input handles its own Enter
           if (walkMode) {
             walkLookup(burst.text);
