@@ -314,6 +314,77 @@
       .regcode {
         color: var(--green);
       }
+      #syncBadge {
+        font-size: 0.8rem;
+        padding: 8px 12px;
+        margin: 0 0 10px;
+        text-align: center;
+      }
+      .walkstats {
+        font-size: 0.9rem;
+        color: var(--muted);
+        margin-bottom: 10px;
+        text-align: center;
+      }
+      #walkInput {
+        font-size: 1.15rem;
+        padding: 16px;
+        text-align: center;
+        letter-spacing: 0.04em;
+      }
+      .flash {
+        position: fixed;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 14px 30px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 1.1rem;
+        z-index: 99;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+      }
+      .flash.flashok {
+        background: var(--green);
+        color: #052e16;
+      }
+      .flash.flashbad {
+        background: var(--red);
+        color: #fff;
+      }
+      .histbar {
+        margin-top: 14px;
+      }
+      button.histbtn {
+        background: var(--card2);
+        color: var(--muted);
+        font-size: 0.8rem;
+        padding: 9px 14px;
+        border-radius: 8px;
+      }
+      .hlist {
+        margin-top: 10px;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .hrow {
+        padding: 8px 0;
+        border-bottom: 1px solid #262626;
+        font-size: 0.8rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .hrow:last-child {
+        border-bottom: 0;
+      }
+      .hrow .hwhen {
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+      .hrow .hwho {
+        font-weight: 700;
+      }
       .hidden {
         display: none;
       }
@@ -328,21 +399,39 @@
         asset's details from SharePoint.
       </p>
       <div id="authState">Signing in…</div>
+      <div id="syncBadge" class="msg info hidden"></div>
 
       <div id="app" class="hidden">
-        <div class="toolbar">
-          <button id="btnScan">📷 Scan Tag</button>
-          <button id="btnStop" class="secondary hidden">⏹ Stop</button>
-        </div>
         <div id="qr-reader" class="hidden"></div>
-        <input
-          type="text"
-          id="manual"
-          placeholder="Type asset tag or serial e.g. MICL0045"
-          autocomplete="off"
-        />
-        <div id="recent" class="hidden"></div>
-        <button id="btnLookup" class="secondary">Look up</button>
+        <div id="mainui">
+          <div class="toolbar">
+            <button id="btnScan">📷 Scan Tag</button>
+            <button id="btnStop" class="secondary hidden">⏹ Stop</button>
+            <button id="btnWalk" class="secondary">🚶 Walk</button>
+          </div>
+          <input
+            type="text"
+            id="manual"
+            placeholder="Type asset tag or serial e.g. MICL0045"
+            autocomplete="off"
+          />
+          <div id="recent" class="hidden"></div>
+          <button id="btnLookup" class="secondary">Look up</button>
+        </div>
+        <div id="walk" class="hidden">
+          <div id="walkStats" class="walkstats"></div>
+          <div id="walkFlash" class="hidden"></div>
+          <input
+            type="text"
+            id="walkInput"
+            placeholder="Scan with USB scanner / type + Enter"
+            autocomplete="off"
+          />
+          <div class="toolbar">
+            <button id="walkCamera">📷 Camera</button>
+            <button id="walkExit" class="secondary">✕ Exit walk mode</button>
+          </div>
+        </div>
         <div id="result"></div>
       </div>
     </div>
@@ -360,6 +449,9 @@
         collectCandidates,
         suggestMatch,
         filterHistory,
+        mergeItems,
+        classifyKeyBurst,
+        diffFields,
         STATUS_CHOICES,
         LOCATION_CHOICES,
       } = Xana;
@@ -368,6 +460,8 @@
       let lastItem = null; // { id, fields } of the last matched asset
       let allItems = []; // [{ id, fields }] fetched by the fallback path
       let currentCode = ""; // last cleaned scan value
+      let walkMode = false; // walk-mode session active
+      const walk = { scans: 0, hits: 0, misses: 0 };
 
       // ---------- Config ----------
       const CLIENT_ID = "7caa51af-9f32-42d8-8264-da5b97c2f8eb";
@@ -660,106 +754,187 @@
               url = data["@odata.nextLink"] || null;
             }
           }
+          // Write-through the offline data cache: the full list when the
+          // fallback fetch ran to completion, or the matched item otherwise.
+          if (!item && allItems.length) mergeCache(allItems);
+          if (item) mergeCache([{ id: itemId, fields: item }]);
           if (!item) {
             lastItem = null;
-            const suggestion = suggestMatch(raw, candidates);
-            result.innerHTML =
-              '<div class="msg err">No asset found for "' +
-              escapeHtml(code) +
-              '". No asset has that tag/serial/barcode in the list.' +
-              (suggestion
-                ? '<br/><button type="button" class="chip suggest" data-code="' +
-                  escapeHtml(suggestion) +
-                  '">Did you mean ' +
-                  escapeHtml(suggestion) +
-                  "?</button>"
-                : "") +
-              (allItems.length
-                ? '<br/><button type="button" class="chip" data-action="register" data-code="' +
-                  escapeHtml(code) +
-                  '">➕ Register this barcode</button>'
-                : "") +
-              "</div>" +
-              '<div id="registerPanel" class="card hidden">' +
-              "<h2>Register <span class=\"regcode\">" +
-              escapeHtml(code) +
-              "</span></h2>" +
-              '<input type="text" id="regSearch" placeholder="Search by tag, serial or model…" autocomplete="off" />' +
-              '<div id="regList"></div>' +
-              '<div id="regConfirm" class="hidden"><p class="confirmtext"></p>' +
-              '<div class="confirmbar"><button id="regSave">Save barcode</button>' +
-              '<button id="regCancel" class="secondary">Cancel</button></div></div>' +
-              "</div>";
-            return;
+            renderMiss(code, candidates, {});
+            return "miss";
           }
           lastItem = { id: itemId, fields: item };
 
           saveHistory(code);
           verifyWriteback(itemId);
 
-          const status = g(item["Status"]);
-          const color = statusColor(status);
-          const title = g(fieldV(item, "Title"));
-          const scanKey =
-            g(fieldV(item, "Serial Number") || fieldV(item, "Serial")) ||
-            (matchedField ? g(item[matchedField]) : "");
-
-          result.innerHTML =
-            '<div class="card">' +
-            '<div class="msg ok matchmsg">' +
-            '<span class="matchcode">✓ Scanned "<b>' +
-            escapeHtml(code) +
-            '</b>"</span><span class="matchto">→ Asset #' +
-            escapeHtml(itemId) +
-            (title && title.toUpperCase() !== code
-              ? " · " + escapeHtml(title)
-              : "") +
-            "</span></div>" +
-            "<h2>📦 " +
-            escapeHtml(g(fieldV(item, "Asset Tag") || fieldV(item, "Title"))) +
-            '<span class="badge" id="statusBadge" style="background:' +
-            color +
-            '">' +
-            escapeHtml(status) +
-            "</span></h2>" +
-            '<div class="row"><span>Status</span><span>' +
-            renderValueCell("Status", status) +
-            "</span></div>" +
-            '<div class="row"><span>Serial No.</span><span>' +
-            escapeHtml(scanKey) +
-            "</span></div>" +
-            '<div class="row"><span>Asset Type</span><span>' +
-            escapeHtml(g(fieldV(item, "Asset Type") || fieldV(item, "Asset"))) +
-            "</span></div>" +
-            '<div class="row"><span>Model</span><span>' +
-            escapeHtml(g(fieldV(item, "Model"))) +
-            "</span></div>" +
-            '<div class="row"><span>Department</span><span>' +
-            escapeHtml(g(fieldV(item, "Department"))) +
-            "</span></div>" +
-            '<div class="row"><span>Employee</span><span>' +
-            escapeHtml(g(fieldV(item, "Employee Name"))) +
-            "</span></div>" +
-            '<div class="row"><span>Location</span><span>' +
-            renderValueCell("Location", g(fieldV(item, "Location"))) +
-            "</span></div>" +
-            '<div class="row"><span>Region</span><span>' +
-            escapeHtml(g(fieldV(item, "Region"))) +
-            "</span></div>" +
-            '<div class="row"><span>Condition</span><span>' +
-            escapeHtml(g(fieldV(item, "Condition"))) +
-            "</span></div>" +
-            '<div class="row"><span>Last Verified</span><span id="lastVerifiedVal">' +
-            escapeHtml(g(fieldV(item, "Last Verified"))) +
-            "</span></div>" +
-            "</div>";
+          renderHit(code, itemId, item, matchedField, {});
+          return "hit";
         } catch (e) {
+          // Offline (or the session is being refreshed): serve from the
+          // local data cache so scans keep working in dead-zone storerooms.
+          if (isOfflineish(e)) return offlineLookup(code);
           console.error(e);
           result.innerHTML =
             '<div class="msg err">Error: ' +
             escapeHtml(e.message || e) +
             "</div>";
+          return "error";
         }
+      }
+
+      // ---------- Result rendering ----------
+      function renderHit(code, itemId, item, matchedField, opts) {
+        const result = document.getElementById("result");
+        const offlineNote =
+          opts && opts.offline
+            ? '<div class="msg info">📴 Offline — saved data from ' +
+              escapeHtml(new Date(opts.cacheTime || Date.now()).toLocaleString()) +
+              "</div>"
+            : "";
+        const status = g(item["Status"]);
+        const color = statusColor(status);
+        const title = g(fieldV(item, "Title"));
+        const scanKey =
+          g(fieldV(item, "Serial Number") || fieldV(item, "Serial")) ||
+          (matchedField ? g(item[matchedField]) : "");
+
+        result.innerHTML =
+          offlineNote +
+          '<div class="card">' +
+          '<div class="msg ok matchmsg">' +
+          '<span class="matchcode">✓ Scanned "<b>' +
+          escapeHtml(code) +
+          '</b>"</span><span class="matchto">→ Asset #' +
+          escapeHtml(itemId) +
+          (title && title.toUpperCase() !== code
+            ? " · " + escapeHtml(title)
+            : "") +
+          "</span></div>" +
+          "<h2>📦 " +
+          escapeHtml(g(fieldV(item, "Asset Tag") || fieldV(item, "Title"))) +
+          '<span class="badge" id="statusBadge" style="background:' +
+          color +
+          '">' +
+          escapeHtml(status) +
+          "</span></h2>" +
+          '<div class="row"><span>Status</span><span>' +
+          renderValueCell("Status", status) +
+          "</span></div>" +
+          '<div class="row"><span>Serial No.</span><span>' +
+          escapeHtml(scanKey) +
+          "</span></div>" +
+          '<div class="row"><span>Asset Type</span><span>' +
+          escapeHtml(g(fieldV(item, "Asset Type") || fieldV(item, "Asset"))) +
+          "</span></div>" +
+          '<div class="row"><span>Model</span><span>' +
+          escapeHtml(g(fieldV(item, "Model"))) +
+          "</span></div>" +
+          '<div class="row"><span>Department</span><span>' +
+          escapeHtml(g(fieldV(item, "Department"))) +
+          "</span></div>" +
+          '<div class="row"><span>Employee</span><span>' +
+          escapeHtml(g(fieldV(item, "Employee Name"))) +
+          "</span></div>" +
+          '<div class="row"><span>Location</span><span>' +
+          renderValueCell("Location", g(fieldV(item, "Location"))) +
+          "</span></div>" +
+          '<div class="row"><span>Region</span><span>' +
+          escapeHtml(g(fieldV(item, "Region"))) +
+          "</span></div>" +
+          '<div class="row"><span>Condition</span><span>' +
+          escapeHtml(g(fieldV(item, "Condition"))) +
+          "</span></div>" +
+          '<div class="row"><span>Last Verified</span><span id="lastVerifiedVal">' +
+          escapeHtml(g(fieldV(item, "Last Verified"))) +
+          "</span></div>" +
+          '<div class="row"><span>Verified By</span><span id="lastVerifiedByVal">' +
+          escapeHtml(g(fieldV(item, "Last Verified By"))) +
+          "</span></div>" +
+          '<div class="histbar"><button type="button" class="histbtn" data-history="1">🕘 History</button></div>' +
+          '<div id="historyPanel" class="hidden"></div>' +
+          "</div>";
+      }
+
+      function renderMiss(code, candidates, opts) {
+        const result = document.getElementById("result");
+        const suggestion = suggestMatch(currentCode || code, candidates);
+        const offlineNote =
+          opts && opts.offline
+            ? " (offline — registering will sync when back online)"
+            : "";
+        result.innerHTML =
+          '<div class="msg err">No asset found for "' +
+          escapeHtml(code) +
+          '". No asset has that tag/serial/barcode in the list.' +
+          (suggestion
+            ? '<br/><button type="button" class="chip suggest" data-code="' +
+              escapeHtml(suggestion) +
+              '">Did you mean ' +
+              escapeHtml(suggestion) +
+              "?</button>"
+            : "") +
+          (allItems.length
+            ? '<br/><button type="button" class="chip" data-action="register" data-code="' +
+              escapeHtml(code) +
+              '">➕ Register this barcode</button>' +
+              offlineNote
+            : "") +
+          "</div>" +
+          '<div id="registerPanel" class="card hidden">' +
+          "<h2>Register <span class=\"regcode\">" +
+          escapeHtml(code) +
+          "</span></h2>" +
+          '<input type="text" id="regSearch" placeholder="Search by tag, serial or model…" autocomplete="off" />' +
+          '<div id="regList"></div>' +
+          '<div id="regConfirm" class="hidden"><p class="confirmtext"></p>' +
+          '<div class="confirmbar"><button id="regSave">Save barcode</button>' +
+          '<button id="regCancel" class="secondary">Cancel</button></div></div>' +
+          "</div>";
+      }
+
+      // Offline lookup: match against the cached item list client-side.
+      // Verified writebacks are queued, not attempted.
+      function offlineLookup(code) {
+        const cache = loadCache();
+        const result = document.getElementById("result");
+        if (!cache || !cache.items.length) {
+          result.innerHTML =
+            '<div class="msg err">📴 You are offline and there is no saved data yet. Go online once — after that, scans keep working offline.</div>';
+          return "error";
+        }
+        const clean = (code || "").trim().toLowerCase();
+        let item = null;
+        let itemId = null;
+        let matchedField = "";
+        const candidates = [];
+        allItems = cache.items; // enables the register panel offline (queued save)
+        for (const it of cache.items) {
+          candidates.push.apply(candidates, collectCandidates(it.fields));
+          const key = matchFields(it.fields, clean);
+          if (key) {
+            item = it.fields;
+            itemId = it.id;
+            matchedField = key;
+            break;
+          }
+        }
+        if (item) {
+          lastItem = { id: itemId, fields: item };
+          saveHistory(code);
+          writeFields(itemId, {
+            LastVerified: new Date().toISOString(),
+            LastVerifiedBy: whoami(),
+          }).catch(() => {});
+          renderHit(code, itemId, item, matchedField, {
+            offline: true,
+            cacheTime: cache.t,
+          });
+          return "hit";
+        }
+        lastItem = null;
+        renderMiss(code, candidates, { offline: true });
+        return "miss";
       }
 
 
@@ -770,27 +945,161 @@
       // minute; failures are silent (a read-only staff member just won't write).
       const lastWrite = {};
       async function verifyWriteback(itemId) {
-        if (!itemId || !SITE_ID || !LIST_ID) return;
+        if (!itemId) return;
         const now = Date.now();
         if (lastWrite[itemId] && now - lastWrite[itemId] < 60 * 1000) return;
         lastWrite[itemId] = now;
+        // WHO verified matters as much as when - the health report and the
+        // item history both read this column.
         try {
-          const token = await getToken();
-          await graphPatch(
-            token,
-            "https://graph.microsoft.com/v1.0/sites/" +
-              SITE_ID +
-              "/lists/" +
-              LIST_ID +
-              "/items/" +
-              itemId +
-              "/fields",
-            { LastVerified: new Date().toISOString() },
-          );
+          const r = await writeFields(itemId, {
+            LastVerified: new Date().toISOString(),
+            LastVerifiedBy: whoami(),
+          });
           const el = document.getElementById("lastVerifiedVal");
           if (el) el.textContent = "Just now";
+          const byEl = document.getElementById("lastVerifiedByVal");
+          if (byEl) byEl.textContent = whoami();
+          void r;
         } catch (e) {
           console.warn("last-verified writeback failed:", e);
+        }
+      }
+
+      // ---------- Offline data cache + write queue ----------
+      const DATA_CACHE_KEY = "xana_data_cache_v1";
+      const WRITE_QUEUE_KEY = "xana_write_queue_v1";
+
+      function whoami() {
+        return (account && (account.name || account.username)) || "unknown";
+      }
+
+      // An error we can safely ride out on cached data: no network, a fetch
+      // that never reached Graph, or the token refresh that navigates away.
+      function isOfflineish(e) {
+        if (!navigator.onLine) return true;
+        const m = String((e && e.message) || e);
+        return (
+          e instanceof TypeError ||
+          m.indexOf("refreshing session") !== -1 ||
+          m.indexOf("Failed to fetch") !== -1 ||
+          m.indexOf("NetworkError") !== -1 ||
+          m.indexOf("network") !== -1
+        );
+      }
+
+      function loadCache() {
+        try {
+          const c = JSON.parse(localStorage.getItem(DATA_CACHE_KEY) || "null");
+          if (c && Array.isArray(c.items)) return c;
+        } catch (e) {
+          /* corrupt - ignore */
+        }
+        return null;
+      }
+
+      function mergeCache(incoming) {
+        const c = loadCache();
+        const merged = mergeItems(c ? c.items : [], incoming);
+        try {
+          localStorage.setItem(
+            DATA_CACHE_KEY,
+            JSON.stringify({ t: Date.now(), items: merged.slice(0, 2000) }),
+          );
+        } catch (e) {
+          /* storage full/blocked - cache is best-effort */
+        }
+        return merged;
+      }
+
+      function getQueue() {
+        try {
+          const q = JSON.parse(localStorage.getItem(WRITE_QUEUE_KEY) || "[]");
+          return Array.isArray(q) ? q : [];
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function setQueue(q) {
+        try {
+          localStorage.setItem(WRITE_QUEUE_KEY, JSON.stringify(q));
+        } catch (e) {
+          /* ignore */
+        }
+        renderSyncBadge();
+      }
+
+      function queueWrite(id, patch) {
+        setQueue(
+          Xana.enqueueWrite(getQueue(), { id: id, patch: patch, ts: Date.now() }),
+        );
+      }
+
+      function renderSyncBadge() {
+        const el = document.getElementById("syncBadge");
+        if (!el) return;
+        const n = getQueue().length;
+        el.classList.toggle("hidden", n === 0);
+        el.textContent =
+          "⏳ " +
+          n +
+          " offline change" +
+          (n === 1 ? "" : "s") +
+          " waiting to sync…";
+      }
+
+      // Every item write goes through here: PATCH directly when online,
+      // queue + optimistic cache update when offline. 4xx errors are thrown
+      // to the caller (they'd fail queued too - surface them now).
+      async function writeFields(id, patch) {
+        mergeCache([{ id: id, fields: patch }]);
+        if (!navigator.onLine) {
+          queueWrite(id, patch);
+          return { queued: true };
+        }
+        try {
+          const token = await getToken();
+          if (!SITE_ID) await resolveSite(token);
+          await graphPatch(token, fieldsUrl(id), patch);
+          return { ok: true };
+        } catch (e) {
+          if (isOfflineish(e)) {
+            queueWrite(id, patch);
+            return { queued: true };
+          }
+          throw e;
+        }
+      }
+
+      let flushing = false;
+      async function flushQueue() {
+        if (flushing) return;
+        const q = getQueue();
+        if (!q.length || !navigator.onLine) return;
+        flushing = true;
+        try {
+          const token = await getToken();
+          if (!SITE_ID) await resolveSite(token);
+          let i = 0;
+          for (; i < q.length; i++) {
+            try {
+              await graphPatch(token, fieldsUrl(q[i].id), q[i].patch);
+            } catch (err) {
+              if (String((err && err.message) || "").indexOf("Graph 4") === 0) {
+                // e.g. 403 for a read-only user or 400 for a bad choice -
+                // retrying will never help. Drop it and keep going.
+                console.warn("dropping queued write that cannot succeed:", q[i]);
+                continue;
+              }
+              break; // offline again / throttled - keep the rest for later
+            }
+          }
+          setQueue(q.slice(i));
+        } catch (e) {
+          console.warn("queue flush deferred:", e);
+        } finally {
+          flushing = false;
         }
       }
 
@@ -864,13 +1173,15 @@
         cell.textContent = "Saving…";
         try {
           if (!lastItem || !lastItem.id) throw new Error("No active asset");
-          const token = await getToken();
           const body = {};
           body[field] = value;
-          await graphPatch(token, fieldsUrl(lastItem.id), body);
+          const r = await writeFields(lastItem.id, body);
           lastItem.fields[field] = value;
           cell.innerHTML =
-            renderValueCell(field, value) + '<span class="savedtip">Saved ✓</span>';
+            renderValueCell(field, value) +
+            '<span class="savedtip">' +
+            (r.queued ? "Saved — will sync ✓" : "Saved ✓") +
+            "</span>";
           if (field === "Status") {
             const badge = document.getElementById("statusBadge");
             if (badge) {
@@ -973,8 +1284,12 @@
         saveBtn.disabled = true;
         saveBtn.textContent = "Saving…";
         try {
-          const token = await getToken();
-          await graphPatch(token, fieldsUrl(itemId), { Barcode: code });
+          const r = await writeFields(itemId, { Barcode: code });
+          if (r.queued) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = "Queued — syncs when online ✓";
+            return;
+          }
           // Re-run the lookup: it now matches via Barcode and stamps Last
           // Verified exactly like a normal scan.
           lookup(code);
@@ -1049,24 +1364,123 @@
           ).join("");
       }
 
+      // ---------- Item history (SharePoint version history via Graph) ----------
+      // Every scan and edit creates a list-item version. The history expander
+      // fetches the last 30 versions and shows who changed what, when -
+      // verification-only versions render as one compact "verified scan" line.
+      async function toggleHistory() {
+        const panel = document.getElementById("historyPanel");
+        if (!panel) return;
+        if (!panel.classList.contains("hidden")) {
+          panel.classList.add("hidden");
+          return;
+        }
+        panel.classList.remove("hidden");
+        panel.innerHTML = '<div class="msg info">Loading history…</div>';
+        try {
+          if (!lastItem || !lastItem.id) throw new Error("No active asset");
+          const token = await getToken();
+          if (!SITE_ID) await resolveSite(token);
+          const data = await graphGet(
+            token,
+            "https://graph.microsoft.com/v1.0/sites/" +
+              SITE_ID +
+              "/lists/" +
+              LIST_ID +
+              "/items/" +
+              lastItem.id +
+              "/versions?$top=30",
+          );
+          panel.innerHTML = renderHistory(data.value);
+        } catch (e) {
+          panel.innerHTML =
+            '<div class="msg err">History unavailable: ' +
+            escapeHtml((e && e.message) || e) +
+            "</div>";
+        }
+      }
+
+      function renderHistory(versions) {
+        if (!versions || !versions.length)
+          return '<div class="msg info">No history yet.</div>';
+        const rows = [];
+        for (let i = 0; i < versions.length; i++) {
+          const v = versions[i];
+          const who =
+            (v.lastModifiedBy &&
+              v.lastModifiedBy.user &&
+              (v.lastModifiedBy.user.displayName ||
+                v.lastModifiedBy.user.userPrincipalName)) ||
+            "—";
+          const when = v.lastModifiedDateTime
+            ? new Date(v.lastModifiedDateTime).toLocaleString()
+            : "";
+          let what = "";
+          if (i === versions.length - 1 || !versions[i + 1].fields) {
+            what = "Created / oldest available version";
+          } else {
+            const d = diffFields(versions[i + 1].fields, v.fields);
+            if (d.length === 0) {
+              what = "Edited (no tracked field changed)";
+            } else if (
+              d.every(
+                (x) => x.key === "lastverified" || x.key === "lastverifiedby",
+              )
+            ) {
+              what = "✓ Verification scan";
+            } else {
+              what = d
+                .filter(
+                  (x) => x.key !== "lastverified" && x.key !== "lastverifiedby",
+                )
+                .map(
+                  (x) =>
+                    escapeHtml(x.label) +
+                    ": " +
+                    escapeHtml(g(x.from)) +
+                    " → " +
+                    escapeHtml(g(x.to)),
+                )
+                .join("<br/>");
+            }
+          }
+          rows.push(
+            '<div class="hrow"><span class="hwhen">' +
+              escapeHtml(when) +
+              '</span><span class="hwho">' +
+              escapeHtml(who) +
+              '</span><span class="hwhat">' +
+              what +
+              "</span></div>",
+          );
+        }
+        return '<div class="hlist">' + rows.join("") + "</div>";
+      }
+
       // ---------- Camera scanning ----------
       let qr = null;
-      function startScan() {
+      let scanSink = null; // optional handler for decoded values (walk mode)
+      function startScan(sink) {
+        scanSink = sink || null;
         qr = new Html5Qrcode("qr-reader");
         document.getElementById("qr-reader").classList.remove("hidden");
-        document.getElementById("btnStop").classList.remove("hidden");
-        document.getElementById("btnScan").classList.add("hidden");
+        if (walkMode) {
+          document.getElementById("walkCamera").textContent = "⏹ Stop camera";
+        } else {
+          document.getElementById("btnStop").classList.remove("hidden");
+          document.getElementById("btnScan").classList.add("hidden");
+        }
         qr.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: 240 },
           (decoded) => {
-            qr.stop()
-              .then(() => qr.clear())
-              .catch(() => {});
-            qr = null;
-            document.getElementById("qr-reader").classList.add("hidden");
-            document.getElementById("btnStop").classList.add("hidden");
-            document.getElementById("btnScan").classList.remove("hidden");
+            stopScan();
+            if (scanSink) {
+              const sink = scanSink;
+              scanSink = null;
+              sink(decoded);
+              return;
+            }
             document.getElementById("manual").value = decoded;
             lookup(decoded);
           },
@@ -1087,14 +1501,165 @@
             .catch(() => {});
           qr = null;
         }
+        scanSink = null;
         document.getElementById("qr-reader").classList.add("hidden");
         document.getElementById("btnStop").classList.add("hidden");
         document.getElementById("btnScan").classList.remove("hidden");
+        const wb = document.getElementById("walkCamera");
+        if (wb) wb.textContent = "📷 Camera";
       }
 
+      // ---------- Walk mode ----------
+      // Continuous scanning session for inventory walks: every scan
+      // auto-verifies, feedback is instant (flash + beep + vibrate), and the
+      // input stays focused so a USB wedge scanner just keeps firing. Misses
+      // still offer register-on-scan, so the walk also closes the data gap.
+      function enterWalk() {
+        walkMode = true;
+        walk.scans = 0;
+        walk.hits = 0;
+        walk.misses = 0;
+        document.getElementById("mainui").classList.add("hidden");
+        document.getElementById("walk").classList.remove("hidden");
+        renderWalkStats();
+        const inp = document.getElementById("walkInput");
+        inp.value = "";
+        inp.focus();
+      }
+
+      function exitWalk() {
+        walkMode = false;
+        stopScan();
+        document.getElementById("walk").classList.add("hidden");
+        document.getElementById("mainui").classList.remove("hidden");
+      }
+
+      function renderWalkStats() {
+        document.getElementById("walkStats").innerHTML =
+          "Scans <b>" +
+          walk.scans +
+          '</b> · <span style="color:var(--green)">✓ ' +
+          walk.hits +
+          '</span> · <span style="color:#fca5a5">✗ ' +
+          walk.misses +
+          "</span>";
+      }
+
+      async function walkLookup(code) {
+        const r = await lookup(code);
+        walk.scans++;
+        if (r === "hit") walk.hits++;
+        else walk.misses++;
+        renderWalkStats();
+        feedback(r === "hit");
+        const inp = document.getElementById("walkInput");
+        if (inp) {
+          inp.value = "";
+          inp.focus();
+        }
+        return r;
+      }
+
+      function feedback(ok) {
+        flash(ok);
+        if (navigator.vibrate) {
+          try {
+            navigator.vibrate(ok ? 60 : [90, 60, 90]);
+          } catch (e) {
+            /* not supported - fine */
+          }
+        }
+        beep(ok ? 950 : 240);
+      }
+
+      function flash(ok) {
+        const f = document.getElementById("walkFlash");
+        if (!f) return;
+        f.className = "flash " + (ok ? "flashok" : "flashbad");
+        f.textContent = ok ? "✓ OK" : "✗ NOT FOUND";
+        clearTimeout(flash._t);
+        flash._t = setTimeout(() => {
+          f.className = "hidden";
+          f.textContent = "";
+        }, 900);
+      }
+
+      function beep(freq) {
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          if (!beep.ctx) beep.ctx = new AC();
+          const ctx = beep.ctx;
+          if (ctx.state === "suspended") ctx.resume();
+          const o = ctx.createOscillator();
+          const gn = ctx.createGain();
+          o.frequency.value = freq;
+          o.connect(gn);
+          gn.connect(ctx.destination);
+          gn.gain.setValueAtTime(0.12, ctx.currentTime);
+          gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+          o.start();
+          o.stop(ctx.currentTime + 0.25);
+        } catch (e) {
+          /* audio unavailable - fine */
+        }
+      }
+
+      // ---------- USB wedge scanner support ----------
+      // A USB barcode scanner types its code as one fast keystroke burst
+      // ending in Enter. Record key timings globally; when a burst classifies
+      // as a scan, route it to the active mode's lookup. If a text input has
+      // focus, its own Enter handler owns the submit (no double lookup).
+      const KEY_QUEUE = [];
+      let keyLastT = 0;
+      window.addEventListener("keydown", (e) => {
+        const t = performance.now();
+        if (t - keyLastT > 400) KEY_QUEUE.length = 0;
+        keyLastT = t;
+        if (e.key && e.key.length === 1) {
+          KEY_QUEUE.push({ key: e.key, t: t });
+          if (KEY_QUEUE.length > 120) KEY_QUEUE.shift();
+          return;
+        }
+        if (e.key === "Enter") {
+          KEY_QUEUE.push({ key: "Enter", t: t });
+          const burst = classifyKeyBurst(KEY_QUEUE.slice());
+          KEY_QUEUE.length = 0;
+          if (!burst.isScan) return;
+          const ae = document.activeElement;
+          const inField =
+            ae &&
+            (ae.tagName === "INPUT" ||
+              ae.tagName === "TEXTAREA" ||
+              ae.tagName === "SELECT");
+          if (inField) return; // the focused input handles its own Enter
+          if (walkMode) {
+            walkLookup(burst.text);
+          } else {
+            document.getElementById("manual").value = burst.text;
+            lookup(burst.text);
+          }
+        }
+      });
+
       // ---------- Boot ----------
-      document.getElementById("btnScan").addEventListener("click", startScan);
+      document.getElementById("btnScan").addEventListener("click", () => startScan());
       document.getElementById("btnStop").addEventListener("click", stopScan);
+      document.getElementById("btnWalk").addEventListener("click", enterWalk);
+      document.getElementById("walkExit").addEventListener("click", exitWalk);
+      document.getElementById("walkCamera").addEventListener("click", () => {
+        if (qr) stopScan();
+        else startScan(walkLookup);
+      });
+      document.getElementById("walkInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          const v = e.target.value.trim();
+          if (v) walkLookup(v);
+        }
+      });
+      document.getElementById("walkInput").addEventListener("input", (e) => {
+        e.target.value = e.target.value.toUpperCase();
+      });
       document.getElementById("btnLookup").addEventListener("click", () => {
         const v = (document.getElementById("manual").value || "").trim();
         if (v) lookup(v);
@@ -1115,6 +1680,10 @@
       document.getElementById("result").addEventListener("click", (e) => {
         const b = e.target.closest("button");
         if (!b) return;
+        if (b.dataset.history) {
+          toggleHistory();
+          return;
+        }
         if (b.dataset.action === "register") {
           renderRegisterPanel(b.dataset.code);
           return;
@@ -1151,7 +1720,10 @@
         if (ok) {
           document.getElementById("app").classList.remove("hidden");
           renderHistory();
+          renderSyncBadge();
+          flushQueue();
         }
+        window.addEventListener("online", flushQueue);
         // Re-check every minute so chips expire even with the page left open.
         setInterval(renderHistory, 60 * 1000);
       })();

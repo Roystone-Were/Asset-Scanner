@@ -13,11 +13,12 @@ asset's metadata — pulled live from the **Xana Asset Inventory** SharePoint li
 
 | Path | Purpose |
 |---|---|
-| `scanner-app/` | The web app (single-file `index.html` + vendored `lib/` + exported data). MSAL sign-in, camera barcode scanning (html5-qrcode), Graph lookup. |
+| `scanner-app/` | The web app (single-file `index.html` + vendored `lib/`). MSAL sign-in, camera + USB-scanner input, Graph lookup, walk mode, offline cache/queue, item history. `scanner-app/.vercelignore` keeps data snapshots and tests out of the public deployment. |
 | `Export-AssetLabels.ps1` | Silent cert-auth export of the list → `scanner-app/assets.csv` / `assets.json`. |
 | `Xana-Asset-Format.ps1` | Applies Status-column color + row formatting to the list. |
 | `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | Add/remove the `Barcode` column — currently present, as the register-on-scan target. |
 | `Add-LastVerifiedColumn.ps1` | Adds the `Last Verified` date column the app writes on every scan. |
+| `Add-LastVerifiedByColumn.ps1` | Adds the `Last Verified By` text column the app writes with the signed-in user on every scan (accountability for the health report + history view). |
 | `Health-Check.ps1` + `.github/workflows/data-health.yml` | Monthly data-health report (duplicate serials, missing tags/serials, unverified 90+ days) filed as a GitHub issue; unverified assets listed in a table. Optional SMTP email via `Send-HealthEmail.ps1`. |
 | `Export-AssetsJson.ps1` | Cert-auth export → `scanner-app/test/fixtures/assets.json` for the golden test suite (commit after bulk list changes). |
 | `Index-LookupFields.ps1` | Indexes the lookup columns (`SerialNumber`, `Barcode`, `Title`); `-Verify` mode just reports state. |
@@ -42,9 +43,21 @@ fallback:
 Deliberately **not** matched: the `Asset` column (internal name of **Asset Type** —
 Laptop/CPU/Monitor…), so typing "Laptop" can't match every laptop.
 
-Every successful scan also writes a timestamp to **Last Verified**, and the result
-card lets staff change **Status / Location** inline — routine scans become an
-automatic inventory audit.
+Every successful scan also writes a timestamp to **Last Verified** and the
+signed-in user to **Last Verified By**, and the result card lets staff change
+**Status / Location** inline — routine scans become an automatic inventory
+audit. The card's **🕘 History** expander shows SharePoint's version history
+(who changed what, when; verification scans collapse to one line).
+
+The app keeps working offline: the last successful fetch is cached locally,
+scans match the cache when Graph is unreachable, and any writes made offline
+(verify stamps, edits, barcode registrations) queue up and sync automatically
+when the connection returns.
+
+**Walk mode** (🚶 button) is built for inventory walks: continuous scanning
+with hit/miss counters, instant flash + beep + vibrate feedback, and no taps
+between scans. USB barcode scanners (keyboard/"wedge" mode) are detected
+anywhere in the app — scan into a laptop and the lookup fires by itself.
 
 Field-name lookups tolerate internal-name quirks: "Asset Type" may come back from
 Graph as `AssetType` or `Asset_x0020_Type`; `fieldV()` normalizes `_xNNNN_` hex
@@ -130,4 +143,7 @@ Requires the PnP module and the client certificate (thumbprint
   rows); the latest health-check run found none — the monthly report will catch
   any that reappear.
 - `assets.json`/`assets.csv` are exported snapshots (for the label generator); the
-  web app always reads live from Graph.
+  web app always reads live from Graph. They contain employee names and serials,
+  so they must never deploy publicly — `scanner-app/.vercelignore` enforces that
+  (old Vercel deployments from before Aug 2026 should be deleted from the
+  dashboard).

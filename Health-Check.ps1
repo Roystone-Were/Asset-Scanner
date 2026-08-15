@@ -54,6 +54,7 @@ $rows = foreach ($i in $items) {
     status   = [string](Get-FieldV $f 'Status')
     location = [string](Get-FieldV $f 'Location')
     verified = Get-FieldV $f 'Last Verified'
+    verifiedby = [string](Get-FieldV $f 'Last Verified By')
   }
 }
 $rows = @($rows | Sort-Object id)
@@ -136,15 +137,16 @@ if ($stale.Count -gt 0) {
     if (-not $v.Trim()) { return '—' }
     return $v.Trim() -replace '\|', '\\|' -replace "`n", ' '
   }
-  $hdr = '| Asset | Tag | Model | Serial | Last verified |'
-  $sep = '|---|---|---|---|---|'
+  $hdr = '| Asset | Tag | Model | Serial | Last verified | Verified by |'
+  $sep = '|---|---|---|---|---|---|'
   $lines = foreach ($s in $stale) {
     $v = if ($s.verified) { $s.verified.ToString('yyyy-MM-dd') } else { 'never' }
-    '| #{0} | {1} | {2} | {3} | {4} |' -f $s.id,
+    '| #{0} | {1} | {2} | {3} | {4} | {5} |' -f $s.id,
       (ConvertTo-MdCell $s.tag),
       (ConvertTo-MdCell $s.model),
       (ConvertTo-MdCell $s.serial),
-      $v
+      $v,
+      (ConvertTo-MdCell $s.verifiedby)
   }
   $table = "$hdr`n$sep`n$($lines -join "`n")"
   Add-Issue "Assets not verified in the last $StaleDays days" "$($stale.Count) assets:`n`n$table"
@@ -154,7 +156,7 @@ if ($stale.Count -gt 0) {
 }
 
 # --- Schema check (a renamed/deleted column breaks the app + scripts) ---
-$expectedFields = @('Title', 'Asset Tag', 'Serial Number', 'Barcode', 'Model', 'Status', 'Location', 'Last Verified')
+$expectedFields = @('Title', 'Asset Tag', 'Serial Number', 'Barcode', 'Model', 'Status', 'Location', 'Last Verified', 'Last Verified By')
 $missingFields = @()
 foreach ($fname in $expectedFields) {
   if (-not (Get-PnPField -List $ListTitle -Identity $fname -ErrorAction SilentlyContinue)) {

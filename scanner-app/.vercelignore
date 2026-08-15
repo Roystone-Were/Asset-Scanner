@@ -1,0 +1,8 @@
+# Data snapshots and tests must never deploy to the public URL - they contain
+# employee names, serials and locations. The app reads live from Graph; these
+# files are only for label export and CI (GitHub Actions ignores this file).
+assets.csv
+assets.json
+test
+.env
+.env.local

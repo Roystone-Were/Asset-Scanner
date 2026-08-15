@@ -177,3 +177,132 @@ test("filterHistory expires old entries and keeps legacy strings", () => {
     ["FRESH", "LEGACY", "NOSET"],
   );
 });
+
+test("mergeItems updates by id (string-compared) and appends new items", () => {
+  const existing = [
+    { id: 1, fields: { Title: "MICL0045", Status: "In Use" } },
+    { id: 2, fields: { Title: "MICL0046" } },
+  ];
+  const out = X.mergeItems(existing, [
+    { id: "1", fields: { Status: "Lost" } }, // number-vs-string id still matches
+    { id: 3, fields: { Title: "MICL0047" } },
+  ]);
+  assert.strictEqual(out.length, 3);
+  assert.deepStrictEqual(out[0].fields, { Title: "MICL0045", Status: "Lost" });
+  assert.deepStrictEqual(out[1].fields, { Title: "MICL0046" });
+  assert.deepStrictEqual(out[2].fields, { Title: "MICL0047" });
+  // Inputs are not mutated (the cache must stay immutable-ish).
+  assert.deepStrictEqual(existing[0].fields, {
+    Title: "MICL0045",
+    Status: "In Use",
+  });
+});
+
+test("mergeItems tolerates empty inputs", () => {
+  assert.deepStrictEqual(X.mergeItems([], []), []);
+  assert.strictEqual(X.mergeItems(null, [{ id: 1, fields: { A: 1 } }]).length, 1);
+  assert.strictEqual(X.mergeItems([{ id: 1, fields: {} }], null).length, 1);
+});
+
+test("enqueueWrite merges patches for the same item, later values win", () => {
+  const q1 = X.enqueueWrite([], { id: 7, patch: { Status: "Lost" }, ts: 1 });
+  const q2 = X.enqueueWrite(q1, { id: "7", patch: { Location: "Ruiru" }, ts: 2 });
+  assert.strictEqual(q2.length, 1);
+  assert.deepStrictEqual(q2[0].patch, { Status: "Lost", Location: "Ruiru" });
+  assert.strictEqual(q2[0].ts, 2);
+});
+
+test("enqueueWrite keeps distinct items apart and caps the queue", () => {
+  let q = X.enqueueWrite([], { id: 1, patch: { LastVerified: "a" }, ts: 1 });
+  q = X.enqueueWrite(q, { id: 2, patch: { LastVerified: "b" }, ts: 2 });
+  assert.strictEqual(q.length, 2);
+  // Cap of 3: oldest entries drop off the front.
+  q = X.enqueueWrite(q, { id: 3, patch: {}, ts: 3 }, 3);
+  q = X.enqueueWrite(q, { id: 4, patch: {}, ts: 4 }, 3);
+  assert.deepStrictEqual(q.map((e) => e.id), [2, 3, 4]);
+});
+
+test("classifyKeyBurst detects a fast scanner burst ending in Enter", () => {
+  const keys = [
+    { key: "M", t: 1000 },
+    { key: "I", t: 1020 },
+    { key: "C", t: 1040 },
+    { key: "L", t: 1060 },
+    { key: "0", t: 1080 },
+    { key: "0", t: 1100 },
+    { key: "4", t: 1120 },
+    { key: "5", t: 1140 },
+    { key: "Enter", t: 1160 },
+  ];
+  const r = X.classifyKeyBurst(keys);
+  assert.strictEqual(r.isScan, true);
+  assert.strictEqual(r.text, "MICL0045");
+});
+
+test("classifyKeyBurst rejects human typing, short codes, missing Enter", () => {
+  // Human-paced gaps (200ms between keys).
+  const human = [
+    { key: "M", t: 1000 },
+    { key: "I", t: 1200 },
+    { key: "C", t: 1400 },
+    { key: "Enter", t: 1600 },
+  ];
+  assert.strictEqual(X.classifyKeyBurst(human).isScan, false);
+  // Scanner-fast but too short to be a code.
+  const short = [
+    { key: "A", t: 1000 },
+    { key: "B", t: 1010 },
+    { key: "Enter", t: 1020 },
+  ];
+  assert.strictEqual(X.classifyKeyBurst(short).isScan, false);
+  // No Enter terminator.
+  const noEnter = [
+    { key: "M", t: 1000 },
+    { key: "I", t: 1010 },
+    { key: "C", t: 1020 },
+  ];
+  assert.strictEqual(X.classifyKeyBurst(noEnter).isScan, false);
+  // Mixed non-printables (Shift) are ignored, not counted as text.
+  const shifted = [
+    { key: "Shift", t: 1000 },
+    { key: "M", t: 1005 },
+    { key: "I", t: 1015 },
+    { key: "C", t: 1025 },
+    { key: "L", t: 1035 },
+    { key: "Enter", t: 1045 },
+  ];
+  assert.strictEqual(X.classifyKeyBurst(shifted).text, "MICL");
+});
+
+test("diffFields reports tracked column changes with labels", () => {
+  const prev = { Title: "MICL0045", Status: "In Use", Location: "Syokimau" };
+  const next = { Title: "MICL0045", Status: "Lost", Location: "Syokimau" };
+  const d = X.diffFields(prev, next);
+  assert.strictEqual(d.length, 1);
+  assert.deepStrictEqual(d[0], { key: "status", label: "Status", from: "In Use", to: "Lost" });
+});
+
+test("diffFields treats blank and missing as equal, flags blank vs value", () => {
+  // Barcode "" vs absent -> no change (Status identical on both sides).
+  assert.deepStrictEqual(
+    X.diffFields({ Barcode: "", Status: "In Use" }, { Status: "In Use" }),
+    [],
+  );
+  // Registering a barcode shows up as "—" -> value.
+  const d = X.diffFields({ Title: "MICL0045" }, { Title: "MICL0045", Barcode: "VENDOR-99" });
+  assert.strictEqual(d.length, 1);
+  assert.strictEqual(d[0].label, "Barcode");
+  assert.strictEqual(d[0].from, "—");
+  assert.strictEqual(d[0].to, "VENDOR-99");
+});
+
+test("diffFields keys let callers spot verification-only versions", () => {
+  const prev = { LastVerified: "2026-08-01T10:00:00Z" };
+  const next = {
+    LastVerified: "2026-08-15T09:00:00Z",
+    LastVerifiedBy: "Roystone Were",
+  };
+  const d = X.diffFields(prev, next);
+  assert.ok(d.length > 0);
+  assert.ok(d.every((x) => x.key === "lastverified" || x.key === "lastverifiedby"));
+});

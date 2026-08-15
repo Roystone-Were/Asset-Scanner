@@ -211,6 +211,107 @@
     return fresh;
   }
 
+  // Merge incoming [{id, fields}] into an existing cached item list by id
+  // (string-compared): incoming field values win, new items are appended.
+  // Used by the offline data cache - a partial refresh (one matched item, a
+  // field patch) updates the cache without a full refetch.
+  function mergeItems(existing, incoming) {
+    const out = [];
+    const index = new Map();
+    for (const it of existing || []) {
+      const k = String(it.id);
+      if (index.has(k)) continue;
+      index.set(k, out.length);
+      out.push({ id: it.id, fields: Object.assign({}, it.fields) });
+    }
+    for (const it of incoming || []) {
+      const k = String(it.id);
+      if (index.has(k)) {
+        const i = index.get(k);
+        out[i].fields = Object.assign({}, out[i].fields, it.fields);
+      } else {
+        index.set(k, out.length);
+        out.push({ id: it.id, fields: Object.assign({}, it.fields) });
+      }
+    }
+    return out;
+  }
+
+  // Add a write to the offline sync queue, merging patches that target the
+  // same item (later field values win) and capping the queue length (oldest
+  // whole entries drop off the front).
+  function enqueueWrite(queue, entry, max) {
+    const cap = max || 50;
+    const q = [];
+    let merged = false;
+    for (const e of queue || []) {
+      if (String(e.id) === String(entry.id)) {
+        q.push({ id: e.id, patch: Object.assign({}, e.patch, entry.patch), ts: entry.ts });
+        merged = true;
+      } else {
+        q.push(e);
+      }
+    }
+    if (!merged) q.push({ id: entry.id, patch: Object.assign({}, entry.patch), ts: entry.ts });
+    return q.length > cap ? q.slice(q.length - cap) : q;
+  }
+
+  // USB "wedge" scanners type their barcode as one fast burst of keystrokes
+  // ending in Enter. Classify a recorded key sequence: printable chars plus a
+  // final Enter, with every gap under maxGap (default 80ms - far faster than
+  // a human sustains over minLen characters).
+  function classifyKeyBurst(keys, opts) {
+    const maxGap = (opts && opts.maxGap) || 80;
+    const minLen = (opts && opts.minLen) || 3;
+    if (!keys || keys.length < 2) return { text: "", isScan: false };
+    if (keys[keys.length - 1].key !== "Enter") return { text: "", isScan: false };
+    const text = keys
+      .filter(function (k) { return k.key && k.key.length === 1; })
+      .map(function (k) { return k.key; })
+      .join("")
+      .trim();
+    if (text.length < minLen) return { text: text, isScan: false };
+    for (let i = 1; i < keys.length; i++) {
+      if (keys[i].t - keys[i - 1].t > maxGap) return { text: text, isScan: false };
+    }
+    return { text: text, isScan: true };
+  }
+
+  // Columns the history view diffs between two item versions, as
+  // [internal/display-ish name, label]. fieldV() tolerates the display-name
+  // variants Graph may return for each.
+  const HISTORY_FIELDS = [
+    ["Title", "Tag"],
+    ["SerialNumber", "Serial"],
+    ["Barcode", "Barcode"],
+    ["Asset", "Asset Type"],
+    ["Model", "Model"],
+    ["Department", "Department"],
+    ["EmployeeName", "Employee"],
+    ["Status", "Status"],
+    ["Location", "Location"],
+    ["Region", "Region"],
+    ["Condition", "Condition"],
+    ["LastVerified", "Last Verified"],
+    ["LastVerifiedBy", "Verified By"],
+  ];
+
+  // Diff two item field snapshots: returns [{key, label, from, to}] for
+  // tracked columns whose value changed (blank vs missing both read as "").
+  // key is the normalized name - callers treat a diff where every key is
+  // lastverified/lastverifiedby as "just a verification scan".
+  function diffFields(prev, next) {
+    const out = [];
+    for (const pair of HISTORY_FIELDS) {
+      const from = fieldV(prev || {}, pair[0]);
+      const to = fieldV(next || {}, pair[0]);
+      const fs = from === undefined || from === null ? "" : String(from);
+      const ts = to === undefined || to === null ? "" : String(to);
+      if (fs !== ts) out.push({ key: pair[0].toLowerCase(), label: pair[1], from: fs || "—", to: ts || "—" });
+    }
+    return out;
+  }
+
   return {
     g,
     escapeHtml,
@@ -223,6 +324,10 @@
     levenshtein,
     suggestMatch,
     filterHistory,
+    mergeItems,
+    enqueueWrite,
+    classifyKeyBurst,
+    diffFields,
     STATUS_CHOICES,
     LOCATION_CHOICES,
     REGION_CHOICES,

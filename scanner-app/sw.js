@@ -1,8 +1,9 @@
 // Xana Asset Lookup - offline app shell.
 // Cache name is versioned; bump it to force a refresh of the shell.
-const CACHE = "xana-shell-v1";
+const CACHE = "xana-shell-v2";
 const SHELL = [
   "index.html",
+  "logic.js",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png",
