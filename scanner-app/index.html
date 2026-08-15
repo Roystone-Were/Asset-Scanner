@@ -165,19 +165,47 @@
       .matchmsg {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: center;
         gap: 10px;
-        text-align: left;
+        flex-wrap: wrap;
+        padding: 14px 12px;
+        line-height: 1.2;
+      }
+      .matchmsg .matchcheck {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--green);
+        color: #052e16;
+        font-weight: 800;
+        font-size: 0.9rem;
+        flex-shrink: 0;
       }
       .matchmsg .matchcode {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        word-break: break-word;
+      }
+      .matchmsg .matcharrow {
+        color: var(--muted);
+        font-weight: 700;
       }
       .matchmsg .matchto {
         color: #bbf7d0;
         font-weight: 700;
-        white-space: nowrap;
+        word-break: break-word;
+      }
+      .card .matchmsg {
+        margin-bottom: 4px;
+      }
+      .matchvia {
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.72rem;
+        margin: 0 0 16px;
       }
       .err {
         background: rgba(209, 52, 56, 0.15);
@@ -799,18 +827,31 @@
           g(fieldV(item, "Serial Number") || fieldV(item, "Serial")) ||
           (matchedField ? g(item[matchedField]) : "");
 
+        // Caption under the match banner: which column the scan matched on.
+        const via = !matchedField
+          ? ""
+          : matchedField === "SerialNumber"
+            ? "Serial Number"
+            : matchedField === "Barcode"
+              ? "Barcode"
+              : "Asset Tag";
+
         result.innerHTML =
           offlineNote +
           '<div class="card">' +
           '<div class="msg ok matchmsg">' +
-          '<span class="matchcode">✓ Scanned "<b>' +
+          '<span class="matchcheck">✓</span>' +
+          '<span class="matchcode">' +
           escapeHtml(code) +
-          '</b>"</span><span class="matchto">→ Asset #' +
+          '</span><span class="matcharrow">→</span><span class="matchto">Asset #' +
           escapeHtml(itemId) +
           (title && title.toUpperCase() !== code
             ? " · " + escapeHtml(title)
             : "") +
           "</span></div>" +
+          (via
+            ? '<div class="matchvia">Matched by ' + escapeHtml(via) + "</div>"
+            : "") +
           "<h2>📦 " +
           escapeHtml(g(fieldV(item, "Asset Tag") || fieldV(item, "Title"))) +
           '<span class="badge" id="statusBadge" style="background:' +
