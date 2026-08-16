@@ -1563,8 +1563,10 @@
       // ---------- Camera scanning ----------
       let qr = null;
       let scanSink = null; // optional handler for decoded values (walk mode)
+      let lastShot = { code: "", t: 0 }; // walk-mode scan dedup/cooldown
       function startScan(sink) {
         scanSink = sink || null;
+        lastShot = { code: "", t: 0 };
         qr = new Html5Qrcode("qr-reader");
         document.getElementById("qr-reader").classList.remove("hidden");
         if (walkMode) {
@@ -1577,13 +1579,21 @@
           { facingMode: "environment" },
           { fps: 10, qrbox: 240 },
           (decoded) => {
-            stopScan();
+            // Continuous mode (walk): the camera STAYS running and feeds
+            // each new code to the session, checkout-counter style.
+            // html5-qrcode re-fires while the same barcode stays in frame,
+            // so ignore repeats of the last code and apply a short cooldown.
             if (scanSink) {
-              const sink = scanSink;
-              scanSink = null;
-              sink(decoded);
+              const now = Date.now();
+              const code = String(decoded || "").trim();
+              if (code && code !== lastShot.code && now - lastShot.t > 1500) {
+                lastShot = { code: code, t: now };
+                scanSink(decoded);
+              }
               return;
             }
+            // One-shot mode: stop the camera and look the code up.
+            stopScan();
             document.getElementById("manual").value = decoded;
             lookup(decoded);
           },
@@ -1655,8 +1665,10 @@
         else walk.misses++;
         renderWalkStats();
         feedback(r === "hit");
+        // Refocus the input only when the camera ISN'T running - focusing a
+        // text field mid-camera pops up the on-screen keyboard over the view.
         const inp = document.getElementById("walkInput");
-        if (inp) {
+        if (inp && !qr) {
           inp.value = "";
           inp.focus();
         }
