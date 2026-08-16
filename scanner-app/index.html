@@ -332,6 +332,55 @@
       .regrow:hover {
         border-color: var(--accent);
       }
+      /* List rows (batch results, person assets): id label / bold title /
+      status pill + meta line. Missing values are omitted, never "N/A". */
+      .brow {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: var(--card2);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--green);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      .brow:hover {
+        border-color: var(--accent);
+        border-left-color: var(--accent);
+      }
+      .brow .brow-id {
+        display: block;
+        color: var(--muted);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .brow .brow-title {
+        display: block;
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin: 3px 0 7px;
+      }
+      .brow .brow-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .brow .brow-badge {
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.68rem;
+        padding: 3px 10px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
       #regList {
         max-height: 230px;
         overflow-y: auto;
@@ -1175,43 +1224,55 @@
         renderBatchList(found, missing);
       }
 
+      // One list row (batch results, person assets): tiny id label, bold
+      // title, status pill + meta. Missing values drop out entirely instead
+      // of printing "N/A".
+      function browHtml(it) {
+        const val = (v) => {
+          const s = g(v);
+          return s === "N/A" ? "" : String(s).trim();
+        };
+        const status = val(it.fields.Status);
+        const color = statusColor(status);
+        const tag = val(fieldV(it.fields, "Title"));
+        const serial = val(fieldV(it.fields, "Serial Number"));
+        const model = val(fieldV(it.fields, "Model"));
+        const loc = val(fieldV(it.fields, "Location"));
+        const employee = val(fieldV(it.fields, "Employee Name"));
+        const title = model || tag || serial || "Asset #" + it.id;
+        // Tap opens the full card: by tag/serial if it has one, else #id.
+        const code = tag || serial || "#" + it.id;
+        const meta = [];
+        if (status)
+          meta.push(
+            '<span class="brow-badge" style="background:' + color + '">' +
+              escapeHtml(status) + "</span>",
+          );
+        if (tag) meta.push(escapeHtml(tag));
+        if (loc) meta.push(escapeHtml(loc));
+        if (employee) meta.push(escapeHtml(employee));
+        return (
+          '<button type="button" class="brow" data-code="' +
+          escapeHtml(code) +
+          '" style="border-left-color:' +
+          color +
+          '"><span class="brow-id">Asset #' +
+          escapeHtml(it.id) +
+          (serial ? " · " + escapeHtml(serial) : "") +
+          '</span><span class="brow-title">' +
+          escapeHtml(title) +
+          '</span><span class="brow-meta">' +
+          meta.join("") +
+          "</span></button>"
+        );
+      }
+
       function renderBatchList(found, missing) {
         const result = document.getElementById("result");
         const rows = found
           .slice()
           .sort((a, b) => Number(a.id) - Number(b.id))
-          .map((it) => {
-            const status = g(it.fields.Status);
-            const color = statusColor(status);
-            const tag = g(
-              fieldV(it.fields, "Asset Tag") || fieldV(it.fields, "Title"),
-            );
-            // Tap opens the full card: by tag/serial if it has one, else #id.
-            const code = String(
-              fieldV(it.fields, "Title") ||
-                fieldV(it.fields, "Serial Number") ||
-                "#" + it.id,
-            );
-            return (
-              '<button type="button" class="regrow" data-code="' +
-              escapeHtml(code) +
-              '" style="border-left:4px solid ' +
-              color +
-              '"><b>Asset #' +
-              escapeHtml(it.id) +
-              " · " +
-              escapeHtml(tag) +
-              "</b><br/>" +
-              escapeHtml(g(fieldV(it.fields, "Model"))) +
-              " · " +
-              escapeHtml(status) +
-              " · " +
-              escapeHtml(g(fieldV(it.fields, "Location"))) +
-              " · " +
-              escapeHtml(g(fieldV(it.fields, "Employee Name"))) +
-              "</button>"
-            );
-          })
+          .map((it) => browHtml(it))
           .join("");
         result.innerHTML =
           '<div class="card"><h2>📋 ' +
@@ -2126,29 +2187,7 @@
         view.dataset.person = name;
         document.getElementById("peopleList").classList.add("hidden");
         view.classList.remove("hidden");
-        const rows = assets
-          .map((it) => {
-            const tag = g(fieldV(it.fields, "Asset Tag") || fieldV(it.fields, "Title"));
-            const code = String(
-              fieldV(it.fields, "Title") || fieldV(it.fields, "Serial Number") || "",
-            );
-            return (
-              '<button type="button" class="regrow" data-code="' +
-              escapeHtml(code) +
-              '"><b>Asset #' +
-              escapeHtml(it.id) +
-              " · " +
-              escapeHtml(tag) +
-              "</b> · " +
-              escapeHtml(g(fieldV(it.fields, "Model"))) +
-              " · " +
-              escapeHtml(g(fieldV(it.fields, "Serial Number"))) +
-              " · " +
-              escapeHtml(g(it.fields.Status)) +
-              "</button>"
-            );
-          })
-          .join("");
+        const rows = assets.map((it) => browHtml(it)).join("");
         view.innerHTML =
           '<button type="button" class="chip" id="peopleBack">← All people</button>' +
           "<h2>👤 " +
