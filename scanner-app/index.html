@@ -471,57 +471,6 @@
         width: 100%;
         margin-bottom: 10px;
       }
-      button.hero {
-        width: 100%;
-        padding: 18px 16px;
-        font-size: 1.15rem;
-        border-radius: 14px;
-      }
-      .stopbtn {
-        width: 100%;
-        margin-bottom: 8px;
-      }
-      .typebox {
-        margin-top: 14px;
-      }
-      .typebox summary {
-        color: var(--muted);
-        font-size: 0.85rem;
-        text-align: center;
-        cursor: pointer;
-        padding: 8px;
-      }
-      .typebox[open] summary {
-        margin-bottom: 10px;
-      }
-      .misscta {
-        display: block;
-        width: 100%;
-        margin-top: 10px;
-        padding: 14px 16px;
-        font-size: 1rem;
-        border-radius: 10px;
-      }
-      .wctag {
-        font-size: 1.6rem;
-        font-weight: 800;
-        letter-spacing: 0.03em;
-        word-break: break-word;
-      }
-      .wcstatus {
-        font-weight: 700;
-        margin: 2px 0 8px;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-      }
-      .wcmeta {
-        font-size: 0.95rem;
-      }
-      .wcver {
-        color: var(--muted);
-        font-size: 0.75rem;
-        margin: 6px 0 10px;
-      }
       #kbdHint {
         display: none;
         color: var(--muted);
@@ -583,23 +532,20 @@
           </div>
         </div>
         <div id="mainui">
-          <button id="btnScan" class="hero">📷 Scan a device</button>
-          <button id="btnStop" class="secondary stopbtn hidden">⏹ Stop camera</button>
           <div class="toolbar">
+            <button id="btnScan">📷 Scan</button>
+            <button id="btnStop" class="secondary hidden">⏹ Stop</button>
             <button id="btnWalk" class="secondary">🚶 Walk</button>
             <button id="btnPeople" class="secondary">👥 People</button>
           </div>
+          <input
+            type="text"
+            id="manual"
+            placeholder="Type asset tag or serial e.g. MICL0045"
+            autocomplete="off"
+          />
           <div id="recent" class="hidden"></div>
-          <details id="typeBox" class="typebox">
-            <summary>⌨️ Type a tag or serial instead</summary>
-            <input
-              type="text"
-              id="manual"
-              placeholder="e.g. MICL0045 or PW0MGGLA"
-              autocomplete="off"
-            />
-            <button id="btnLookup" class="secondary">Look up</button>
-          </details>
+          <button id="btnLookup" class="secondary">Look up</button>
         </div>
         <div id="walk" class="hidden">
           <div id="walkStats" class="walkstats"></div>
@@ -1005,7 +951,7 @@
 
         result.innerHTML =
           offlineNote +
-          '<div class="card" style="border-left:4px solid ' + color + '">' +
+          '<div class="card">' +
           '<div class="msg ok matchmsg">' +
           '<span class="matchcheck">✓</span>' +
           '<span class="matchcode">' +
@@ -1082,9 +1028,9 @@
               escapeHtml(suggestion) +
               "?</button>"
             : "") +
-          '<br/><button type="button" class="misscta" data-action="addasset" data-code="' +
+          '<br/><button type="button" class="chip" data-action="addasset" data-code="' +
           escapeHtml(code) +
-          '">🆕 Add this device to the inventory</button>' +
+          '">🆕 Device not in the list — add it</button>' +
           offlineNote +
           "</div>" +
           '<div id="addPanel" class="card hidden">' +
@@ -1332,7 +1278,6 @@
         } catch (e) {
           /* storage full/blocked - cache is best-effort */
         }
-        renderSyncBadge();
         return merged;
       }
 
@@ -1363,26 +1308,14 @@
       function renderSyncBadge() {
         const el = document.getElementById("syncBadge");
         if (!el) return;
-        const q = getQueue().length;
-        let text = "";
-        // Persistent connection indicator: staff in a dead zone can see
-        // they're on cached data (and since when), not live results.
-        if (!navigator.onLine) {
-          const c = loadCache();
-          text =
-            "📴 Offline — saved data from " +
-            (c ? new Date(c.t).toLocaleTimeString() : "never (go online once)");
-        }
-        if (q)
-          text +=
-            (text ? " · " : "") +
-            "⏳ " +
-            q +
-            " offline change" +
-            (q === 1 ? "" : "s") +
-            " waiting to sync";
-        el.textContent = text;
-        el.classList.toggle("hidden", !text);
+        const n = getQueue().length;
+        el.classList.toggle("hidden", n === 0);
+        el.textContent =
+          "⏳ " +
+          n +
+          " offline change" +
+          (n === 1 ? "" : "s") +
+          " waiting to sync…";
       }
 
       // Every item write goes through here: PATCH directly when online,
@@ -2042,22 +1975,6 @@
         stopScan();
         document.getElementById("walk").classList.add("hidden");
         document.getElementById("mainui").classList.remove("hidden");
-        // Session summary doubles as the report you forward to a manager.
-        if (walk.scans > 0) {
-          document.getElementById("result").innerHTML =
-            '<div class="card"><h2>🚶 Walk summary</h2>' +
-            '<div class="row"><span>Scans</span><span>' +
-            walk.scans +
-            "</span></div>" +
-            '<div class="row"><span>Found ✓</span><span>' +
-            walk.hits +
-            "</span></div>" +
-            '<div class="row"><span>Not found ✗</span><span>' +
-            walk.misses +
-            "</span></div>" +
-            '<div class="histbar"><button type="button" class="chip" id="walkCopy">📋 Copy summary</button></div>' +
-            "</div>";
-        }
       }
 
       function renderWalkStats() {
@@ -2078,7 +1995,6 @@
         else walk.misses++;
         renderWalkStats();
         feedback(r === "hit");
-        if (r === "hit") renderWalkCard();
         // Refocus the input only when the camera ISN'T running - focusing a
         // text field mid-camera pops up the on-screen keyboard over the view.
         const inp = document.getElementById("walkInput");
@@ -2087,38 +2003,6 @@
           inp.focus();
         }
         return r;
-      }
-
-      // Compact glance card for walk mode: tag + status + who/where. The
-      // full card stays one tap away ("Full details").
-      function renderWalkCard() {
-        if (!lastItem || !lastItem.fields) return;
-        const status = g(lastItem.fields.Status);
-        const color = statusColor(status);
-        const tag = g(
-          fieldV(lastItem.fields, "Asset Tag") ||
-            fieldV(lastItem.fields, "Title"),
-        );
-        document.getElementById("result").innerHTML =
-          '<div class="card" style="border-left:4px solid ' + color + '">' +
-          '<div class="wctag">' +
-          escapeHtml(tag) +
-          "</div>" +
-          '<div class="wcstatus" style="color:' +
-          (status === "—" ? "var(--muted)" : color) +
-          '">' +
-          escapeHtml(status) +
-          "</div>" +
-          '<div class="wcmeta">' +
-          escapeHtml(g(fieldV(lastItem.fields, "Employee Name"))) +
-          " · " +
-          escapeHtml(g(fieldV(lastItem.fields, "Location"))) +
-          "</div>" +
-          '<div class="wcver">Verified just now by ' +
-          escapeHtml(whoami()) +
-          "</div>" +
-          '<button type="button" class="chip" data-action="details">Full details</button>' +
-          "</div>";
       }
 
       function feedback(ok) {
@@ -2203,10 +2087,6 @@
           t - keyLastT > 400
         ) {
           e.preventDefault(); // don't type the "/" into the focused input
-          if (!walkMode) {
-            const box = document.getElementById("typeBox");
-            if (box) box.open = true;
-          }
           document.getElementById(walkMode ? "walkInput" : "manual").focus();
           return;
         }
@@ -2309,33 +2189,6 @@
           toggleHistory();
           return;
         }
-        if (b.dataset.action === "details") {
-          if (currentCode) lookup(currentCode);
-          return;
-        }
-        if (b.id === "walkCopy") {
-          const txt =
-            "Asset walk " +
-            new Date().toLocaleString() +
-            ": " +
-            walk.scans +
-            " scans, " +
-            walk.hits +
-            " found, " +
-            walk.misses +
-            " not found";
-          if (navigator.clipboard) {
-            navigator.clipboard
-              .writeText(txt)
-              .then(() => {
-                b.textContent = "Copied ✓";
-              })
-              .catch(() => {
-                b.textContent = txt;
-              });
-          }
-          return;
-        }
         if (b.dataset.action === "addasset") {
           renderAddPanel(b.dataset.code);
           return;
@@ -2386,17 +2239,9 @@
           loadCachedChoices();
           refreshChoices();
         }
-        window.addEventListener("online", () => {
-          flushQueue();
-          renderSyncBadge();
-        });
-        window.addEventListener("offline", renderSyncBadge);
-        // Re-check every minute so chips expire and the connection line
-        // stays truthful even with the page left open.
-        setInterval(() => {
-          renderHistory();
-          renderSyncBadge();
-        }, 60 * 1000);
+        window.addEventListener("online", flushQueue);
+        // Re-check every minute so chips expire even with the page left open.
+        setInterval(renderHistory, 60 * 1000);
       })();
     </script>
   </body>
