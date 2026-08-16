@@ -435,6 +435,168 @@
       .hidden {
         display: none;
       }
+      .misscta {
+        display: block;
+        width: 100%;
+        margin-top: 10px;
+        padding: 14px 16px;
+        font-size: 1rem;
+        border-radius: 10px;
+      }
+      /* ---------- Motion (transform/opacity only - cheap everywhere) ---------- */
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .card,
+      .msg,
+      #mainui,
+      #walk,
+      #people,
+      .flash {
+        animation: rise 0.22s ease-out;
+      }
+      button {
+        transition:
+          transform 0.12s ease,
+          filter 0.12s ease,
+          border-color 0.12s ease;
+      }
+      button:active {
+        transform: scale(0.97);
+      }
+      /* ---------- Toasts ---------- */
+      #toasts {
+        position: fixed;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 120;
+        width: min(92vw, 360px);
+        pointer-events: none;
+      }
+      .toast {
+        background: var(--card2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 10px 18px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-align: center;
+        opacity: 0;
+        transform: translateY(-8px);
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+      }
+      .toast.in {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .toast.ok {
+        border-color: rgba(34, 197, 94, 0.5);
+        color: #86efac;
+      }
+      .toast.err {
+        border-color: rgba(209, 52, 56, 0.5);
+        color: #fca5a5;
+      }
+      /* ---------- Bottom sheet (add-asset form) ---------- */
+      #sheet {
+        position: fixed;
+        inset: 0;
+        z-index: 110;
+      }
+      #sheet.hidden {
+        display: none;
+      }
+      .sheet-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        opacity: 0;
+        transition: opacity 0.25s ease;
+      }
+      .sheet-panel {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-bottom: 0;
+        border-radius: 18px 18px 0 0;
+        padding: 10px 18px 24px;
+        max-height: 85vh;
+        overflow-y: auto;
+        transform: translateY(100%);
+        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      #sheet.open .sheet-backdrop {
+        opacity: 1;
+      }
+      #sheet.open .sheet-panel {
+        transform: translateY(0);
+      }
+      .sheet-handle {
+        width: 44px;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--border);
+        margin: 4px auto 12px;
+      }
+      .sheet-panel h2 {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 1.05rem;
+        margin-bottom: 12px;
+      }
+      .sheet-panel input,
+      .sheet-panel select {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+      @media (min-width: 768px) {
+        /* On wide screens the sheet becomes a centered modal. */
+        .sheet-panel {
+          left: 50%;
+          right: auto;
+          bottom: auto;
+          top: 50%;
+          width: 480px;
+          border: 1px solid var(--border);
+          border-radius: 18px;
+          transform: translate(-50%, -50%) scale(0.96);
+          opacity: 0;
+          transition:
+            transform 0.25s ease,
+            opacity 0.25s ease;
+        }
+        #sheet.open .sheet-panel {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
       #camWrap {
         position: relative;
       }
@@ -466,10 +628,6 @@
       #personView h2 {
         font-size: 1rem;
         margin: 10px 0;
-      }
-      #addPanel select.fieldpick {
-        width: 100%;
-        margin-bottom: 10px;
       }
       #kbdHint {
         display: none;
@@ -576,6 +734,27 @@
         <p id="kbdHint">W walk mode · / search · Esc exit walk</p>
       </div>
     </div>
+    <div id="sheet" class="hidden">
+      <div class="sheet-backdrop" id="sheetBackdrop"></div>
+      <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Add new asset">
+        <div class="sheet-handle"></div>
+        <h2>🆕 New asset
+          <button type="button" class="chip" id="sheetClose">✕ Close</button>
+        </h2>
+        <input type="text" id="addTag" placeholder="Asset tag e.g. MICL0048" autocomplete="off" />
+        <input type="text" id="addSerial" placeholder="Serial number" autocomplete="off" />
+        <input type="text" id="addModel" placeholder="Model e.g. Lenovo L13" autocomplete="off" />
+        <input type="text" id="addType" placeholder="Asset type e.g. Laptop" autocomplete="off" />
+        <select class="fieldpick" id="addStatus"></select>
+        <select class="fieldpick" id="addLocation"></select>
+        <div class="confirmbar">
+          <button id="addSave" type="button">Add asset</button>
+          <button id="addCancel" type="button" class="secondary">Cancel</button>
+        </div>
+        <div id="addMsg"></div>
+      </div>
+    </div>
+    <div id="toasts"></div>
     <script>
       "use strict";
 
@@ -1154,23 +1333,47 @@
               escapeHtml(suggestion) +
               "?</button>"
             : "") +
-          '<br/><button type="button" class="chip" data-action="addasset" data-code="' +
+          '<br/><button type="button" class="misscta" data-action="addasset" data-code="' +
           escapeHtml(code) +
           '">🆕 Not in the list? Add this device</button>' +
           offlineNote +
-          "</div>" +
-          '<div id="addPanel" class="card hidden">' +
-          "<h2>🆕 New asset</h2>" +
-          '<input type="text" id="addTag" placeholder="Asset tag e.g. MICL0048" autocomplete="off" />' +
-          '<input type="text" id="addSerial" placeholder="Serial number" autocomplete="off" />' +
-          '<input type="text" id="addModel" placeholder="Model e.g. Lenovo L13" autocomplete="off" />' +
-          '<input type="text" id="addType" placeholder="Asset type e.g. Laptop" autocomplete="off" />' +
-          '<select class="fieldpick" id="addStatus"></select>' +
-          '<select class="fieldpick" id="addLocation"></select>' +
-          '<div class="confirmbar"><button id="addSave">Add asset</button>' +
-          '<button id="addCancel" class="secondary">Cancel</button></div>' +
-          '<div id="addMsg"></div>' +
           "</div>";
+      }
+
+      // ---------- Bottom sheet + toasts ----------
+      let sheetOpen = false;
+      function openSheet() {
+        const s = document.getElementById("sheet");
+        s.classList.remove("hidden");
+        // Double rAF so the transition runs after the element is displayed.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => s.classList.add("open")),
+        );
+        sheetOpen = true;
+      }
+      function closeSheet() {
+        const s = document.getElementById("sheet");
+        s.classList.remove("open");
+        sheetOpen = false;
+        setTimeout(() => {
+          if (!sheetOpen) s.classList.add("hidden");
+        }, 300);
+      }
+
+      // Floating confirmation pill (top center, max 3 stacked).
+      function toast(msg, kind) {
+        const wrap = document.getElementById("toasts");
+        if (!wrap) return;
+        const el = document.createElement("div");
+        el.className = "toast " + (kind || "info");
+        el.textContent = msg;
+        wrap.appendChild(el);
+        while (wrap.children.length > 3) wrap.firstChild.remove();
+        requestAnimationFrame(() => el.classList.add("in"));
+        setTimeout(() => {
+          el.classList.remove("in");
+          setTimeout(() => el.remove(), 300);
+        }, 2600);
       }
 
       // ---------- Add asset from the field ----------
@@ -1209,9 +1412,6 @@
       }
 
       function renderAddPanel(code) {
-        const panel = document.getElementById("addPanel");
-        if (!panel) return;
-        panel.classList.remove("hidden");
         // Most vendor barcodes ARE the serial - prefill it with the scan.
         document.getElementById("addTag").value = "";
         document.getElementById("addSerial").value = code || "";
@@ -1219,13 +1419,19 @@
         document.getElementById("addType").value = "";
         const fill = (id, choices) => {
           document.getElementById(id).innerHTML = choices
-            .map((c) => '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + "</option>")
+            .map(
+              (c) =>
+                '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + "</option>",
+            )
             .join("");
         };
         fill("addStatus", statusChoices);
         fill("addLocation", locationChoices);
-        const msg = document.getElementById("addMsg");
-        msg.innerHTML = "";
+        document.getElementById("addMsg").innerHTML = "";
+        const saveBtn = document.getElementById("addSave");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Add asset";
+        openSheet();
       }
 
       async function addAssetFromForm() {
@@ -1251,13 +1457,11 @@
           const r = await addAsset(fields);
           if (r.queued) {
             saveBtn.textContent = "Queued: syncs when online ✓";
-            msg.innerHTML =
-              '<div class="msg ok">Saved offline: the new asset syncs when you reconnect.</div>';
+            toast("Saved offline: syncs when you reconnect", "ok");
             return;
           }
-          msg.innerHTML =
-            '<div class="msg ok">Added as Asset #' + escapeHtml(r.id) + " ✓</div>";
-          saveBtn.textContent = "Added ✓";
+          toast("Added as Asset #" + r.id + " ✓", "ok");
+          closeSheet();
           // Show the fresh card immediately (also stamps Last Verified/By).
           lookup(tag);
         } catch (e) {
@@ -1502,16 +1706,18 @@
         try {
           const token = await getToken();
           if (!SITE_ID) await resolveSite(token);
-          let i = 0;
-          for (; i < q.length; i++) {
-            try {
-              if (String(q[i].id).indexOf("new-") === 0) {
-                // Queued "add asset" entry - create instead of patch.
-                await graphPost(token, itemsUrl(), { fields: q[i].patch });
-              } else {
-                await graphPatch(token, fieldsUrl(q[i].id), q[i].patch);
-              }
-            } catch (err) {
+        let i = 0;
+        let synced = 0;
+        for (; i < q.length; i++) {
+          try {
+            if (String(q[i].id).indexOf("new-") === 0) {
+              // Queued "add asset" entry - create instead of patch.
+              await graphPost(token, itemsUrl(), { fields: q[i].patch });
+            } else {
+              await graphPatch(token, fieldsUrl(q[i].id), q[i].patch);
+            }
+            synced++;
+          } catch (err) {
               if (String((err && err.message) || "").indexOf("Graph 4") === 0) {
                 // e.g. 403 for a read-only user or 400 for a bad choice -
                 // retrying will never help. Drop it and keep going.
@@ -1522,6 +1728,11 @@
             }
           }
           setQueue(q.slice(i));
+          if (synced > 0)
+            toast(
+              synced + " change" + (synced === 1 ? "" : "s") + " synced ✓",
+              "ok",
+            );
         } catch (e) {
           console.warn("queue flush deferred:", e);
         } finally {
@@ -1980,11 +2191,15 @@
           it.fields.Status = "Available";
           it.fields.EmployeeName = "";
         }
-        btn.textContent = failed
-          ? "Done: " + failed + " failed"
-          : queued
-            ? "Saved: " + queued + " waiting to sync ✓"
-            : "All saved ✓";
+        btn.textContent = failed ? "Some failed" : "All saved ✓";
+        toast(
+          failed
+            ? failed + " save(s) failed"
+            : queued
+              ? "Saved: " + queued + " waiting to sync"
+              : "All changes saved ✓",
+          failed ? "err" : "ok",
+        );
       }
 
       // ---------- Camera scanning ----------
@@ -2230,7 +2445,8 @@
         // burst detector (no key in 400ms) so a wedge scanner bursting a code
         // containing these characters can't trigger them mid-scan.
         if (e.key === "Escape") {
-          if (inField) ae.blur();
+          if (sheetOpen) closeSheet();
+          else if (inField) ae.blur();
           else if (walkMode) exitWalk();
           else if (peopleOpen) closePeople();
           KEY_QUEUE.length = 0;
@@ -2287,6 +2503,10 @@
       document.getElementById("btnPeople").addEventListener("click", openPeople);
       document.getElementById("btnTorch").addEventListener("click", camToggleTorch);
       document.getElementById("btnZoom").addEventListener("click", camCycleZoom);
+      document.getElementById("addSave").addEventListener("click", addAssetFromForm);
+      document.getElementById("addCancel").addEventListener("click", closeSheet);
+      document.getElementById("sheetClose").addEventListener("click", closeSheet);
+      document.getElementById("sheetBackdrop").addEventListener("click", closeSheet);
       document.getElementById("peopleClose").addEventListener("click", closePeople);
       document.getElementById("peopleSearch").addEventListener("input", (e) => {
         renderPeopleList(e.target.value);
@@ -2347,15 +2567,6 @@
         }
         if (b.dataset.action === "addasset") {
           renderAddPanel(b.dataset.code);
-          return;
-        }
-        if (b.id === "addSave") {
-          addAssetFromForm();
-          return;
-        }
-        if (b.id === "addCancel") {
-          const p = document.getElementById("addPanel");
-          if (p) p.classList.add("hidden");
           return;
         }
         if (b.dataset.edit) {

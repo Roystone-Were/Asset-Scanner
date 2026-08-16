@@ -68,7 +68,11 @@ or queues it for sync if offline. Bulk additions are still easiest directly
 in SharePoint; the form is for the field.
 
 The camera offers **torch and zoom** controls while scanning — shown only
-when the device supports them, so the view stays clean.
+when the device supports them, so the view stays clean. Interface motion
+(card entrances, screen switches, the add-asset bottom sheet, toast
+notifications) is plain CSS/Web Animations — no animation library, no build
+step, and it all switches off automatically for users who prefer reduced
+motion.
 
 **Walk mode** (🚶 button) is built for inventory walks: continuous scanning
 with hit/miss counters, instant flash + beep + vibrate feedback, and no taps
