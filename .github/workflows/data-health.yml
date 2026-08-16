@@ -59,7 +59,11 @@ jobs:
         shell: pwsh
         run: |
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          Install-Module PnP.PowerShell -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber
+          # Pinned to the version the local scripts are tested against.
+          # Unpinned installs grab the latest, which can change cmdlet
+          # behavior and break a workflow that works fine locally.
+          # Bump deliberately after testing locally.
+          Install-Module PnP.PowerShell -RequiredVersion 3.3.0 -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber
 
       - name: Run data health check
         shell: pwsh

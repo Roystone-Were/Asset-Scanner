@@ -1203,6 +1203,65 @@
         }
       }
 
+      // ---------- Choice lists (Status / Location) ----------
+      // The built-in constants are the offline fallback; after sign-in the
+      // real choice values are fetched from the list columns, so a choice
+      // added in SharePoint shows up in the app without a code change.
+      const CHOICES_CACHE_KEY = "xana_choices_v1";
+      let statusChoices = STATUS_CHOICES;
+      let locationChoices = LOCATION_CHOICES;
+
+      function applyChoices(status, location) {
+        if (Array.isArray(status) && status.length) statusChoices = status;
+        if (Array.isArray(location) && location.length) locationChoices = location;
+      }
+
+      function loadCachedChoices() {
+        try {
+          const c = JSON.parse(localStorage.getItem(CHOICES_CACHE_KEY) || "null");
+          if (c) applyChoices(c.status, c.location);
+        } catch (e) {
+          /* corrupt - ignore */
+        }
+      }
+
+      async function refreshChoices() {
+        try {
+          const token = await getToken();
+          if (!SITE_ID) await resolveSite(token);
+          const cols = await graphGet(
+            token,
+            "https://graph.microsoft.com/v1.0/sites/" +
+              SITE_ID +
+              "/lists/" +
+              LIST_ID +
+              "/columns",
+          );
+          const found = {};
+          for (const c of cols.value || []) {
+            if (!Array.isArray(c.choices) || !c.choices.length) continue;
+            const n = (c.displayName || "").toLowerCase();
+            if (n === "status") found.status = c.choices.slice();
+            if (n === "location") found.location = c.choices.slice();
+          }
+          applyChoices(found.status, found.location);
+          try {
+            localStorage.setItem(
+              CHOICES_CACHE_KEY,
+              JSON.stringify({
+                status: statusChoices,
+                location: locationChoices,
+                t: Date.now(),
+              }),
+            );
+          } catch (e) {
+            /* storage full/blocked - ignore */
+          }
+        } catch (e) {
+          console.warn("choice refresh failed - using built-ins/cache:", e);
+        }
+      }
+
       // ---------- Inline field editing (Status / Location) ----------
       // Both are SharePoint Choice columns; only the choices the column
       // actually allows are offered (Choice columns reject other values).
@@ -1237,7 +1296,7 @@
       }
 
       function editField(field) {
-        const choices = field === "Status" ? STATUS_CHOICES : LOCATION_CHOICES;
+        const choices = field === "Status" ? statusChoices : locationChoices;
         const id = field === "Status" ? "statusVal" : "locVal";
         const valEl = document.getElementById(id);
         if (!valEl) return;
@@ -1873,6 +1932,8 @@
           renderHistory();
           renderSyncBadge();
           flushQueue();
+          loadCachedChoices();
+          refreshChoices();
         }
         window.addEventListener("online", flushQueue);
         // Re-check every minute so chips expire even with the page left open.
