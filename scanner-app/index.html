@@ -458,7 +458,10 @@
         min-width: 54px;
       }
       #peopleSearch {
-        margin-bottom: 10px;
+        margin: 10px 0;
+      }
+      #peopleClose {
+        margin-bottom: 4px;
       }
       #personView h2 {
         font-size: 1rem;
@@ -559,6 +562,7 @@
           </div>
         </div>
         <div id="people" class="hidden">
+          <button type="button" class="chip" id="peopleClose">← Back to scanner</button>
           <input
             type="text"
             id="peopleSearch"
@@ -2251,6 +2255,7 @@
       document.getElementById("btnPeople").addEventListener("click", openPeople);
       document.getElementById("btnTorch").addEventListener("click", camToggleTorch);
       document.getElementById("btnZoom").addEventListener("click", camCycleZoom);
+      document.getElementById("peopleClose").addEventListener("click", closePeople);
       document.getElementById("peopleSearch").addEventListener("input", (e) => {
         renderPeopleList(e.target.value);
       });
