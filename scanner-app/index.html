@@ -593,6 +593,7 @@
         mergeItems,
         classifyKeyBurst,
         diffFields,
+        parseIdQuery,
         STATUS_CHOICES,
         LOCATION_CHOICES,
       } = Xana;
@@ -844,7 +845,34 @@
           // for this to work (see Index-LookupFields.ps1); an unindexed or
           // missing field errors out and we just try the next candidate.
           const raw = (code || "").trim();
+
+          // Direct asset-number path ("#98"): fetch the item by its id, so a
+          // row with no tag and no serial is still findable. Needs no index.
+          const idq = parseIdQuery(raw);
+          if (idq) {
+            try {
+              const it = await graphGet(
+                token,
+                "https://graph.microsoft.com/v1.0/sites/" +
+                  SITE_ID +
+                  "/lists/" +
+                  LIST_ID +
+                  "/items/" +
+                  idq +
+                  "?expand=fields",
+              );
+              if (it && it.fields) {
+                item = it.fields;
+                itemId = it.id;
+                matchedField = "Id";
+              }
+            } catch (e2) {
+              /* no such item - fall through to the miss screen */
+            }
+          }
+
           for (const fname of ["Title", "SerialNumber", "AssetTag"]) {
+            if (item) break;
             try {
               const q = encodeURIComponent(
                 "fields/" + fname + " eq '" + raw.replace(/'/g, "''") + "'",
@@ -930,7 +958,7 @@
         const result = document.getElementById("result");
         const offlineNote =
           opts && opts.offline
-            ? '<div class="msg info">📴 Offline — saved data from ' +
+            ? '<div class="msg info">📴 Offline: saved data from ' +
               escapeHtml(new Date(opts.cacheTime || Date.now()).toLocaleString()) +
               "</div>"
             : "";
@@ -947,7 +975,9 @@
           ? ""
           : matchedField === "SerialNumber"
             ? "Serial Number"
-            : "Asset Tag";
+            : matchedField === "Id"
+              ? "Asset number"
+              : "Asset Tag";
 
         result.innerHTML =
           offlineNote +
@@ -1015,7 +1045,7 @@
         const suggestion = suggestMatch(currentCode || code, candidates);
         const offlineNote =
           opts && opts.offline
-            ? " (offline — adding will sync when back online)"
+            ? " (offline: adding will sync when back online)"
             : "";
         result.innerHTML =
           '<div class="msg err">No asset found for "' +
@@ -1030,7 +1060,7 @@
             : "") +
           '<br/><button type="button" class="chip" data-action="addasset" data-code="' +
           escapeHtml(code) +
-          '">🆕 Device not in the list — add it</button>' +
+          '">🆕 Not in the list? Add this device</button>' +
           offlineNote +
           "</div>" +
           '<div id="addPanel" class="card hidden">' +
@@ -1124,9 +1154,9 @@
         try {
           const r = await addAsset(fields);
           if (r.queued) {
-            saveBtn.textContent = "Queued — syncs when online ✓";
+            saveBtn.textContent = "Queued: syncs when online ✓";
             msg.innerHTML =
-              '<div class="msg ok">Saved offline — the new asset syncs when you reconnect.</div>';
+              '<div class="msg ok">Saved offline: the new asset syncs when you reconnect.</div>';
             return;
           }
           msg.innerHTML =
@@ -1170,7 +1200,7 @@
         const result = document.getElementById("result");
         if (!cache || !cache.items.length) {
           result.innerHTML =
-            '<div class="msg err">📴 You are offline and there is no saved data yet. Go online once — after that, scans keep working offline.</div>';
+            '<div class="msg err">📴 You are offline and there is no saved data yet. Go online once; after that, scans keep working offline.</div>';
           return "error";
         }
         const clean = (code || "").trim().toLowerCase();
@@ -1178,7 +1208,19 @@
         let itemId = null;
         let matchedField = "";
         const candidates = [];
+        // Direct asset-number path ("#98") works offline too - ids are in
+        // the cached items.
+        const idq = parseIdQuery(code || "");
         for (const it of cache.items) {
+          if (idq) {
+            if (String(it.id) === idq) {
+              item = it.fields;
+              itemId = it.id;
+              matchedField = "Id";
+              break;
+            }
+            continue;
+          }
           candidates.push.apply(candidates, collectCandidates(it.fields));
           const key = matchFields(it.fields, clean);
           if (key) {
@@ -1516,7 +1558,7 @@
           cell.innerHTML =
             renderValueCell(field, value) +
             '<span class="savedtip">' +
-            (r.queued ? "Saved — will sync ✓" : "Saved ✓") +
+            (r.queued ? "Saved: will sync ✓" : "Saved ✓") +
             "</span>";
           if (field === "Status") {
             const badge = document.getElementById("statusBadge");
@@ -1640,7 +1682,7 @@
               v.lastModifiedBy.user &&
               (v.lastModifiedBy.user.displayName ||
                 v.lastModifiedBy.user.userPrincipalName)) ||
-            "—";
+            "N/A";
           const when = v.lastModifiedDateTime
             ? new Date(v.lastModifiedDateTime).toLocaleString()
             : "";
@@ -1748,7 +1790,7 @@
                 escapeHtml(p.name) +
                 '">' +
                 escapeHtml(p.name) +
-                " — " +
+                " · " +
                 p.count +
                 " asset" +
                 (p.count === 1 ? "" : "s") +
@@ -1790,7 +1832,7 @@
           '<button type="button" class="chip" id="peopleBack">← All people</button>' +
           "<h2>👤 " +
           escapeHtml(name) +
-          " — " +
+          " · " +
           assets.length +
           " asset" +
           (assets.length === 1 ? "" : "s") +
@@ -1829,9 +1871,9 @@
           it.fields.EmployeeName = "";
         }
         btn.textContent = failed
-          ? "Done — " + failed + " failed"
+          ? "Done: " + failed + " failed"
           : queued
-            ? "Saved — " + queued + " waiting to sync ✓"
+            ? "Saved: " + queued + " waiting to sync ✓"
             : "All saved ✓";
       }
 

@@ -9,14 +9,14 @@
   // Flatten a field value for display: strings pass through unchanged,
   // SharePoint lookup objects get their values joined.
   function g(v) {
-    if (v === undefined || v === null) return "—";
+    if (v === undefined || v === null) return "N/A";
     if (typeof v === "string") return v;
     if (typeof v === "object") {
       const s = Object.values(v).join(", ");
-      return s !== "" ? s : "—";
+      return s !== "" ? s : "N/A";
     }
     const s = String(v);
-    return s !== "" ? s : "—";
+    return s !== "" ? s : "N/A";
   }
 
   function escapeHtml(s) {
@@ -277,6 +277,14 @@
     return { text: text, isScan: true };
   }
 
+  // "#98" -> "98": a direct asset-number lookup, so a row with no tag and
+  // no serial is still findable. Only an explicit "#<digits>" counts -
+  // bare numbers stay unmatched (they could be serial fragments).
+  function parseIdQuery(s) {
+    const m = String(s || "").trim().match(/^#(\d+)$/);
+    return m ? m[1] : null;
+  }
+
   // Columns the history view diffs between two item versions, as
   // [internal/display-ish name, label]. fieldV() tolerates the display-name
   // variants Graph may return for each.
@@ -306,7 +314,7 @@
       const to = fieldV(next || {}, pair[0]);
       const fs = from === undefined || from === null ? "" : String(from);
       const ts = to === undefined || to === null ? "" : String(to);
-      if (fs !== ts) out.push({ key: pair[0].toLowerCase(), label: pair[1], from: fs || "—", to: ts || "—" });
+      if (fs !== ts) out.push({ key: pair[0].toLowerCase(), label: pair[1], from: fs || "N/A", to: ts || "N/A" });
     }
     return out;
   }
@@ -359,6 +367,7 @@
     diffFields,
     groupEmployees,
     assetsOfEmployee,
+    parseIdQuery,
     STATUS_CHOICES,
     LOCATION_CHOICES,
     REGION_CHOICES,

@@ -74,8 +74,8 @@ test("fieldV does not match the renamed 'Asset' column", () => {
 test("g renders strings, lookup objects, and empty values", () => {
   assert.strictEqual(X.g("MICL0045"), "MICL0045");
   assert.strictEqual(X.g({ description: "A", lookupId: 1 }), "A, 1");
-  assert.strictEqual(X.g(null), "—");
-  assert.strictEqual(X.g(undefined), "—");
+  assert.strictEqual(X.g(null), "N/A");
+  assert.strictEqual(X.g(undefined), "N/A");
 });
 
 test("statusColor maps statuses", () => {
@@ -283,15 +283,27 @@ test("diffFields treats blank and missing as equal, flags blank vs value", () =>
     X.diffFields({ Condition: "", Status: "In Use" }, { Status: "In Use" }),
     [],
   );
-  // Setting a previously-blank value shows up as "—" -> value.
+  // Setting a previously-blank value shows up as "N/A" -> value.
   const d = X.diffFields(
     { Title: "MICL0045" },
     { Title: "MICL0045", Condition: "New" },
   );
   assert.strictEqual(d.length, 1);
   assert.strictEqual(d[0].label, "Condition");
-  assert.strictEqual(d[0].from, "—");
+  assert.strictEqual(d[0].from, "N/A");
   assert.strictEqual(d[0].to, "New");
+});
+
+test("parseIdQuery accepts #<digits> only", () => {
+  assert.strictEqual(X.parseIdQuery("#98"), "98");
+  assert.strictEqual(X.parseIdQuery(" #98 "), "98");
+  assert.strictEqual(X.parseIdQuery("#1"), "1");
+  // Bare numbers are NOT id lookups (could be serial fragments).
+  assert.strictEqual(X.parseIdQuery("98"), null);
+  assert.strictEqual(X.parseIdQuery("#9a"), null);
+  assert.strictEqual(X.parseIdQuery("#-1"), null);
+  assert.strictEqual(X.parseIdQuery(""), null);
+  assert.strictEqual(X.parseIdQuery(null), null);
 });
 
 test("diffFields keys let callers spot verification-only versions", () => {
