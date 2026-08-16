@@ -285,6 +285,24 @@
     return m ? m[1] : null;
   }
 
+  // "39,98,23" (also space/semicolon separated, # optional per token) ->
+  // ["39","98","23"]: a BATCH asset-number lookup. Requires 2+ tokens that
+  // are ALL numbers - a single bare number is still not a lookup, and any
+  // non-numeric token means the user is searching something else.
+  function parseIdListQuery(s) {
+    const raw = String(s || "").trim();
+    if (!raw) return null;
+    const tokens = raw.split(/[\s,;]+/).filter(Boolean);
+    if (tokens.length < 2) return null;
+    const ids = [];
+    for (const t of tokens) {
+      const m = t.match(/^#?(\d+)$/);
+      if (!m) return null;
+      ids.push(m[1]);
+    }
+    return ids;
+  }
+
   // Columns the history view diffs between two item versions, as
   // [internal/display-ish name, label]. fieldV() tolerates the display-name
   // variants Graph may return for each.
@@ -368,6 +386,7 @@
     groupEmployees,
     assetsOfEmployee,
     parseIdQuery,
+    parseIdListQuery,
     STATUS_CHOICES,
     LOCATION_CHOICES,
     REGION_CHOICES,

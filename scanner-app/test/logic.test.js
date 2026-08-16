@@ -306,6 +306,25 @@ test("parseIdQuery accepts #<digits> only", () => {
   assert.strictEqual(X.parseIdQuery(null), null);
 });
 
+test("parseIdListQuery accepts multi-number batches in any separator", () => {
+  assert.deepStrictEqual(X.parseIdListQuery("39,98,23"), ["39", "98", "23"]);
+  assert.deepStrictEqual(X.parseIdListQuery("39 98"), ["39", "98"]);
+  assert.deepStrictEqual(X.parseIdListQuery("#39, 98;23"), ["39", "98", "23"]);
+  assert.deepStrictEqual(X.parseIdListQuery(" 39 ,  98 "), ["39", "98"]);
+});
+
+test("parseIdListQuery rejects single numbers and mixed text", () => {
+  // A single bare number is not a batch (and not a lookup at all).
+  assert.strictEqual(X.parseIdListQuery("98"), null);
+  assert.strictEqual(X.parseIdListQuery("#98"), null);
+  // Any non-numeric token means this is some other search.
+  assert.strictEqual(X.parseIdListQuery("39,MICL0045"), null);
+  // A trailing separator is harmless.
+  assert.deepStrictEqual(X.parseIdListQuery("39,98,"), ["39", "98"]);
+  assert.strictEqual(X.parseIdListQuery(""), null);
+  assert.strictEqual(X.parseIdListQuery(null), null);
+});
+
 test("diffFields keys let callers spot verification-only versions", () => {
   const prev = { LastVerified: "2026-08-01T10:00:00Z" };
   const next = {

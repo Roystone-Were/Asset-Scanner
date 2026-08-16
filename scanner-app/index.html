@@ -594,6 +594,7 @@
         classifyKeyBurst,
         diffFields,
         parseIdQuery,
+        parseIdListQuery,
         STATUS_CHOICES,
         LOCATION_CHOICES,
       } = Xana;
@@ -846,6 +847,14 @@
           // missing field errors out and we just try the next candidate.
           const raw = (code || "").trim();
 
+          // Batch asset-number path ("39,98,23"): fetch each item by id and
+          // show them as one tappable list. Runs before the single paths.
+          const idList = parseIdListQuery(raw);
+          if (idList) {
+            await batchLookup(token, idList);
+            return "batch";
+          }
+
           // Direct asset-number path ("#98"): fetch the item by its id, so a
           // row with no tag and no serial is still findable. Needs no index.
           const idq = parseIdQuery(raw);
@@ -951,6 +960,93 @@
             "</div>";
           return "error";
         }
+      }
+
+      // ---------- Batch asset-number lookup ("39,98,23") ----------
+      // Fetches each id directly and renders one tappable list; ids that
+      // don't exist are listed at the bottom so nothing disappears silently.
+      async function batchLookup(token, ids) {
+        const result = document.getElementById("result");
+        result.innerHTML =
+          '<div class="msg info">Looking up ' +
+          escapeHtml(String(ids.length)) +
+          " assets…</div>";
+        const found = [];
+        const missing = [];
+        await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const it = await graphGet(
+                token,
+                "https://graph.microsoft.com/v1.0/sites/" +
+                  SITE_ID +
+                  "/lists/" +
+                  LIST_ID +
+                  "/items/" +
+                  id +
+                  "?expand=fields",
+              );
+              if (it && it.fields) found.push({ id: it.id, fields: it.fields });
+              else missing.push(id);
+            } catch (e) {
+              missing.push(id);
+            }
+          }),
+        );
+        renderBatchList(found, missing);
+      }
+
+      function renderBatchList(found, missing) {
+        const result = document.getElementById("result");
+        const rows = found
+          .slice()
+          .sort((a, b) => Number(a.id) - Number(b.id))
+          .map((it) => {
+            const status = g(it.fields.Status);
+            const color = statusColor(status);
+            const tag = g(
+              fieldV(it.fields, "Asset Tag") || fieldV(it.fields, "Title"),
+            );
+            // Tap opens the full card: by tag/serial if it has one, else #id.
+            const code = String(
+              fieldV(it.fields, "Title") ||
+                fieldV(it.fields, "Serial Number") ||
+                "#" + it.id,
+            );
+            return (
+              '<button type="button" class="regrow" data-code="' +
+              escapeHtml(code) +
+              '" style="border-left:4px solid ' +
+              color +
+              '"><b>Asset #' +
+              escapeHtml(it.id) +
+              " · " +
+              escapeHtml(tag) +
+              "</b><br/>" +
+              escapeHtml(g(fieldV(it.fields, "Model"))) +
+              " · " +
+              escapeHtml(status) +
+              " · " +
+              escapeHtml(g(fieldV(it.fields, "Location"))) +
+              " · " +
+              escapeHtml(g(fieldV(it.fields, "Employee Name"))) +
+              "</button>"
+            );
+          })
+          .join("");
+        result.innerHTML =
+          '<div class="card"><h2>📋 ' +
+          found.length +
+          " asset" +
+          (found.length === 1 ? "" : "s") +
+          "</h2>" +
+          (rows || '<div class="msg info">None of those asset numbers exist.</div>') +
+          (missing.length
+            ? '<div class="msg err" style="margin-top:10px">Not found: ' +
+              escapeHtml(missing.join(", ")) +
+              "</div>"
+            : "") +
+          "</div>";
       }
 
       // ---------- Result rendering ----------
@@ -1196,12 +1292,26 @@
       // Offline lookup: match against the cached item list client-side.
       // Verified writebacks are queued, not attempted.
       function offlineLookup(code) {
-        const cache = loadCache();
         const result = document.getElementById("result");
+        const cache = loadCache();
         if (!cache || !cache.items.length) {
           result.innerHTML =
             '<div class="msg err">📴 You are offline and there is no saved data yet. Go online once; after that, scans keep working offline.</div>';
           return "error";
+        }
+        // Batch asset-number path works offline too (ids are in the cache).
+        const idList = parseIdListQuery(code || "");
+        if (idList) {
+          const byId = new Map(cache.items.map((it) => [String(it.id), it]));
+          const found = [];
+          const missing = [];
+          for (const id of idList) {
+            const it = byId.get(id);
+            if (it) found.push(it);
+            else missing.push(id);
+          }
+          renderBatchList(found, missing);
+          return "batch";
         }
         const clean = (code || "").trim().toLowerCase();
         let item = null;
@@ -2032,11 +2142,15 @@
 
       async function walkLookup(code) {
         const r = await lookup(code);
-        walk.scans++;
-        if (r === "hit") walk.hits++;
-        else walk.misses++;
+        // Batch lookups are an admin/search action, not a scan - they don't
+        // count toward the session stats.
+        if (r === "hit" || r === "miss" || r === "error") {
+          walk.scans++;
+          if (r === "hit") walk.hits++;
+          else walk.misses++;
+          feedback(r === "hit");
+        }
         renderWalkStats();
-        feedback(r === "hit");
         // Refocus the input only when the camera ISN'T running - focusing a
         // text field mid-camera pops up the on-screen keyboard over the view.
         const inp = document.getElementById("walkInput");
