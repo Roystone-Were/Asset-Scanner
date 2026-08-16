@@ -16,11 +16,15 @@
   GitHub Actions ignores `.vercelignore`, so CI tests still see the fixtures.
 - **Walk mode + USB scanner support:** the 🚶 Walk button starts a continuous
   scanning session — hit/miss counters, green/red flash + beep + vibrate,
-  input auto-refocus after every scan, camera or wedge scanner. USB "wedge"
-  scanners (keyboard mode) are detected globally via keystroke timing
-  (`classifyKeyBurst`: printable chars, all gaps ≤ 80ms, Enter terminator)
-  and routed to the active mode's lookup; a focused text input still owns its
-  own Enter, so no double lookups.
+  input auto-refocus after every scan. The camera STAYS open in walk mode and
+  fires continuously (checkout-counter style; repeats of the in-frame barcode
+  are deduped with a 1.5s cooldown, and the input is not refocused while the
+  camera runs so the on-screen keyboard doesn't cover the view) — the same
+  zero-tap flow as a USB wedge scanner. Normal mode keeps one-shot camera
+  behavior. Wedge scanners (keyboard mode) are detected globally via
+  keystroke timing (`classifyKeyBurst`: printable chars, all gaps ≤ 80ms,
+  Enter terminator) and routed to the active mode's lookup; a focused text
+  input still owns its own Enter, so no double lookups.
 - **Offline-first:** the last successful fetch is cached in localStorage
   (`xana_data_cache_v1`, write-through on every lookup / full fallback fetch).
   When Graph is unreachable (`isOfflineish`: offline, fetch TypeError, or a
