@@ -87,7 +87,9 @@
   // Returns the matched field key if `fields` matches the cleaned value
   // against any lookup column, otherwise null. Both sides are trimmed:
   // SharePoint values sometimes carry trailing spaces (e.g. "4P09PF3 "), and
-  // an untrimmed stored value would silently miss a scan.
+  // an untrimmed stored value would silently miss a scan. There is
+  // deliberately NO Barcode column: the barcode on an asset label encodes
+  // the tag itself (or the serial), so tag/serial matching covers scans.
   function matchFields(f, clean) {
     for (const key of Object.keys(f || {})) {
       const k = key.toLowerCase().replace(/[^a-z]/g, "");
@@ -95,14 +97,13 @@
         k === "assettag" ||
         k === "title" ||
         k === "serialnumber" ||
-        k === "serial" ||
-        k === "barcode";
+        k === "serial";
       if (isKey && String(f[key]).toLowerCase().trim() === clean) return key;
     }
     return null;
   }
 
-  // Candidate values (titles/tags/serials/barcodes) from a fields object, for
+  // Candidate values (titles/tags/serials) from a fields object, for
   // fuzzy "did you mean" suggestions.
   function collectCandidates(fields) {
     const out = [];
@@ -112,8 +113,7 @@
         k === "assettag" ||
         k === "title" ||
         k === "serialnumber" ||
-        k === "serial" ||
-        k === "barcode";
+        k === "serial";
       if (isKey) {
         const v = String(fields[key] || "").trim();
         if (v) out.push(v);
@@ -283,7 +283,6 @@
   const HISTORY_FIELDS = [
     ["Title", "Tag"],
     ["SerialNumber", "Serial"],
-    ["Barcode", "Barcode"],
     ["Asset", "Asset Type"],
     ["Model", "Model"],
     ["Department", "Department"],

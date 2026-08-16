@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Index the lookup columns (SerialNumber, Barcode, Title) on the Xana Asset
+  Index the lookup columns (SerialNumber, Title) on the Xana Asset
   Inventory list so Graph $filter lookups are fast and allowed at any list
   size. SharePoint only permits $filter on indexed columns, and past ~5,000
   items unindexed $filter queries are rejected outright (the app currently
@@ -25,7 +25,7 @@ $ErrorActionPreference = 'Stop'
 Import-Module PnP.PowerShell
 Connect-PnPOnline -Url $SiteUrl -ClientId $ClientId -Tenant $Tenant -Thumbprint $Thumbprint
 
-$LookupFields = @('SerialNumber', 'Barcode', 'Title')
+$LookupFields = @('SerialNumber', 'Title')
 
 function Show-State([string]$heading) {
   Write-Host ""

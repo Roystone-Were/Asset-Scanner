@@ -14,7 +14,6 @@ function fieldsOf(row) {
     SerialNumber: row.serial,
     Asset: row.assetType, // Asset Type column (internal name 'Asset')
   };
-  if (row.barcode) f.Barcode = row.barcode;
   return f;
 }
 

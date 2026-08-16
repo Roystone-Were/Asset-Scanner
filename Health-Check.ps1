@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   Monthly data-health check for the Xana Asset Inventory list. Reports:
-    - items with a duplicate serial number or barcode
+    - items with a duplicate serial number
     - items with no tag (Title) or no serial
     - items not verified in the last 90 days (uses Last Verified)
     - missing/renamed columns
@@ -60,7 +60,6 @@ $rows = foreach ($i in $items) {
     tag      = [string]$tag
     model    = [string](Get-FieldV $f 'Model')
     serial   = $serial
-    barcode  = [string](Get-FieldV $f 'Barcode')
     status   = [string](Get-FieldV $f 'Status')
     location = [string](Get-FieldV $f 'Location')
     verified = Get-FieldV $f 'Last Verified'
@@ -79,14 +78,9 @@ $bySerialPre = $rows | Where-Object { $_.serial } | Group-Object { $_.serial.Tri
 foreach ($g in ($bySerialPre | Where-Object { $_.Count -gt 1 })) {
   foreach ($r in $g.Group) { $dupSerialIds[[int]$r.id] = $true }
 }
-$dupBarcodeIds = @{}
-$byBarcodePre = $rows | Where-Object { $_.barcode } | Group-Object { $_.barcode.Trim().ToUpper() }
-foreach ($g in ($byBarcodePre | Where-Object { $_.Count -gt 1 })) {
-  foreach ($r in $g.Group) { $dupBarcodeIds[[int]$r.id] = $true }
-}
 $clean = @($rows | Where-Object {
   $_.tag.Trim() -and $_.serial.Trim() -and $_.verified -and $_.verified -ge $cutoff -and
-  -not $dupSerialIds.ContainsKey([int]$_.id) -and -not $dupBarcodeIds.ContainsKey([int]$_.id)
+  -not $dupSerialIds.ContainsKey([int]$_.id)
 })
 $score = if ($rows.Count) { [int][Math]::Round(100 * $clean.Count / $rows.Count) } else { 0 }
 $staleCount = @($rows | Where-Object { -not $_.verified -or $_.verified -lt $cutoff }).Count
@@ -149,20 +143,6 @@ if ($dups) {
   [void]$sb.AppendLine("")
 }
 
-# --- Duplicate barcodes (a shared barcode returns the wrong asset silently) ---
-$byBarcode = $rows | Where-Object { $_.barcode } | Group-Object { $_.barcode.Trim().ToUpper() }
-$bDups = $byBarcode | Where-Object { $_.Count -gt 1 }
-if ($bDups) {
-  $lines = foreach ($d in $bDups) {
-    $ids = ($d.Group | ForEach-Object { "Asset #$($_.id) ($($_.tag))" }) -join ', '
-    "- **$($d.Name)**: $ids"
-  }
-  Add-Issue "Duplicate barcodes" ($lines -join "`n")
-} else {
-  [void]$sb.AppendLine("No duplicate barcodes. :white_check_mark:")
-  [void]$sb.AppendLine("")
-}
-
 # --- Empty tags ---
 $noTag = @($rows | Where-Object { -not $_.tag.Trim() })
 if ($noTag.Count -gt 0) {
@@ -215,7 +195,7 @@ if ($stale.Count -gt 0) {
 }
 
 # --- Schema check (a renamed/deleted column breaks the app + scripts) ---
-$expectedFields = @('Title', 'Asset Tag', 'Serial Number', 'Barcode', 'Model', 'Status', 'Location', 'Last Verified', 'Last Verified By')
+$expectedFields = @('Title', 'Asset Tag', 'Serial Number', 'Model', 'Status', 'Location', 'Last Verified', 'Last Verified By')
 $missingFields = @()
 foreach ($fname in $expectedFields) {
   if (-not (Get-PnPField -List $ListTitle -Identity $fname -ErrorAction SilentlyContinue)) {
@@ -269,7 +249,6 @@ if ($OutMetrics) {
     noSerial    = $noSerialCount
     stale       = $staleCount
     dupSerials  = @($bySerialPre | Where-Object { $_.Count -gt 1 }).Count
-    dupBarcodes = @($byBarcodePre | Where-Object { $_.Count -gt 1 }).Count
   }
   $metrics | ConvertTo-Json | Out-File $OutMetrics -Encoding UTF8
   Write-Host "Metrics saved to $OutMetrics" -ForegroundColor Green

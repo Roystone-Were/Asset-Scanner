@@ -16,12 +16,12 @@ asset's metadata — pulled live from the **Xana Asset Inventory** SharePoint li
 | `scanner-app/` | The web app (single-file `index.html` + vendored `lib/`). MSAL sign-in, camera + USB-scanner input, Graph lookup, walk mode, offline cache/queue, item history. `scanner-app/.vercelignore` keeps data snapshots and tests out of the public deployment. |
 | `Export-AssetLabels.ps1` | Silent cert-auth export of the list → `scanner-app/assets.csv` / `assets.json`. |
 | `Xana-Asset-Format.ps1` | Applies Status-column color + row formatting to the list. |
-| `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | Add/remove the `Barcode` column — currently present, as the register-on-scan target. |
+| `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED (Aug 2026): the `Barcode` column was removed — the barcode on an asset label encodes the tag or serial, so tag/serial matching covers scans. Scripts kept for history. |
 | `Add-LastVerifiedColumn.ps1` | Adds the `Last Verified` date column the app writes on every scan. |
 | `Add-LastVerifiedByColumn.ps1` | Adds the `Last Verified By` text column the app writes with the signed-in user on every scan (accountability for the health report + history view). |
 | `Health-Check.ps1` + `.github/workflows/data-health.yml` | Monthly data-health report (duplicate serials, missing tags/serials, unverified 90+ days) filed as a GitHub issue; unverified assets listed in a table. Optional SMTP email via `Send-HealthEmail.ps1`. |
 | `Export-AssetsJson.ps1` | Cert-auth export → `scanner-app/test/fixtures/assets.json` for the golden test suite (commit after bulk list changes). |
-| `Index-LookupFields.ps1` | Indexes the lookup columns (`SerialNumber`, `Barcode`, `Title`); `-Verify` mode just reports state. |
+| `Index-LookupFields.ps1` | Indexes the lookup columns (`SerialNumber`, `Title`); `-Verify` mode just reports state. |
 | `generate-cert.ps1` | Created the self-signed client certificate used for PowerShell automation. |
 | `ocr.ps1` | Windows OCR helper for reading screenshots. |
 | `labels/` | Deprecated QR label generator (backup only — staff scan existing vendor barcodes, not QRs). |
@@ -36,9 +36,12 @@ fallback:
 - **Title** — this is the "Asset Tag" column you see in the list UI (SharePoint
   renders Title as a link column; internal name `LinkTitle`, value in `Title`)
 - **Serial Number** (`SerialNumber`)
-- **Barcode** — the register-on-scan target: when a scan misses, staff tap
-  "Register this barcode", pick the device, and the app writes the scanned value
-  into this column.
+
+The barcode printed on an asset label is not a separate column: it *encodes*
+the tag (e.g. a vendor label reading "METROCARE … — MICL0045" scans, gets
+cleaned to `MICL0045`, and matches Title) or the serial. A scan that matches
+nothing simply isn't in the inventory — the miss screen offers adding the
+device as a new asset.
 
 Deliberately **not** matched: the `Asset` column (internal name of **Asset Type** —
 Laptop/CPU/Monitor…), so typing "Laptop" can't match every laptop.
@@ -51,7 +54,7 @@ audit. The card's **🕘 History** expander shows SharePoint's version history
 
 The app keeps working offline: the last successful fetch is cached locally,
 scans match the cache when Graph is unreachable, and any writes made offline
-(verify stamps, edits, barcode registrations) queue up and sync automatically
+(verify stamps, edits, new assets) queue up and sync automatically
 when the connection returns.
 
 The **👥 People** view is the offboarding tool: search an employee, see every
@@ -96,7 +99,7 @@ escapes and case before comparing. (The renamed column here lives at internal na
 ## Data health
 
 `Health-Check.ps1` (run monthly by `.github/workflows/data-health.yml`) checks the
-list for duplicate serial numbers, duplicate barcodes, missing tags/serials,
+list for duplicate serial numbers, missing tags/serials,
 missing/renamed columns, and assets not verified in 90 days — unverified assets
 appear in a Markdown table. The report leads with a **health score** (share of
 assets fully clean) and, from the second month on, **month-over-month deltas**

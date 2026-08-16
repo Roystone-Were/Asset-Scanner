@@ -597,7 +597,7 @@
         LOCATION_CHOICES,
       } = Xana;
 
-      // State shared across lookup / edit / register handlers.
+      // State shared across lookup / edit handlers.
       let lastItem = null; // { id, fields } of the last matched asset
       let allItems = []; // [{ id, fields }] fetched by the fallback path
       let currentCode = ""; // last cleaned scan value
@@ -844,12 +844,12 @@
           // for this to work (see Index-LookupFields.ps1); an unindexed or
           // missing field errors out and we just try the next candidate.
           const raw = (code || "").trim();
-          for (const fname of ["Title", "SerialNumber", "AssetTag", "Barcode"]) {
+          for (const fname of ["Title", "SerialNumber", "AssetTag"]) {
             try {
               const q = encodeURIComponent(
                 "fields/" + fname + " eq '" + raw.replace(/'/g, "''") + "'",
               );
-              // Lookup columns (SerialNumber / Barcode / Title) are indexed
+              // Lookup columns (SerialNumber / Title) are indexed
               // via Index-LookupFields.ps1. This header is only a safety net
               // for any unindexed column - harmless when the query is indexed.
               const data = await graphGet(token, base + "&$filter=" + q, {
@@ -873,8 +873,8 @@
 
           // Fallback: fetch everything with paging (no $top ceiling) and
           // match client-side, same as before. Also collect candidate values
-          // (for the fuzzy "did you mean") and the full item list (for the
-          // register-on-scan picker) when nothing matches.
+          // (for the fuzzy "did you mean") and the full item list (which
+          // also seeds the offline cache) when nothing matches.
           const candidates = [];
           allItems = [];
           if (!item) {
@@ -942,13 +942,12 @@
           (matchedField ? g(item[matchedField]) : "");
 
         // Caption under the match banner: which column the scan matched on.
+        // (No Barcode column exists - label barcodes encode the tag/serial.)
         const via = !matchedField
           ? ""
           : matchedField === "SerialNumber"
             ? "Serial Number"
-            : matchedField === "Barcode"
-              ? "Barcode"
-              : "Asset Tag";
+            : "Asset Tag";
 
         result.innerHTML =
           offlineNote +
@@ -1016,12 +1015,12 @@
         const suggestion = suggestMatch(currentCode || code, candidates);
         const offlineNote =
           opts && opts.offline
-            ? " (offline — registering will sync when back online)"
+            ? " (offline — adding will sync when back online)"
             : "";
         result.innerHTML =
           '<div class="msg err">No asset found for "' +
           escapeHtml(code) +
-          '". No asset has that tag/serial/barcode in the list.' +
+          '". No asset has that tag or serial in the list.' +
           (suggestion
             ? '<br/><button type="button" class="chip suggest" data-code="' +
               escapeHtml(suggestion) +
@@ -1029,25 +1028,10 @@
               escapeHtml(suggestion) +
               "?</button>"
             : "") +
-          (allItems.length
-            ? '<br/><button type="button" class="chip" data-action="register" data-code="' +
-              escapeHtml(code) +
-              '">➕ Register this barcode</button>' +
-              offlineNote
-            : "") +
           '<br/><button type="button" class="chip" data-action="addasset" data-code="' +
           escapeHtml(code) +
           '">🆕 Device not in the list — add it</button>' +
-          "</div>" +
-          '<div id="registerPanel" class="card hidden">' +
-          "<h2>Register <span class=\"regcode\">" +
-          escapeHtml(code) +
-          '</span><button type="button" class="chip" id="regClose" style="margin-left:auto">✕ Close</button></h2>' +
-          '<input type="text" id="regSearch" placeholder="Search by tag, serial or model…" autocomplete="off" />' +
-          '<div id="regList"></div>' +
-          '<div id="regConfirm" class="hidden"><p class="confirmtext"></p>' +
-          '<div class="confirmbar"><button id="regSave">Save barcode</button>' +
-          '<button id="regCancel" class="secondary">Cancel</button></div></div>' +
+          offlineNote +
           "</div>" +
           '<div id="addPanel" class="card hidden">' +
           "<h2>🆕 New asset</h2>" +
@@ -1194,7 +1178,6 @@
         let itemId = null;
         let matchedField = "";
         const candidates = [];
-        allItems = cache.items; // enables the register panel offline (queued save)
         for (const it of cache.items) {
           candidates.push.apply(candidates, collectCandidates(it.fields));
           const key = matchFields(it.fields, clean);
@@ -1550,116 +1533,6 @@
             escapeHtml((e && e.message) || e) +
             "</span>" +
             renderValueCell(field, current);
-        }
-      }
-
-      // ---------- Register on scan ----------
-      // When a scan misses, staff can attach the scanned barcode to an asset
-      // from the list. The value is written into the list's Barcode column
-      // (which the app also matches on), so the next scan finds the device.
-      function renderRegisterPanel(code) {
-        const panel = document.getElementById("registerPanel");
-        if (!panel) return;
-        panel.classList.remove("hidden");
-        const norm = (s) => String(s || "").toUpperCase();
-        const searchEl = document.getElementById("regSearch");
-        const listEl = document.getElementById("regList");
-        const confirmEl = document.getElementById("regConfirm");
-        const saveBtn = document.getElementById("regSave");
-        const cancelBtn = document.getElementById("regCancel");
-
-        function renderList(q) {
-          const needle = norm(q);
-          const rows = allItems.filter((it) => {
-            if (!needle) return true;
-            const hay = [
-              it.fields.Title,
-              fieldV(it.fields, "Serial Number"),
-              fieldV(it.fields, "Model"),
-            ];
-            return hay.some((v) => norm(v).includes(needle));
-          });
-          listEl.innerHTML =
-            rows
-              .map(
-                (it) =>
-                  '<button type="button" class="regrow" data-id="' +
-                  it.id +
-                  '" data-title="' +
-                  escapeHtml(String(fieldV(it.fields, "Title") || "")) +
-                  '">Asset #' +
-                  it.id +
-                  " — " +
-                  escapeHtml(
-                    g(
-                      fieldV(it.fields, "Asset Tag") ||
-                        fieldV(it.fields, "Title"),
-                    ),
-                  ) +
-                  " · " +
-                  escapeHtml(g(fieldV(it.fields, "Model"))) +
-                  " · " +
-                  escapeHtml(g(fieldV(it.fields, "Serial Number"))) +
-                  "</button>",
-              )
-              .join("") ||
-            '<div class="msg info">No matching assets.</div>';
-        }
-
-        renderList("");
-        searchEl.value = "";
-        confirmEl.classList.add("hidden");
-        saveBtn.disabled = false;
-        saveBtn.textContent = "Save barcode";
-
-        searchEl.oninput = (e) => renderList(e.target.value);
-        listEl.onclick = (e) => {
-          const row = e.target.closest(".regrow");
-          if (!row) return;
-          confirmEl.classList.remove("hidden");
-          confirmEl.querySelector(".confirmtext").textContent =
-            "Save '" +
-            code +
-            "' to Asset #" +
-            row.dataset.id +
-            " (" +
-            row.dataset.title +
-            ")?";
-          confirmEl.dataset.id = row.dataset.id;
-        };
-        cancelBtn.onclick = () => confirmEl.classList.add("hidden");
-        saveBtn.onclick = () => registerBarcode(code, confirmEl.dataset.id);
-        const closeBtn = document.getElementById("regClose");
-        if (closeBtn)
-          closeBtn.onclick = () => panel.classList.add("hidden");
-      }
-
-      async function registerBarcode(code, itemId) {
-        if (!itemId) return;
-        const saveBtn = document.getElementById("regSave");
-        saveBtn.disabled = true;
-        saveBtn.textContent = "Saving…";
-        try {
-          const r = await writeFields(itemId, { Barcode: code });
-          if (r.queued) {
-            saveBtn.disabled = true;
-            saveBtn.textContent = "Queued — syncs when online ✓";
-            return;
-          }
-          // Re-run the lookup: it now matches via Barcode and stamps Last
-          // Verified exactly like a normal scan.
-          lookup(code);
-        } catch (e) {
-          console.warn("register failed:", e);
-          saveBtn.disabled = false;
-          saveBtn.textContent = "Save barcode";
-          const confirmEl = document.getElementById("regConfirm");
-          confirmEl.insertAdjacentHTML(
-            "beforeend",
-            '<div class="msg err">' +
-              escapeHtml((e && e.message) || e) +
-              "</div>",
-          );
         }
       }
 
@@ -2083,7 +1956,7 @@
       // Continuous scanning session for inventory walks: every scan
       // auto-verifies, feedback is instant (flash + beep + vibrate), and the
       // input stays focused so a USB wedge scanner just keeps firing. Misses
-      // still offer register-on-scan, so the walk also closes the data gap.
+      // offer add-asset, so the walk also closes the data gap.
       function enterWalk() {
         walkMode = true;
         walk.scans = 0;
@@ -2314,10 +2187,6 @@
         if (!b) return;
         if (b.dataset.history) {
           toggleHistory();
-          return;
-        }
-        if (b.dataset.action === "register") {
-          renderRegisterPanel(b.dataset.code);
           return;
         }
         if (b.dataset.action === "addasset") {

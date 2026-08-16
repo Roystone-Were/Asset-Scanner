@@ -1,6 +1,6 @@
 # Monthly data-health check for the Xana Asset Inventory list.
 # Runs Health-Check.ps1 against SharePoint and files a GitHub issue whenever
-# the report contains issues (duplicate serials/barcodes, missing tags/serials,
+# the report contains issues (duplicate serials, missing tags/serials,
 # missing/renamed columns, assets not verified in 90 days, client certificate
 # expiring within 90 days). No issue is filed on a clean month.
 #

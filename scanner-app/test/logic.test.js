@@ -24,17 +24,17 @@ test("cleanScanInput preserves mid-code hyphens", () => {
   assert.strictEqual(X.cleanScanInput("9cp536240y"), "9CP536240Y");
 });
 
-test("matchFields matches lookup columns only", () => {
+test("matchFields matches tag/serial columns only", () => {
   const f = {
     Title: "MICL0045",
     SerialNumber: "PW0MGGLA",
-    Barcode: "VENDOR-99",
     Asset: "Laptop",
   };
   assert.strictEqual(X.matchFields(f, "micl0045"), "Title");
   assert.strictEqual(X.matchFields(f, "pw0mggla"), "SerialNumber");
-  // Registered barcodes are matchable too (register-on-scan target).
-  assert.strictEqual(X.matchFields(f, "vendor-99"), "Barcode");
+  // There is no Barcode column: a stray stored barcode value must NOT match
+  // (label barcodes encode the tag or serial, which match via Title/Serial).
+  assert.strictEqual(X.matchFields({ Barcode: "VENDOR-99" }, "vendor-99"), null);
   // Asset (Asset Type) must NOT be matchable - typing "Laptop" is not a scan.
   assert.strictEqual(X.matchFields(f, "laptop"), null);
 });
@@ -44,10 +44,6 @@ test("matchFields trims stored values so trailing spaces can't miss", () => {
   assert.strictEqual(
     X.matchFields({ SerialNumber: "PW0MGGLA " }, "pw0mggla"),
     "SerialNumber",
-  );
-  assert.strictEqual(
-    X.matchFields({ Barcode: " VENDOR-99" }, "vendor-99"),
-    "Barcode",
   );
   assert.strictEqual(
     X.matchFields({ Title: " MICL0045 " }, "micl0045"),
@@ -117,12 +113,11 @@ test("collectCandidates gathers lookup values only", () => {
   const f = {
     Title: "MICL0045",
     SerialNumber: "PW0MGGLA",
-    Barcode: "VENDOR-99",
     Asset: "Laptop", // excluded - not a lookup column
     Model: "Lenovo L13", // excluded
   };
   const c = X.collectCandidates(f);
-  assert.deepStrictEqual(c.sort(), ["MICL0045", "PW0MGGLA", "VENDOR-99"]);
+  assert.deepStrictEqual(c.sort(), ["MICL0045", "PW0MGGLA"]);
 });
 
 test("findDuplicateSerials flags serials on multiple rows", () => {
@@ -283,17 +278,20 @@ test("diffFields reports tracked column changes with labels", () => {
 });
 
 test("diffFields treats blank and missing as equal, flags blank vs value", () => {
-  // Barcode "" vs absent -> no change (Status identical on both sides).
+  // Condition "" vs absent -> no change (Status identical on both sides).
   assert.deepStrictEqual(
-    X.diffFields({ Barcode: "", Status: "In Use" }, { Status: "In Use" }),
+    X.diffFields({ Condition: "", Status: "In Use" }, { Status: "In Use" }),
     [],
   );
-  // Registering a barcode shows up as "—" -> value.
-  const d = X.diffFields({ Title: "MICL0045" }, { Title: "MICL0045", Barcode: "VENDOR-99" });
+  // Setting a previously-blank value shows up as "—" -> value.
+  const d = X.diffFields(
+    { Title: "MICL0045" },
+    { Title: "MICL0045", Condition: "New" },
+  );
   assert.strictEqual(d.length, 1);
-  assert.strictEqual(d[0].label, "Barcode");
+  assert.strictEqual(d[0].label, "Condition");
   assert.strictEqual(d[0].from, "—");
-  assert.strictEqual(d[0].to, "VENDOR-99");
+  assert.strictEqual(d[0].to, "New");
 });
 
 test("diffFields keys let callers spot verification-only versions", () => {

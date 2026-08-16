@@ -67,11 +67,16 @@
 - **Scanner app is DEPLOYED and signing in.** Live at `https://xana-asset-lookup.vercel.app`
   (Vercel, Hobby plan, automatic HTTPS). The Entra redirect URI was added and the
   user confirmed sign-in works.
-- **Barcode column is back** (`Barcode`, re-added via `Add-BarcodeColumn.ps1`) as
-  the **register-on-scan target**: when a scan misses, staff tap "Register this
-  barcode", pick the device, and the app writes the scanned value into it. The app
-  matches on **Title / Serial Number / Barcode** (Asset Type is deliberately
-  excluded).
+- **Barcode column REMOVED (Aug 2026):** the barcode printed on an asset
+  label *is* the tag (or serial) — e.g. "METROCARE … — MICL0045" scans →
+  `cleanScanInput` → `MICL0045` → matches Title. A separate `Barcode` column
+  was redundant (it sat empty, 0/61) and register-on-scan is gone. The app now
+  matches **Title / Serial Number only**; a miss means the device isn't in
+  inventory → the miss screen offers **add-asset**. `Remove-BarcodeColumn.ps1`
+  was run (column deleted from the live list); `matchFields` /
+  `collectCandidates` / the `$filter` list / Health-Check / Index-LookupFields
+  all dropped Barcode, and a test pins that a stray stored Barcode value does
+  NOT match.
 - **Edit on scan:** the result card lets staff change **Status / Location** inline
   (Choice-column dropdowns — only real choices offered; one PATCH per save;
   permission errors surface inline).
@@ -134,7 +139,9 @@
   (private group, 7 members).
 - List **Xana Asset Inventory** — 36 items. Graph list Id: `7d3b5f47-8199-4cb9-b7c4-361dc70c4622`.
 - Visible columns: Asset Tag, Employee Name, Asset Type, Department, Model,
-  Serial Number, Status, Location, Region, Condition, Last Verified, Barcode.
+  Serial Number, Status, Location, Region, Condition, Last Verified,
+  Last Verified By. (A `Barcode` column existed until Aug 2026 — removed; the
+  label barcode encodes the tag/serial.)
 - **Column internal names (verified via Get-PnPField):**
   - "Asset Tag" is NOT a real column — it's the list **Title** rendered as a
     link (`LinkTitle`); the value lives in `Title`. Item 1: `Title = MICL0045`.
@@ -142,7 +149,7 @@
     internal names never change). Values: Laptop, CPU, Monitor, Mouse, Keyboard.
   - Serial Number → `SerialNumber`; Employee Name → `EmployeeName`;
     Location → `Location`; Region → `Region`; Condition → `Condition`;
-    Last Verified → `LastVerified`; Barcode → `Barcode`.
+    Last Verified → `LastVerified`; Last Verified By → `LastVerifiedBy`.
 - Status choices: `In Use, Available, Retired, Left With, Lost`; Location choices:
   `Syokimau, Katani, Ruiru, Githurai, Lumumba Dr, TRM Dr`; Region: `Nairobi, Kiambu`.
 - Sample row (item 1): MICL0045 = Lenovo L13, serial `PW0MGGLA`,
@@ -188,7 +195,7 @@
 ## 7. Files inventory
 
 - `scanner-app/index.html` — single-file app (MSAL v2 + html5-qrcode vendored in
-  `lib/`). Lookup: server-side `$filter` on Title/SerialNumber/AssetTag/Barcode
+  `lib/`). Lookup: server-side `$filter` on Title/SerialNumber/AssetTag
   (columns are indexed; Prefer header kept as a safety net) → paged full-fetch
   fallback → client-side `matchFields()`, with an offline cache fallback
   (`xana_data_cache_v1`) and a synced write queue (`xana_write_queue_v1`).
@@ -203,7 +210,7 @@
   status summary. Fired by `.github/workflows/data-health.yml` (monthly cron).
 - `Send-HealthEmail.ps1` — optional SMTP delivery of the report (STARTTLS;
   needs `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_TO` secrets; off by default).
-- `Index-LookupFields.ps1` — indexes the lookup columns `SerialNumber`/`Barcode`/`Title`;
+- `Index-LookupFields.ps1` — indexes the lookup columns `SerialNumber`/`Title`;
   `-Verify` reports state without changing anything.
 - `Add-LastVerifiedColumn.ps1` — adds the `Last Verified` date column the app
   writes on every scan (idempotent).
@@ -211,8 +218,9 @@
   app writes with the signed-in user on every scan (idempotent; already run —
   column exists on the live list).
 - `Xana-Asset-Format.ps1` — Status column + row formatting.
-- `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` — add/remove the `Barcode`
-  column (currently present — the register-on-scan target).
+- `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` — DEPRECATED: the
+  `Barcode` column was removed (Aug 2026, via Remove-BarcodeColumn.ps1);
+  label barcodes encode the tag/serial, no separate column needed.
 - `generate-cert.ps1` — created the client cert. `ocr.ps1` — Windows OCR helper.
 - `labels/` — deprecated QR label generator (backup only).
 - `README.md` — current setup/deploy docs. `HANDOFF.md` — this file.
@@ -230,13 +238,14 @@
 
 ## 9. OPEN ITEMS (ranked)
 
-1. **Actually scan the devices (the real blocker for staff).** The
-   register-on-scan flow is built — the data gap now closes by use: scan a vendor
-   barcode → tap "Register this barcode" → pick the device → the list fills
-   itself. As of the last export, 33 of 36 assets have no tag/barcode yet and 4
-   have no serial (14/33/37/38). A one-time walk can seed most of it — use the
-   new **Walk mode** (phone camera, or a USB wedge scanner on a laptop: bursts
-   are auto-detected, no taps needed between scans).
+1. **Actually scan the devices (the real blocker for staff).** Scan a vendor
+   barcode → it matches the tag/serial it encodes; if the device is missing
+   from the list entirely, the miss screen's **add-asset** form creates it on
+   the spot (works offline too). As of the last health run, 59 of 61 assets
+   have no tag yet and 7 have no serial. A one-time walk can seed most of it —
+   use **Walk mode** (phone camera stays open and fires continuously, or a
+   USB wedge scanner on a laptop: bursts are auto-detected, no taps needed
+   between scans).
 2. **CI deploy gate (2 min, GitHub UI).** Settings → Branches → Add rule → branch
    `main` → enable **Require status checks to pass before merging** → select
    `test` → enable **Do not allow bypassing the above settings** → Create. After
