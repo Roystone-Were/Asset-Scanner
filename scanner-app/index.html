@@ -1042,7 +1042,7 @@
           '<div id="registerPanel" class="card hidden">' +
           "<h2>Register <span class=\"regcode\">" +
           escapeHtml(code) +
-          "</span></h2>" +
+          '</span><button type="button" class="chip" id="regClose" style="margin-left:auto">✕ Close</button></h2>' +
           '<input type="text" id="regSearch" placeholder="Search by tag, serial or model…" autocomplete="off" />' +
           '<div id="regList"></div>' +
           '<div id="regConfirm" class="hidden"><p class="confirmtext"></p>' +
@@ -1629,6 +1629,9 @@
         };
         cancelBtn.onclick = () => confirmEl.classList.add("hidden");
         saveBtn.onclick = () => registerBarcode(code, confirmEl.dataset.id);
+        const closeBtn = document.getElementById("regClose");
+        if (closeBtn)
+          closeBtn.onclick = () => panel.classList.add("hidden");
       }
 
       async function registerBarcode(code, itemId) {
