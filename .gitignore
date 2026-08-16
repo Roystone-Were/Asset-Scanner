@@ -16,3 +16,6 @@ health-report.md
 
 # Node
 node_modules/
+
+# Generated locally by Health-Check.ps1 runs
+health-metrics.json

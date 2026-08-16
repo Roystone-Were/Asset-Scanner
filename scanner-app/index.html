@@ -435,6 +435,39 @@
       .hidden {
         display: none;
       }
+      #camWrap {
+        position: relative;
+      }
+      #camCtl {
+        position: absolute;
+        bottom: 12px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        z-index: 5;
+      }
+      button.camctl {
+        flex: 0 0 auto;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 999px;
+        padding: 10px 18px;
+        font-size: 0.95rem;
+        min-width: 54px;
+      }
+      #peopleSearch {
+        margin-bottom: 10px;
+      }
+      #personView h2 {
+        font-size: 1rem;
+        margin: 10px 0;
+      }
+      #addPanel select.fieldpick {
+        width: 100%;
+        margin-bottom: 10px;
+      }
       #kbdHint {
         display: none;
         color: var(--muted);
@@ -488,12 +521,19 @@
       <div id="syncBadge" class="msg info hidden"></div>
 
       <div id="app" class="hidden">
-        <div id="qr-reader" class="hidden"></div>
+        <div id="camWrap" class="hidden">
+          <div id="qr-reader"></div>
+          <div id="camCtl" class="hidden">
+            <button type="button" id="btnTorch" class="camctl" title="Toggle torch">🔦</button>
+            <button type="button" id="btnZoom" class="camctl" title="Cycle zoom">🔍 1×</button>
+          </div>
+        </div>
         <div id="mainui">
           <div class="toolbar">
-            <button id="btnScan">📷 Scan Tag</button>
+            <button id="btnScan">📷 Scan</button>
             <button id="btnStop" class="secondary hidden">⏹ Stop</button>
             <button id="btnWalk" class="secondary">🚶 Walk</button>
+            <button id="btnPeople" class="secondary">👥 People</button>
           </div>
           <input
             type="text"
@@ -517,6 +557,16 @@
             <button id="walkCamera">📷 Camera</button>
             <button id="walkExit" class="secondary">✕ Exit walk mode</button>
           </div>
+        </div>
+        <div id="people" class="hidden">
+          <input
+            type="text"
+            id="peopleSearch"
+            placeholder="Search employee name…"
+            autocomplete="off"
+          />
+          <div id="peopleList"></div>
+          <div id="personView" class="hidden"></div>
         </div>
         <div id="result"></div>
         <p id="kbdHint">W walk mode · / search · Esc exit walk</p>
@@ -548,7 +598,8 @@
       let allItems = []; // [{ id, fields }] fetched by the fallback path
       let currentCode = ""; // last cleaned scan value
       let walkMode = false; // walk-mode session active
-      const walk = { scans: 0, hits: 0, misses: 0 };
+      const walk = { scans: 0, hits: 0, misses: 0 }; // session counters
+      let peopleOpen = false; // people (offboarding) view active
 
       // ---------- Config ----------
       const CLIENT_ID = "7caa51af-9f32-42d8-8264-da5b97c2f8eb";
@@ -980,6 +1031,9 @@
               '">➕ Register this barcode</button>' +
               offlineNote
             : "") +
+          '<br/><button type="button" class="chip" data-action="addasset" data-code="' +
+          escapeHtml(code) +
+          '">🆕 Device not in the list — add it</button>' +
           "</div>" +
           '<div id="registerPanel" class="card hidden">' +
           "<h2>Register <span class=\"regcode\">" +
@@ -990,7 +1044,135 @@
           '<div id="regConfirm" class="hidden"><p class="confirmtext"></p>' +
           '<div class="confirmbar"><button id="regSave">Save barcode</button>' +
           '<button id="regCancel" class="secondary">Cancel</button></div></div>' +
+          "</div>" +
+          '<div id="addPanel" class="card hidden">' +
+          "<h2>🆕 New asset</h2>" +
+          '<input type="text" id="addTag" placeholder="Asset tag e.g. MICL0048" autocomplete="off" />' +
+          '<input type="text" id="addSerial" placeholder="Serial number" autocomplete="off" />' +
+          '<input type="text" id="addModel" placeholder="Model e.g. Lenovo L13" autocomplete="off" />' +
+          '<input type="text" id="addType" placeholder="Asset type e.g. Laptop" autocomplete="off" />' +
+          '<select class="fieldpick" id="addStatus"></select>' +
+          '<select class="fieldpick" id="addLocation"></select>' +
+          '<div class="confirmbar"><button id="addSave">Add asset</button>' +
+          '<button id="addCancel" class="secondary">Cancel</button></div>' +
+          '<div id="addMsg"></div>' +
           "</div>";
+      }
+
+      // ---------- Add asset from the field ----------
+      // The mid-walk counterpart to adding rows in SharePoint: a minimal
+      // form for a device that isn't in the list at all. POSTs a new item,
+      // or queues one (id "new-*") when offline - the queue flush knows to
+      // POST those instead of PATCHing an item id.
+      function itemsUrl() {
+        return (
+          "https://graph.microsoft.com/v1.0/sites/" +
+          SITE_ID +
+          "/lists/" +
+          LIST_ID +
+          "/items"
+        );
+      }
+
+      async function graphPost(token, url, body) {
+        const res = await graphFetch(
+          url,
+          {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + token,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          },
+          3,
+        );
+        if (!res.ok)
+          throw new Error(
+            "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
+          );
+        return res.json();
+      }
+
+      function renderAddPanel(code) {
+        const panel = document.getElementById("addPanel");
+        if (!panel) return;
+        panel.classList.remove("hidden");
+        // Most vendor barcodes ARE the serial - prefill it with the scan.
+        document.getElementById("addTag").value = "";
+        document.getElementById("addSerial").value = code || "";
+        document.getElementById("addModel").value = "";
+        document.getElementById("addType").value = "";
+        const fill = (id, choices) => {
+          document.getElementById(id).innerHTML = choices
+            .map((c) => '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + "</option>")
+            .join("");
+        };
+        fill("addStatus", statusChoices);
+        fill("addLocation", locationChoices);
+        const msg = document.getElementById("addMsg");
+        msg.innerHTML = "";
+      }
+
+      async function addAssetFromForm() {
+        const tag = (document.getElementById("addTag").value || "").trim();
+        const serial = (document.getElementById("addSerial").value || "").trim();
+        const model = (document.getElementById("addModel").value || "").trim();
+        const type = (document.getElementById("addType").value || "").trim();
+        const status = document.getElementById("addStatus").value;
+        const location = document.getElementById("addLocation").value;
+        const msg = document.getElementById("addMsg");
+        const saveBtn = document.getElementById("addSave");
+        if (!tag) {
+          msg.innerHTML = '<div class="msg err">Asset tag is required.</div>';
+          return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving…";
+        const fields = { Title: tag, Status: status, Location: location };
+        if (serial) fields.SerialNumber = serial;
+        if (model) fields.Model = model;
+        if (type) fields.Asset = type;
+        try {
+          const r = await addAsset(fields);
+          if (r.queued) {
+            saveBtn.textContent = "Queued — syncs when online ✓";
+            msg.innerHTML =
+              '<div class="msg ok">Saved offline — the new asset syncs when you reconnect.</div>';
+            return;
+          }
+          msg.innerHTML =
+            '<div class="msg ok">Added as Asset #' + escapeHtml(r.id) + " ✓</div>";
+          saveBtn.textContent = "Added ✓";
+          // Show the fresh card immediately (also stamps Last Verified/By).
+          lookup(tag);
+        } catch (e) {
+          console.warn("add asset failed:", e);
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Add asset";
+          msg.innerHTML =
+            '<div class="msg err">' + escapeHtml((e && e.message) || e) + "</div>";
+        }
+      }
+
+      async function addAsset(fields) {
+        if (!navigator.onLine) {
+          queueWrite("new-" + Date.now(), fields, true);
+          return { queued: true };
+        }
+        try {
+          const token = await getToken();
+          if (!SITE_ID) await resolveSite(token);
+          const created = await graphPost(token, itemsUrl(), { fields: fields });
+          mergeCache([{ id: created.id, fields: fields }]);
+          return { ok: true, id: created.id };
+        } catch (e) {
+          if (isOfflineish(e)) {
+            queueWrite("new-" + Date.now(), fields, true);
+            return { queued: true };
+          }
+          throw e;
+        }
       }
 
       // Offline lookup: match against the cached item list client-side.
@@ -1184,7 +1366,12 @@
           let i = 0;
           for (; i < q.length; i++) {
             try {
-              await graphPatch(token, fieldsUrl(q[i].id), q[i].patch);
+              if (String(q[i].id).indexOf("new-") === 0) {
+                // Queued "add asset" entry - create instead of patch.
+                await graphPost(token, itemsUrl(), { fields: q[i].patch });
+              } else {
+                await graphPatch(token, fieldsUrl(q[i].id), q[i].patch);
+              }
             } catch (err) {
               if (String((err && err.message) || "").indexOf("Graph 4") === 0) {
                 // e.g. 403 for a read-only user or 400 for a bad choice -
@@ -1619,15 +1806,172 @@
         return '<div class="hlist">' + rows.join("") + "</div>";
       }
 
+      // ---------- People (offboarding) view ----------
+      // "Everything assigned to X" in one screen: search employees, tap for
+      // their assets, one button to mark a leaver's devices returned
+      // (Status -> Available, Employee cleared). Reads the offline cache and
+      // refreshes it online, so it works in dead zones too.
+      let peopleItems = [];
+
+      async function ensurePeopleItems() {
+        const cache = loadCache();
+        peopleItems = cache ? cache.items : [];
+        if (!navigator.onLine) return;
+        try {
+          const token = await getToken();
+          if (!SITE_ID) await resolveSite(token);
+          let url = itemsUrl() + "?expand=fields&$top=200";
+          const items = [];
+          while (url) {
+            const data = await graphGet(token, url);
+            for (const it of data.value) items.push({ id: it.id, fields: it.fields });
+            url = data["@odata.nextLink"] || null;
+          }
+          if (items.length) {
+            peopleItems = items;
+            mergeCache(items);
+          }
+        } catch (e) {
+          console.warn("people refresh failed - using cache:", e);
+        }
+      }
+
+      async function openPeople() {
+        peopleOpen = true;
+        document.getElementById("mainui").classList.add("hidden");
+        document.getElementById("people").classList.remove("hidden");
+        document.getElementById("peopleSearch").value = "";
+        document.getElementById("personView").classList.add("hidden");
+        document.getElementById("peopleList").classList.remove("hidden");
+        document.getElementById("peopleList").innerHTML =
+          '<div class="msg info">Loading…</div>';
+        await ensurePeopleItems();
+        renderPeopleList("");
+      }
+
+      function closePeople() {
+        peopleOpen = false;
+        document.getElementById("people").classList.add("hidden");
+        document.getElementById("mainui").classList.remove("hidden");
+      }
+
+      function renderPeopleList(q) {
+        const needle = (q || "").trim().toLowerCase();
+        const groups = Xana.groupEmployees(peopleItems).filter(
+          (p) => !needle || p.name.toLowerCase().includes(needle),
+        );
+        document.getElementById("peopleList").innerHTML =
+          groups
+            .map(
+              (p) =>
+                '<button type="button" class="regrow" data-person="' +
+                escapeHtml(p.name) +
+                '">' +
+                escapeHtml(p.name) +
+                " — " +
+                p.count +
+                " asset" +
+                (p.count === 1 ? "" : "s") +
+                "</button>",
+            )
+            .join("") || '<div class="msg info">No matching employees.</div>';
+      }
+
+      function renderPerson(name) {
+        const assets = Xana.assetsOfEmployee(peopleItems, name);
+        const view = document.getElementById("personView");
+        view.dataset.person = name;
+        document.getElementById("peopleList").classList.add("hidden");
+        view.classList.remove("hidden");
+        const rows = assets
+          .map((it) => {
+            const tag = g(fieldV(it.fields, "Asset Tag") || fieldV(it.fields, "Title"));
+            const code = String(
+              fieldV(it.fields, "Title") || fieldV(it.fields, "Serial Number") || "",
+            );
+            return (
+              '<button type="button" class="regrow" data-code="' +
+              escapeHtml(code) +
+              '"><b>Asset #' +
+              escapeHtml(it.id) +
+              " · " +
+              escapeHtml(tag) +
+              "</b> · " +
+              escapeHtml(g(fieldV(it.fields, "Model"))) +
+              " · " +
+              escapeHtml(g(fieldV(it.fields, "Serial Number"))) +
+              " · " +
+              escapeHtml(g(it.fields.Status)) +
+              "</button>"
+            );
+          })
+          .join("");
+        view.innerHTML =
+          '<button type="button" class="chip" id="peopleBack">← All people</button>' +
+          "<h2>👤 " +
+          escapeHtml(name) +
+          " — " +
+          assets.length +
+          " asset" +
+          (assets.length === 1 ? "" : "s") +
+          "</h2>" +
+          (rows || '<div class="msg info">No assets assigned.</div>') +
+          (assets.length
+            ? '<div class="confirmbar"><button id="personReturned">✅ Mark all returned</button></div>' +
+              '<p class="confirmtext">Sets Status to Available and clears Employee on every asset above.</p>'
+            : "");
+      }
+
+      async function personMarkReturned(name) {
+        const assets = Xana.assetsOfEmployee(peopleItems, name);
+        if (!assets.length) return;
+        if (!confirm("Mark " + assets.length + " asset(s) returned and unassigned?")) return;
+        const btn = document.getElementById("personReturned");
+        btn.disabled = true;
+        btn.textContent = "Saving…";
+        let queued = 0;
+        let failed = 0;
+        for (const it of assets) {
+          try {
+            const r = await writeFields(it.id, {
+              Status: "Available",
+              EmployeeName: "",
+            });
+            if (r.queued) queued++;
+          } catch (e) {
+            failed++;
+            console.warn("return failed for asset", it.id, e);
+          }
+        }
+        // Update the local copy so the list reflects reality immediately.
+        for (const it of assets) {
+          it.fields.Status = "Available";
+          it.fields.EmployeeName = "";
+        }
+        btn.textContent = failed
+          ? "Done — " + failed + " failed"
+          : queued
+            ? "Saved — " + queued + " waiting to sync ✓"
+            : "All saved ✓";
+      }
+
       // ---------- Camera scanning ----------
       let qr = null;
       let scanSink = null; // optional handler for decoded values (walk mode)
       let lastShot = { code: "", t: 0 }; // walk-mode scan dedup/cooldown
+      let torchOn = false;
+      let zoomIdx = 0;
+      const ZOOM_STEPS = [1, 1.5, 2, 3];
       function startScan(sink) {
         scanSink = sink || null;
         lastShot = { code: "", t: 0 };
+        torchOn = false;
+        zoomIdx = 0;
+        document.getElementById("btnTorch").textContent = "🔦";
+        document.getElementById("btnZoom").textContent = "🔍 1×";
+        document.getElementById("camCtl").classList.add("hidden");
         qr = new Html5Qrcode("qr-reader");
-        document.getElementById("qr-reader").classList.remove("hidden");
+        document.getElementById("camWrap").classList.remove("hidden");
         if (walkMode) {
           document.getElementById("walkCamera").textContent = "⏹ Stop camera";
         } else {
@@ -1657,7 +2001,24 @@
             lookup(decoded);
           },
           () => {},
-        ).catch((e) => {
+        )
+          .then(async () => {
+            // Torch/zoom chips appear only when the camera supports them,
+            // so the view stays clean on devices without them (e.g. iOS).
+            try {
+              const caps = qr.getRunningTrackCapabilities
+                ? await qr.getRunningTrackCapabilities()
+                : null;
+              const torchOk = !!(caps && caps.torch);
+              const zoomOk = !!(caps && caps.zoom);
+              document.getElementById("btnTorch").classList.toggle("hidden", !torchOk);
+              document.getElementById("btnZoom").classList.toggle("hidden", !zoomOk);
+              document.getElementById("camCtl").classList.toggle("hidden", !(torchOk || zoomOk));
+            } catch (err) {
+              document.getElementById("camCtl").classList.add("hidden");
+            }
+          })
+          .catch((e) => {
           alert(
             "Could not start camera:\n" +
               e +
@@ -1674,11 +2035,41 @@
           qr = null;
         }
         scanSink = null;
-        document.getElementById("qr-reader").classList.add("hidden");
+        document.getElementById("camCtl").classList.add("hidden");
+        document.getElementById("camWrap").classList.add("hidden");
         document.getElementById("btnStop").classList.add("hidden");
         document.getElementById("btnScan").classList.remove("hidden");
         const wb = document.getElementById("walkCamera");
         if (wb) wb.textContent = "📷 Camera";
+      }
+
+      async function camToggleTorch() {
+        try {
+          if (!qr || !qr.getRunningTrack) return;
+          const track = await qr.getRunningTrack();
+          if (!track) return;
+          torchOn = !torchOn;
+          await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+          document.getElementById("btnTorch").textContent = torchOn ? "🔆" : "🔦";
+        } catch (e) {
+          console.warn("torch toggle failed:", e);
+        }
+      }
+
+      async function camCycleZoom() {
+        try {
+          if (!qr || !qr.getRunningTrackCapabilities || !qr.applyVideoConstraints) return;
+          const caps = await qr.getRunningTrackCapabilities();
+          if (!caps || !caps.zoom) return;
+          zoomIdx = (zoomIdx + 1) % ZOOM_STEPS.length;
+          const min = caps.zoom.min || 1;
+          const max = caps.zoom.max || ZOOM_STEPS[ZOOM_STEPS.length - 1];
+          const z = Math.min(Math.max(ZOOM_STEPS[zoomIdx], min), max);
+          await qr.applyVideoConstraints({ advanced: [{ zoom: z }] });
+          document.getElementById("btnZoom").textContent = "🔍 " + z + "×";
+        } catch (e) {
+          console.warn("zoom cycle failed:", e);
+        }
       }
 
       // ---------- Walk mode ----------
@@ -1805,6 +2196,7 @@
         if (e.key === "Escape") {
           if (inField) ae.blur();
           else if (walkMode) exitWalk();
+          else if (peopleOpen) closePeople();
           KEY_QUEUE.length = 0;
           return;
         }
@@ -1856,6 +2248,28 @@
       document.getElementById("btnScan").addEventListener("click", () => startScan());
       document.getElementById("btnStop").addEventListener("click", stopScan);
       document.getElementById("btnWalk").addEventListener("click", enterWalk);
+      document.getElementById("btnPeople").addEventListener("click", openPeople);
+      document.getElementById("btnTorch").addEventListener("click", camToggleTorch);
+      document.getElementById("btnZoom").addEventListener("click", camCycleZoom);
+      document.getElementById("peopleSearch").addEventListener("input", (e) => {
+        renderPeopleList(e.target.value);
+      });
+      document.getElementById("people").addEventListener("click", (e) => {
+        if (e.target.closest("#peopleBack")) {
+          document.getElementById("personView").classList.add("hidden");
+          document.getElementById("peopleList").classList.remove("hidden");
+          return;
+        }
+        if (e.target.closest("#personReturned")) {
+          const v = document.getElementById("personView");
+          if (v.dataset.person) personMarkReturned(v.dataset.person);
+          return;
+        }
+        const row = e.target.closest(".regrow");
+        if (!row) return;
+        if (row.dataset.person) renderPerson(row.dataset.person);
+        else if (row.dataset.code) lookup(row.dataset.code);
+      });
       document.getElementById("walkExit").addEventListener("click", exitWalk);
       document.getElementById("walkCamera").addEventListener("click", () => {
         if (qr) stopScan();
@@ -1896,6 +2310,19 @@
         }
         if (b.dataset.action === "register") {
           renderRegisterPanel(b.dataset.code);
+          return;
+        }
+        if (b.dataset.action === "addasset") {
+          renderAddPanel(b.dataset.code);
+          return;
+        }
+        if (b.id === "addSave") {
+          addAssetFromForm();
+          return;
+        }
+        if (b.id === "addCancel") {
+          const p = document.getElementById("addPanel");
+          if (p) p.classList.add("hidden");
           return;
         }
         if (b.dataset.edit) {

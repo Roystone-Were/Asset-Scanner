@@ -22,7 +22,13 @@ param(
   [string]$Tenant     = "refrontiergroup.onmicrosoft.com",
   [string]$Thumbprint = "B4437765C89E84AE84B813194E6BD0D54EB3F430",
   [int]$StaleDays     = 90,
-  [string]$OutReport  = "health-report.md"
+  [string]$OutReport  = "health-report.md",
+  # Optional: write a machine-readable metrics snapshot (used by the GitHub
+  # workflow to maintain health-history.json for month-over-month deltas).
+  [string]$OutMetrics = "",
+  # Optional: previous metrics JSON - when present the report gains a
+  # "vs last report" section (score/stale/untagged/noSerial deltas).
+  [string]$PrevMetrics = ""
 )
 $ErrorActionPreference = 'Stop'
 Import-Module PnP.PowerShell
@@ -45,11 +51,15 @@ $rows = foreach ($i in $items) {
   $f = $i.FieldValues
   $tag = Get-FieldV $f 'Asset Tag'
   if (-not $tag) { $tag = $f['Title'] }
+  $serial = [string](Get-FieldV $f 'Serial Number')
+  # Placeholder-only serials ("-", "—", "N/A", spaces) count as missing -
+  # otherwise six rows with "-" read as one big duplicate-serial group.
+  if ($serial -match '^[-—.\s]*$' -or $serial -match '^(n/?a)$') { $serial = '' }
   [pscustomobject]@{
     id       = [int]$i.Id
     tag      = [string]$tag
     model    = [string](Get-FieldV $f 'Model')
-    serial   = [string](Get-FieldV $f 'Serial Number')
+    serial   = $serial
     barcode  = [string](Get-FieldV $f 'Barcode')
     status   = [string](Get-FieldV $f 'Status')
     location = [string](Get-FieldV $f 'Location')
@@ -59,6 +69,30 @@ $rows = foreach ($i in $items) {
 }
 $rows = @($rows | Sort-Object id)
 
+# --- Health score + headline metrics ---
+# An asset is "clean" when it has a tag, a serial, a fresh verification and
+# no duplicate keys. The score is the share of clean assets - the one number
+# leadership reads first, tracked month-over-month via -PrevMetrics.
+$cutoff = (Get-Date).AddDays(-$StaleDays)
+$dupSerialIds = @{}
+$bySerialPre = $rows | Where-Object { $_.serial } | Group-Object { $_.serial.Trim().ToUpper() }
+foreach ($g in ($bySerialPre | Where-Object { $_.Count -gt 1 })) {
+  foreach ($r in $g.Group) { $dupSerialIds[[int]$r.id] = $true }
+}
+$dupBarcodeIds = @{}
+$byBarcodePre = $rows | Where-Object { $_.barcode } | Group-Object { $_.barcode.Trim().ToUpper() }
+foreach ($g in ($byBarcodePre | Where-Object { $_.Count -gt 1 })) {
+  foreach ($r in $g.Group) { $dupBarcodeIds[[int]$r.id] = $true }
+}
+$clean = @($rows | Where-Object {
+  $_.tag.Trim() -and $_.serial.Trim() -and $_.verified -and $_.verified -ge $cutoff -and
+  -not $dupSerialIds.ContainsKey([int]$_.id) -and -not $dupBarcodeIds.ContainsKey([int]$_.id)
+})
+$score = if ($rows.Count) { [int][Math]::Round(100 * $clean.Count / $rows.Count) } else { 0 }
+$staleCount = @($rows | Where-Object { -not $_.verified -or $_.verified -lt $cutoff }).Count
+$noTagCount = @($rows | Where-Object { -not $_.tag.Trim() }).Count
+$noSerialCount = @($rows | Where-Object { -not $_.serial.Trim() }).Count
+
 $sb = [System.Text.StringBuilder]::new()
 [void]$sb.AppendLine("# Xana Asset Inventory - Data Health Report")
 [void]$sb.AppendLine("")
@@ -66,6 +100,31 @@ $sb = [System.Text.StringBuilder]::new()
 [void]$sb.AppendLine("")
 [void]$sb.AppendLine("**Total assets: $($rows.Count)**")
 [void]$sb.AppendLine("")
+[void]$sb.AppendLine("**Health score: $score%** — $($clean.Count) of $($rows.Count) assets fully clean (tagged, serial present, verified within $StaleDays days, no duplicate keys).")
+[void]$sb.AppendLine("")
+
+if ($PrevMetrics -and (Test-Path $PrevMetrics)) {
+  try {
+    $prev = Get-Content $PrevMetrics -Raw | ConvertFrom-Json
+    function Format-Delta([string]$label, [object]$from, [object]$to, [switch]$HigherIsBetter) {
+      $d = [int]$to - [int]$from
+      if ($d -eq 0) { return "- ${label}: unchanged ($to)" }
+      $arrow = if ($d -gt 0) { "▲" } else { "▼" }
+      $good = if ($HigherIsBetter) { $d -gt 0 } else { $d -lt 0 }
+      $tone = if ($good) { ":white_check_mark:" } else { ":warning:" }
+      return "- ${label}: $from → $to ($arrow$([Math]::Abs($d))) $tone"
+    }
+    [void]$sb.AppendLine("### vs last report")
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine((Format-Delta "Health score" $prev.score $score -HigherIsBetter))
+    [void]$sb.AppendLine((Format-Delta "Unverified $StaleDays+ days" $prev.stale $staleCount))
+    [void]$sb.AppendLine((Format-Delta "Untagged" $prev.untagged $noTagCount))
+    [void]$sb.AppendLine((Format-Delta "Missing serials" $prev.noSerial $noSerialCount))
+    [void]$sb.AppendLine("")
+  } catch {
+    Write-Host "Could not compare against previous metrics: $_" -ForegroundColor Yellow
+  }
+}
 
 $issues = 0
 function Add-Issue([string]$title, [string]$body) {
@@ -199,6 +258,23 @@ if ($issues -gt 0) {
 
 $report = $sb.ToString()
 $report | Out-File $OutReport -Encoding UTF8
+
+if ($OutMetrics) {
+  $metrics = [pscustomobject]@{
+    generated   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    totalAssets = $rows.Count
+    clean       = $clean.Count
+    score       = $score
+    untagged    = $noTagCount
+    noSerial    = $noSerialCount
+    stale       = $staleCount
+    dupSerials  = @($bySerialPre | Where-Object { $_.Count -gt 1 }).Count
+    dupBarcodes = @($byBarcodePre | Where-Object { $_.Count -gt 1 }).Count
+  }
+  $metrics | ConvertTo-Json | Out-File $OutMetrics -Encoding UTF8
+  Write-Host "Metrics saved to $OutMetrics" -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "REPORT" -ForegroundColor Cyan
 Write-Host $report

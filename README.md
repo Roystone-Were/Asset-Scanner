@@ -54,6 +54,19 @@ scans match the cache when Graph is unreachable, and any writes made offline
 (verify stamps, edits, barcode registrations) queue up and sync automatically
 when the connection returns.
 
+The **👥 People** view is the offboarding tool: search an employee, see every
+asset assigned to them, and mark a leaver's devices returned in one tap
+(Status → Available, Employee cleared).
+
+When a scan misses because the device isn't in the list at all, the miss
+screen offers **🆕 Device not in the list — add it**: a minimal form (tag,
+serial, model, type, status, location) that creates the item on the spot —
+or queues it for sync if offline. Bulk additions are still easiest directly
+in SharePoint; the form is for the field.
+
+The camera offers **torch and zoom** controls while scanning — shown only
+when the device supports them, so the view stays clean.
+
 **Walk mode** (🚶 button) is built for inventory walks: continuous scanning
 with hit/miss counters, instant flash + beep + vibrate feedback, and no taps
 between scans. USB barcode scanners (keyboard/"wedge" mode) are detected
@@ -85,10 +98,13 @@ escapes and case before comparing. (The renamed column here lives at internal na
 `Health-Check.ps1` (run monthly by `.github/workflows/data-health.yml`) checks the
 list for duplicate serial numbers, duplicate barcodes, missing tags/serials,
 missing/renamed columns, and assets not verified in 90 days — unverified assets
-appear in a Markdown table. It also warns when the automation client certificate
-has less than 90 days left. When issues are found the workflow files a GitHub
-issue (@mentioning the owner) and can email the report via SMTP
-(`Send-HealthEmail.ps1`, off by default — needs the `SMTP_*` secrets).
+appear in a Markdown table. The report leads with a **health score** (share of
+assets fully clean) and, from the second month on, **month-over-month deltas**
+(the workflow commits an aggregate `health-history.json` after each run).
+It also warns when the automation client certificate has less than 90 days
+left. When issues are found the workflow files a GitHub issue (@mentioning
+the owner) and can email the report via SMTP (`Send-HealthEmail.ps1`, off by
+default — needs the `SMTP_*` secrets).
 
 ## Hardening checklist (manual, one-time)
 

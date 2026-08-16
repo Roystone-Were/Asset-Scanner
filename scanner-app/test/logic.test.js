@@ -306,3 +306,30 @@ test("diffFields keys let callers spot verification-only versions", () => {
   assert.ok(d.length > 0);
   assert.ok(d.every((x) => x.key === "lastverified" || x.key === "lastverifiedby"));
 });
+
+test("groupEmployees groups by trimmed case-insensitive name", () => {
+  const items = [
+    { id: 1, fields: { EmployeeName: "Erastus Maina" } },
+    { id: 2, fields: { EmployeeName: "erastus maina " } }, // same person
+    { id: 3, fields: { EmployeeName: "Roystone Licha" } },
+    { id: 4, fields: { EmployeeName: "" } }, // blank - skipped
+    { id: 5, fields: { Model: "no employee at all" } },
+  ];
+  assert.deepStrictEqual(X.groupEmployees(items), [
+    { name: "Erastus Maina", count: 2 },
+    { name: "Roystone Licha", count: 1 },
+  ]);
+  assert.deepStrictEqual(X.groupEmployees([]), []);
+});
+
+test("assetsOfEmployee matches with the same normalization", () => {
+  const items = [
+    { id: 1, fields: { EmployeeName: "Erastus Maina", Title: "MICL0045" } },
+    { id: 2, fields: { EmployeeName: " erastus MAINA ", Title: "MICL0046" } },
+    { id: 3, fields: { EmployeeName: "Someone Else" } },
+  ];
+  const got = X.assetsOfEmployee(items, "ERASTUS maina");
+  assert.deepStrictEqual(got.map((x) => x.id), [1, 2]);
+  assert.deepStrictEqual(X.assetsOfEmployee(items, ""), []);
+  assert.deepStrictEqual(X.assetsOfEmployee(items, "Nobody"), []);
+});

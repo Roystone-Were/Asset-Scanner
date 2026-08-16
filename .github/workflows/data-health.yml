@@ -32,7 +32,9 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  # write: the workflow commits health-history.json back to main so the next
+  # run can compute month-over-month deltas in the report.
+  contents: write
 
 jobs:
   health:
@@ -72,7 +74,7 @@ jobs:
           SP_CLIENT_ID: ${{ secrets.SP_CLIENT_ID }}
           SP_THUMBPRINT: ${{ secrets.SP_THUMBPRINT }}
         run: |
-          ./Health-Check.ps1 -Tenant $env:SP_TENANT -ClientId $env:SP_CLIENT_ID -Thumbprint $env:SP_THUMBPRINT -OutReport "$env:GITHUB_WORKSPACE\health-report.md"
+          ./Health-Check.ps1 -Tenant $env:SP_TENANT -ClientId $env:SP_CLIENT_ID -Thumbprint $env:SP_THUMBPRINT -OutReport "$env:GITHUB_WORKSPACE\health-report.md" -OutMetrics "$env:GITHUB_WORKSPACE\health-metrics.json" -PrevMetrics "$env:GITHUB_WORKSPACE\health-history.json"
 
       - name: File an issue with the report
         shell: pwsh
@@ -88,6 +90,32 @@ jobs:
             gh issue create --title "Monthly asset data health report" --body-file "$env:GITHUB_WORKSPACE\health-report.md"
           } else {
             Write-Host "All checks passed - no issue filed."
+          }
+
+      - name: Track month-over-month history
+        shell: pwsh
+        run: |
+          # Append this month's metrics to the committed history file so the
+          # next run's report shows deltas. Aggregate numbers only - no
+          # personal data. (Not deployed: Vercel only serves scanner-app/.)
+          $histPath = "$env:GITHUB_WORKSPACE\health-history.json"
+          $hist = @()
+          if (Test-Path $histPath) {
+            try { $hist = @(Get-Content $histPath -Raw | ConvertFrom-Json) } catch { $hist = @() }
+          }
+          $m = Get-Content "$env:GITHUB_WORKSPACE\health-metrics.json" -Raw | ConvertFrom-Json
+          $hist += $m
+          if ($hist.Count -gt 24) { $hist = $hist[($hist.Count - 24)..($hist.Count - 1)] }
+          $hist | ConvertTo-Json -Depth 4 | Set-Content $histPath -Encoding UTF8
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add health-history.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "data: health history $($m.generated)"
+            git push
+          } else {
+            Write-Host "No history changes to commit."
           }
 
       - name: Email the report directly

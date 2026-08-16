@@ -49,6 +49,21 @@
   **Esc** (exit walk). Shortcuts share the burst detector's "cold stream"
   guard (no key within 400ms) so a wedge scanner bursting a code containing
   `W`/`/` can't trigger them mid-scan.
+- **Field features (Aug 2026):** miss screen offers **🆕 add-asset** (minimal
+  form POSTs a new item; offline it queues a `new-*` create the flush POSTs);
+  **👥 People view** (offboarding: search employee → their assets → one-tap
+  "mark all returned" = Status Available + Employee cleared, queued offline);
+  camera **torch + zoom** chips shown only when the device supports them
+  (iOS gets none - by design, not a bug). Pure helpers in logic.js:
+  `groupEmployees`, `assetsOfEmployee` (36 tests).
+- **Health report v2:** leads with a **health score** (share of assets clean:
+  tagged + serial + verified + no dup keys) and month-over-month deltas.
+  `Health-Check.ps1 -OutMetrics` writes a snapshot; the workflow appends it
+  to a committed `health-history.json` (cap 24 entries, contents: write) and
+  passes it back as `-PrevMetrics` next run. Placeholder serials ("-") count
+  as missing. First run after this change has no baseline - deltas appear
+  from month 2. NOTE: live list grew to 61 assets (bulk-added in SharePoint);
+  score is 3% until tags/serials/verifications catch up.
 - **Scanner app is DEPLOYED and signing in.** Live at `https://xana-asset-lookup.vercel.app`
   (Vercel, Hobby plan, automatic HTTPS). The Entra redirect URI was added and the
   user confirmed sign-in works.

@@ -312,6 +312,36 @@
     return out;
   }
 
+  // People/offboarding view: group cached items by Employee Name
+  // (case-insensitive, trimmed; blank names skipped). Returns
+  // [{name, count}] sorted by count desc, then name.
+  function groupEmployees(items) {
+    const map = new Map();
+    for (const it of items || []) {
+      const raw = String(fieldV(it.fields || {}, "Employee Name") || "").trim();
+      if (!raw) continue;
+      const k = raw.toLowerCase();
+      if (!map.has(k)) map.set(k, { name: raw, count: 0 });
+      map.get(k).count++;
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+    );
+  }
+
+  // All items assigned to one employee (same normalization as
+  // groupEmployees, so a chip from the list always finds its rows).
+  function assetsOfEmployee(items, name) {
+    const n = String(name || "").trim().toLowerCase();
+    if (!n) return [];
+    return (items || []).filter(
+      (it) =>
+        String(fieldV(it.fields || {}, "Employee Name") || "")
+          .trim()
+          .toLowerCase() === n,
+    );
+  }
+
   return {
     g,
     escapeHtml,
@@ -328,6 +358,8 @@
     enqueueWrite,
     classifyKeyBurst,
     diffFields,
+    groupEmployees,
+    assetsOfEmployee,
     STATUS_CHOICES,
     LOCATION_CHOICES,
     REGION_CHOICES,
