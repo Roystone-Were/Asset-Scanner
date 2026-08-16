@@ -59,6 +59,10 @@ with hit/miss counters, instant flash + beep + vibrate feedback, and no taps
 between scans. USB barcode scanners (keyboard/"wedge" mode) are detected
 anywhere in the app — scan into a laptop and the lookup fires by itself.
 
+On desktop (≥768px) the layout widens, the result card shows its fields in
+two columns, and keyboard shortcuts apply: **W** toggles walk mode, **/**
+focuses the input, **Esc** exits walk mode. Mobile is unchanged.
+
 Field-name lookups tolerate internal-name quirks: "Asset Type" may come back from
 Graph as `AssetType` or `Asset_x0020_Type`; `fieldV()` normalizes `_xNNNN_` hex
 escapes and case before comparing. (The renamed column here lives at internal name

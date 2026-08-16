@@ -39,6 +39,12 @@
   "✓ Verification scan" line, real edits as `Field: old → new`. The monthly
   health report's unverified table now has a "Verified by" column and checks
   the column exists.
+- **Desktop tier (>=768px, one responsive UI — no fork):** wider column
+  (640px), result-card fields in two CSS-grid columns, taller history/register
+  panels, and keyboard shortcuts **W** (walk toggle), **/** (focus input),
+  **Esc** (exit walk). Shortcuts share the burst detector's "cold stream"
+  guard (no key within 400ms) so a wedge scanner bursting a code containing
+  `W`/`/` can't trigger them mid-scan.
 - **Scanner app is DEPLOYED and signing in.** Live at `https://xana-asset-lookup.vercel.app`
   (Vercel, Hobby plan, automatic HTTPS). The Entra redirect URI was added and the
   user confirmed sign-in works.
