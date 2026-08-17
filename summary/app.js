@@ -1,4 +1,4 @@
-// app.js — Xana Asset Summary client: MSAL auth + theme toggle + dashboard
+﻿// app.js â€” Xana Asset Summary client: MSAL auth + theme toggle + dashboard
 "use strict";
 (function () {
   // ---------- Config ----------
@@ -22,39 +22,39 @@
     const stored = localStorage.getItem(STORAGE_THEME) || "dark";
     document.documentElement.setAttribute("data-theme", stored);
     const tog = document.getElementById("themeToggle");
-    if (tog) tog.textContent = stored === "light" ? "🌙" : "☀️";
+    if (tog) tog.textContent = stored === "light" ? "ðŸŒ™" : "â˜€ï¸";
   }
   document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("themeToggle").addEventListener("click", () => {
       const cur = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
       document.documentElement.setAttribute("data-theme", cur);
       localStorage.setItem(STORAGE_THEME, cur);
-      document.getElementById("themeToggle").textContent = cur === "light" ? "🌙" : "☀️";
+      document.getElementById("themeToggle").textContent = cur === "light" ? "ðŸŒ™" : "â˜€ï¸";
     });
     applyTheme();
   });
   // ---------- MSAL ----------
   const msalConfig = { auth: { clientId: CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI }, cache: { cacheLocation: "localStorage" } };
-  const msal = new msal.PublicClientApplication(msalConfig);
+  const msalApp = new msal.PublicClientApplication(msalConfig);
   let account = null;
 
   async function initAuth() {
-    await msal.initialize();
+    await msalApp.initialize();
     try {
-      const resp = await msal.handleRedirectPromise();
+      const resp = await msalApp.handleRedirectPromise();
       if (resp && resp.account) { account = resp.account; onSignedIn(); return; }
     } catch (e) { console.error("MSAL redirect error:", e); showSignIn("Sign-in error: " + (e.message || e)); return; }
-    const all = msal.getAllAccounts();
+    const all = msalApp.getAllAccounts();
     if (all.length > 0) { account = all[0]; onSignedIn(); return; }
-    // no sign-in yet — show the Microsoft sign-in button
+    // no sign-in yet â€” show the Microsoft sign-in button
     showSignIn();
-    document.getElementById("signInBtn").onclick = () => { msal.loginRedirect({ scopes: GRAPH_SCOPES }); };
+    document.getElementById("signInBtn").onclick = () => { msalApp.loginRedirect({ scopes: GRAPH_SCOPES }); };
   }
 
   async function getToken() {
     const req = { scopes: GRAPH_SCOPES, account };
-    try { const r = await msal.acquireTokenSilent(req); return r.accessToken; }
-    catch (e) { console.warn("silent token failed, retrying redirect:", e); msal.acquireTokenRedirect(req); throw new Error("refreshing session"); }
+    try { const r = await msalApp.acquireTokenSilent(req); return r.accessToken; }
+    catch (e) { console.warn("silent token failed, retrying redirect:", e); msalApp.acquireTokenRedirect(req); throw new Error("refreshing session"); }
   }
 
   // ---------- Auth UI helpers ----------
@@ -72,7 +72,7 @@
   function onSignedIn() {
     document.getElementById("userName").textContent = account.name || account.username;
     document.getElementById("userInfo").style.display = "flex";
-    document.getElementById("signOutBtn").onclick = () => msal.logout({ postLogoutRedirectUri: location.origin + location.pathname });
+    document.getElementById("signOutBtn").onclick = () => msalApp.logout({ postLogoutRedirectUri: location.origin + location.pathname });
     showMain(); load();
   }
 
@@ -86,7 +86,7 @@
     const btn = document.getElementById("refresh"); if (btn) btn.disabled = true;
     const main = document.getElementById("main");
     const meta = document.getElementById("meta");
-    main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live data…</div>';
+    main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live dataâ€¦</div>';
     try {
       const token = await getToken();
       const res = await fetch("/api/summary", { cache: "no-store", headers: { Authorization: "Bearer " + token } });
@@ -105,11 +105,11 @@
   }
   async function apiError(res) {
     let body = ""; try { body = (await res.json()).error || res.statusText; } catch (e) { body = res.statusText; }
-    if (res.status === 401) return "Session expired — please refresh the page to sign in again.";
-    return "HTTP " + res.status + " — " + body;
+    if (res.status === 401) return "Session expired â€” please refresh the page to sign in again.";
+    return "HTTP " + res.status + " â€” " + body;
   }
   function render(d, main, meta) {
-    if (meta) meta.textContent = "Updated " + (d.generatedAt ? d.generatedAt.replace("T", " ").slice(0, 19) : new Date().toLocaleString()) + (d.elapsedMs ? " · " + d.elapsedMs + "ms" : "");
+    if (meta) meta.textContent = "Updated " + (d.generatedAt ? d.generatedAt.replace("T", " ").slice(0, 19) : new Date().toLocaleString()) + (d.elapsedMs ? " Â· " + d.elapsedMs + "ms" : "");
     const t = d.totals, h = d.dataHealth;
     main.innerHTML =
       '<div class="kpis">' +
@@ -187,3 +187,4 @@
   // ---------- Boot ----------
   initAuth();
 })();
+
