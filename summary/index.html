@@ -81,7 +81,19 @@
     </div>
   </header>
 
-  <div id="main">
+  <div id="login" style="max-width:380px;margin:12vh auto;text-align:center;">
+    <div style="font-size:2.2rem;margin-bottom:8px;">🔐</div>
+    <h2 style="font-size:1.2rem;margin-bottom:6px;">Xana Asset Summary</h2>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:20px;">Enter the access PIN to view the dashboard</p>
+    <input type="password" id="pin" placeholder="Access PIN" autocomplete="off" style="
+      width:100%;padding:14px;font-size:1rem;border:1px solid var(--line);border-radius:12px;
+      background:var(--panel2);color:var(--text);text-align:center;margin-bottom:12px;
+      letter-spacing:3px;">
+    <button id="unlock" style="width:100%">Unlock</button>
+    <div id="loginMsg" style="margin-top:10px;font-size:.82rem;color:var(--red);min-height:18px;"></div>
+  </div>
+
+  <div id="main" style="display:none">
     <div class="loading"><div class="spinner"></div>Loading live data…</div>
   </div>
 
@@ -89,7 +101,8 @@
 </div>
 <script>
 "use strict";
-const KEY = new URLSearchParams(location.search).get("key") || "";
+
+const PIN_KEY = "xana_pin";
 const CURRENCY = "KES";
 const STATUS_COLORS = { "In Use":"#22c55e", "Available":"#f59e0b", "Under Repair":"#ef4444", "Lost":"#dc2626", "Retired":"#64748b", "Left With":"#a855f7" };
 const DEP_COLORS = { "Fully depreciated":"#ef4444", "In progress":"#f59e0b", "No data":"#64748b" };
@@ -99,26 +112,65 @@ function money(n){ const v = n==null?0:n; return CURRENCY+" "+(v<0?"-":"")+Math.
 function statusColor(s){ return STATUS_COLORS[s] || "#3b82f6"; }
 function depColor(s){ return DEP_COLORS[s] || "#3b82f6"; }
 
+function getPin(){
+  // 1) session storage (user entered PIN this session), 2) ?key= in URL (backward compat / embed)
+  let p = sessionStorage.getItem(PIN_KEY);
+  if (!p) { p = new URLSearchParams(location.search).get("key") || ""; if (p) sessionStorage.setItem(PIN_KEY, p); }
+  return p;
+}
+
 async function load(){
   const btn = document.getElementById("refresh"); if(btn) btn.disabled = true;
   const main = document.getElementById("main");
   const meta = document.getElementById("meta");
+  const pin = getPin();
+  if (!pin) { showLogin(); return; }
   main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live data…</div>';
   try {
-    const url = "/api/summary" + (KEY ? "?key=" + encodeURIComponent(KEY) : "");
-    const res = await fetch(url, { cache: "no-store", headers: KEY ? { "x-summary-key": KEY } : {} });
+    const url = "/api/summary";
+    const res = await fetch(url, { cache:"no-store", headers:{"x-summary-key":pin} });
     if (!res.ok) {
       let detail = ""; try { detail = (await res.json()).error || ""; } catch(e){}
+      if (res.status === 401) { sessionStorage.removeItem(PIN_KEY); document.getElementById("main").style.display="none"; document.getElementById("login").style.display=""; document.getElementById("loginMsg").textContent="Invalid PIN — try again."; return; }
       throw new Error("HTTP " + res.status + (detail ? " — " + detail : ""));
     }
     const d = await res.json();
     render(d, main, meta);
   } catch (e) {
     console.error(e);
-    main.innerHTML = '<div class="errbox"><b>Could not load the summary.</b><br>' + esc(e.message || e) +
-      '<br><br>Check the API key in the URL and that the summary app is deployed (' + esc(location.origin) + ').</div>';
+    main.innerHTML = '<div class="errbox"><b>Could not load the summary.</b><br>' + esc(e.message || e) + '<br><br>Check the API key in the URL and that the summary app is deployed (' + esc(location.origin) + ').</div>';
   } finally { if(btn) btn.disabled = false; }
 }
+
+function showLogin(){
+  document.getElementById("login").style.display="";
+  document.getElementById("main").style.display="none";
+}
+
+function showMain(){ document.getElementById("login").style.display="none"; document.getElementById("main").style.display=""; }
+
+async function doUnlock(){
+  const pin = document.getElementById("pin").value.trim();
+  if (!pin) return;
+  const msg = document.getElementById("loginMsg");
+  msg.textContent = "Checking…";
+  try {
+    const res = await fetch("/api/summary", { cache:"no-store", headers:{"x-summary-key":pin} });
+    if (!res.ok) { msg.textContent = (res.status===401) ? "Invalid PIN. Try again." : "Error " + res.status; return; }
+    sessionStorage.setItem(PIN_KEY, pin);
+    // clean URL: remove ?key= from the address bar if it was there
+    if (location.search.indexOf("key=")!==-1){ history.replaceState(null,"", location.pathname); }
+    showMain(); load();
+  } catch(e){ msg.textContent = "Connection error — check your link or VPN."; }
+}
+
+document.getElementById("pin").addEventListener("keydown", e => { if(e.key==="Enter") doUnlock(); });
+document.getElementById("unlock").addEventListener("click", doUnlock);
+
+// -------- Boot: if we already have a PIN go straight to dashboard, else show login
+(function(){
+  if (getPin()) { showMain(); load(); } else { showLogin(); }
+})();
 
 function render(d, main, meta){
   if (meta) meta.textContent = "Updated " + (d.generatedAt ? d.generatedAt.replace("T"," ").slice(0,19) : new Date().toLocaleString()) + (d.elapsedMs ? " · " + d.elapsedMs + "ms" : "");
@@ -194,7 +246,6 @@ function tableHtml(items){
   return "<table><thead>"+head+"</thead><tbody>"+rows+"</tbody></table>";
 }
 
-load();
 </script>
 </body>
 </html>
