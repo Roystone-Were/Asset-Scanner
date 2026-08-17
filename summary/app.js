@@ -63,6 +63,9 @@
     const m = document.getElementById("main"); if (m) m.style.display = "none";
     const ui = document.getElementById("userInfo"); if (ui) ui.style.display = "none";
     if (msg) { const me = document.getElementById("signinMsg"); if (me) me.textContent = msg; }
+    // always wire the sign-in button so it works regardless of when initAuth finishes
+    const btn = document.getElementById("signInBtn");
+    if (btn) btn.onclick = () => { msalApp.loginRedirect({ scopes: GRAPH_SCOPES }); };
   }
   function showMain() {
     document.getElementById("signin").style.display = "none";
