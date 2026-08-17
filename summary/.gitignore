@@ -2,7 +2,11 @@
 .env
 .env.local
 .env.*.local
+.env.vercel
+summary-key.txt
 # Vercel local
 .vercel
 # npm
 node_modules/
+# Backfill task list (local only)
+backfill/*.csv

@@ -19,3 +19,6 @@ node_modules/
 
 # Generated locally by Health-Check.ps1 runs
 health-metrics.json
+
+# Backfill task lists (filled locally, never commit)
+/backfill/*.csv
