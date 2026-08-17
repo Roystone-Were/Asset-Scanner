@@ -12,7 +12,10 @@
     "In Use": "#22c55e", Available: "#f59e0b", "Under Repair": "#ef4444",
     Lost: "#dc2626", Retired: "#64748b", "Left With": "#a855f7",
   };
-  const DEP_COLORS = {
+  const ALL_STATUSES = ["In Use", "Available", "Under Repair", "Retired", "Left With"];
+const PAGE_SIZE = 50;
+let currentPage = 0, lastItems = [];
+const DEP_COLORS = {
     "Fully depreciated": "#ef4444", "In progress": "#f59e0b", "No data": "#64748b",
   };
 
@@ -22,14 +25,14 @@
     const stored = localStorage.getItem(STORAGE_THEME) || "dark";
     document.documentElement.setAttribute("data-theme", stored);
     const tog = document.getElementById("themeToggle");
-    if (tog) tog.textContent = stored === "light" ? "ðŸŒ™" : "â˜€ï¸";
+    if (tog) tog.textContent = stored === "light" ? "☽" : "☀";
   }
   document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("themeToggle").addEventListener("click", () => {
       const cur = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
       document.documentElement.setAttribute("data-theme", cur);
       localStorage.setItem(STORAGE_THEME, cur);
-      document.getElementById("themeToggle").textContent = cur === "light" ? "ðŸŒ™" : "â˜€ï¸";
+      document.getElementById("themeToggle").textContent = cur === "light" ? "☽" : "☀";
     });
     applyTheme();
   });
@@ -112,23 +115,21 @@
     return "HTTP " + res.status + " â€” " + body;
   }
   function render(d, main, meta) {
-    if (meta) meta.textContent = "Updated " + (d.generatedAt ? d.generatedAt.replace("T", " ").slice(0, 19) : new Date().toLocaleString()) + (d.elapsedMs ? " Â· " + d.elapsedMs + "ms" : "");
-    const t = d.totals, h = d.dataHealth;
+    if (meta) meta.textContent = "Last fetched: " + new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short" });
+    const t = d.totals;
     main.innerHTML =
-      '<div class="kpis">' +
-      kpi("Total", t.total) + kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing") +
-      kpi("Book Value", money(t.bookValue), "after depreciation", "acc") + kpi("Fully Depreciated", t.fullyDepreciated, "of " + t.total) +
-      kpi("Annual Expense", money(t.expensedThisYear), "straight-line") + "</div>" +
-      '<div class="grid">' + panel(donut(d.byStatus), "Status") + panel(bars(d.byType, "#3b82f6"), "By Type") +
-      panel(bars(d.byLocation, "#38bdf8"), "By Location") + panel(bars(d.byDepartment, "#a855f7"), "By Department") + "</div>" +
-      healthStrip(h) + '<div class="panel"><h2>Asset Register</h2><div class="tbl-scroll">' + tableHtml(d.items) + "</div></div>";
+      `<div class="kpis">${kpi("Total", t.total)}${kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing")}${kpi("Book Value", money(t.bookValue), "after depreciation", "acc")}${kpi("Fully Depreciated", t.fullyDepreciated, "of " + t.total)}${kpi("Annual Expense", money(t.expensedThisYear), "straight-line")}</div>` +
+      `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
+      healthStrip(d.dataHealth) +
+      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button></div></div>`;
   }
   function kpi(l, v, h, c) {
     return '<div class="kpi ' + (c || "") + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
   function panel(i, t) { return '<div class="panel"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
   function donut(byStatus) {
-    const e = Object.entries(byStatus || {}).sort((a, b) => b[1] - a[1]),
+    const complete = {}; ALL_STATUSES.forEach(s => { complete[s] = (byStatus && byStatus[s]) || 0; });
+    const e = Object.entries(complete).sort((a, b) => b[1] - a[1]),
       total = e.reduce((s, x) => s + x[1], 0) || 1;
     let acc = 0,
       parts = [];
@@ -137,14 +138,11 @@
     const legend = e
       .map(
         ([k, v]) =>
-          '<div class="row"><span class="swatch" style="background:' + statusColor(k) + '"></span><span>' + esc(k) + '</span><span class="count">' + v + "</span></div>",
+          '<div class="row" title="' + esc(k) + ": " + (total > 0 ? (v / total * 100).toFixed(1) : 0) + '%"><span class="swatch" style="background:' + (v === 0 ? "var(--line)" : statusColor(k)) + '"></span><span>' + esc(k) + '</span><span class="count">' + v + (v > 0 ? " · " + (v / total * 100).toFixed(1) + "%" : "") + "</span></div>",
       )
       .join("");
     return (
-      '<div class="flex"><div class="donut-wrap">' +
-      '<div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(' + grad + ')"></div>' +
-      '<div style="position:absolute;inset:26px;border-radius:50%;background:var(--panel)"></div>' +
-      '<div class="donut-center"><div class="n">' + total + '</div><div class="t">assets</div></div></div><div class="legend">' + legend + "</div></div>");
+      '<div class="flex"><div class="donut-wrap"><div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(' + grad + ')"></div><div style="position:absolute;inset:26px;border-radius:50%;background:var(--panel)"></div><div class="donut-center"><div class="n">' + total + '</div><div class="t">assets</div></div></div><div class="legend">' + legend + "</div></div>");
   }
   function bars(obj, color) {
     const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10),
@@ -186,10 +184,25 @@
         .join("") +
       "</tbody></table>");
   }
+  function renderTable() {
+    const info = document.getElementById("tblInfo"), body = document.getElementById("tblBody");
+    const prev = document.getElementById("prevBtn"), next = document.getElementById("nextBtn");
+    const start = currentPage * PAGE_SIZE, end = Math.min(start + PAGE_SIZE, lastItems.length);
+    if (info) info.textContent = "Showing " + (start + 1) + "–" + end + " of " + lastItems.length;
+    if (body) body.innerHTML = tableHtml(lastItems.slice(start, end));
+    if (prev) prev.disabled = currentPage === 0;
+    if (next) next.disabled = end >= lastItems.length;
+  }
+  // exposed globally for onclick in HTML
+  window.changePage = (dir) => { currentPage = Math.max(0, currentPage + dir); if (currentPage * PAGE_SIZE >= lastItems.length) currentPage = Math.max(0, Math.floor((lastItems.length - 1) / PAGE_SIZE)); renderTable(); };
+
 
   // ---------- Boot ----------
   initAuth();
 })();
+
+
+
 
 
 
