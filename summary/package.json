@@ -1,0 +1,14 @@
+{
+  "name": "xana-asset-summary",
+  "private": true,
+  "version": "1.0.0",
+  "description": "C-suite asset summary dashboard + serverless backend for Xana Asset Inventory (Route A).",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "vercel dev",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.9.1"
+  }
+}

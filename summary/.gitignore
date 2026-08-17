@@ -1,0 +1,8 @@
+# Local secrets / env
+.env
+.env.local
+.env.*.local
+# Vercel local
+.vercel
+# npm
+node_modules/
