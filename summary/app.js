@@ -92,7 +92,7 @@
     main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live dataâ€¦</div>';
     try {
       const token = await getToken();
-      const res = await fetch("/api/summary", { cache: "no-store", headers: { Authorization: "Bearer " + token } });
+      const res = await fetch("/api/summary", { cache: "no-store", headers: { Authorization: "Bearer " + token, "x-summary-key": token } });
       if (!res.ok) { throw new Error(await apiError(res)); }
       const d = await res.json();
       render(d, main, meta);
@@ -190,5 +190,6 @@
   // ---------- Boot ----------
   initAuth();
 })();
+
 
 

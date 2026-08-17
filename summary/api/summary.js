@@ -1,4 +1,4 @@
-// Vercel serverless function — Xana Asset Summary API
+﻿// Vercel serverless function â€” Xana Asset Summary API
 // Returns a JSON summary of the asset portfolio for the C-suite dashboard.
 // Endpoint: GET /api/summary?key=<access_key>
 // Env vars: TENANT, CLIENT_ID, CLIENT_SECRET, SITE_URL, LIST_NAME, SUMMARY_ACCESS_KEY
@@ -89,12 +89,12 @@ function fieldV(fields, name) {
 }
 
 // ---------- Fetch all items (paged) ----------
-async function fetchItems() {
+async function fetchItems(optToken) {
   if (!_listId) await resolveListId();
   let url = "https://graph.microsoft.com/v1.0/sites/" + _siteId + "/lists/" + _listId + "/items?expand=fields&$top=999";
   const items = [];
   while (url) {
-    const data = await graphGet(url);
+    const data = await graphGet(url, optToken);
     for (const it of data.value) items.push(it);
     url = data["@odata.nextLink"] || null;
   }
@@ -148,7 +148,7 @@ function computeSummary(items) {
       model: f(it, "Model"),
       serial: f(it, "Serial Number"),
       employee: f(it, "Employee Name"),
-      department: f(it, "Department") || "—",
+      department: f(it, "Department") || "â€”",
       location: f(it, "Location") || "Unassigned",
       status: f(it, "Status"),
       purchaseDate: getDate(it) ? getDate(it).toISOString().slice(0, 10) : "",
@@ -171,7 +171,7 @@ function computeSummary(items) {
 
   const byStatus = {}, byType = {}, byLocation = {}, byDepartment = {};
   for (const i of itemsComputed) {
-    byStatus[i.status || "—"] = (byStatus[i.status || "—"] || 0) + 1;
+    byStatus[i.status || "â€”"] = (byStatus[i.status || "â€”"] || 0) + 1;
     byType[i.type] = (byType[i.type] || 0) + 1;
     byLocation[i.location] = (byLocation[i.location] || 0) + 1;
     byDepartment[i.department] = (byDepartment[i.department] || 0) + 1;
@@ -207,17 +207,29 @@ async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
 
+  // Forwarded user token: if the browser (after MSAL sign-in) sends a delegated
+  // token, use it directly.  Otherwise fall back to the app-only shared key
+  // (backward compat for embed/PIN-based callers).
+  const userToken = (req.headers.authorization || "").startsWith("Bearer ")
+    ? req.headers.authorization.slice(7)
+    : (req.headers["x-summary-key"] || null);
+
   const key = req.headers["x-summary-key"] || req.query.key || "";
-  if (ACCESS_KEY && key !== ACCESS_KEY) {
-    res.status(401).json({ error: "Unauthorized — invalid or missing access key" });
+  if (!userToken && ACCESS_KEY && key !== ACCESS_KEY) {
+    res.status(401).json({ error: "Unauthorized â€” invalid or missing access key" });
     return;
   }
 
   try {
     const start = Date.now();
-    const items = await fetchItems();
+    const items = await fetchItems(userToken);
     const summary = computeSummary(items);
-    res.status(200).json({ generatedAt: new Date().toISOString(), elapsedMs: Date.now() - start, ...summary });
+    res.status(200).json({
+      generatedAt: new Date().toISOString(),
+      elapsedMs: Date.now() - start,
+      adminEmails: (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean),
+      ...summary,
+    });
   } catch (e) {
     console.error("summary error:", e);
     res.status(500).json({ error: e.message || "Internal error" });
@@ -226,3 +238,4 @@ async function handler(req, res) {
 
 module.exports = handler;
 module.exports.computeSummary = computeSummary;
+
