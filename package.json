@@ -1,0 +1,9 @@
+﻿{
+  "name": "xana-asset-system",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Unified Xana Asset System - scanner + dashboard",
+  "dependencies": {
+    "@azure/msal-node": "^2.9.1"
+  }
+}

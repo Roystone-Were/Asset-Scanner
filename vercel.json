@@ -2,13 +2,12 @@
   "version": 2,
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/summary/api/:path*" },
     { "source": "/dashboard/:path*", "destination": "/summary/:path*" },
     { "source": "/dashboard", "destination": "/summary/index.html" },
     { "source": "/scan/:path*", "destination": "/scanner-app/:path*" },
     { "source": "/scan", "destination": "/scanner-app/index.html" }
   ],
   "functions": {
-    "summary/api/summary.js": { "memory": 512, "maxDuration": 15 }
+    "api/summary.js": { "memory": 512, "maxDuration": 15 }
   }
 }
