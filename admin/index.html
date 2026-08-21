@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin - Members · Xana</title>
+<script src="/scanner-app/lib/msal-browser.min.js"></script>
+<style>
+  :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b; --red:#d13438; --green:#22c55e; }
+  [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; --red:#d13438; --green:#22c55e; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px}
+  .wrap{max-width:720px;margin:0 auto}
+  .theme-toggle{background:transparent;border:0;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.2rem;cursor:pointer;color:var(--text);border-radius:8px;margin-left:auto}
+  .theme-toggle:hover{background:var(--card2)}
+  .topnav{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:14px;flex-wrap:wrap;position:relative}
+  .topnav a{flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:.78rem;font-weight:600;text-decoration:none;border:1px solid var(--border)}
+  .topnav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .topnav a:not(.active){background:var(--card);color:var(--text);border-color:var(--border)}
+  h1{font-size:1.3rem;margin-bottom:4px}
+  p.sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:14px}
+  input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:1rem;margin-bottom:10px}
+  input:focus{outline:none;border-color:var(--accent)}
+  button{border:0;border-radius:10px;padding:12px 16px;font-weight:600;cursor:pointer}
+  .btn{background:var(--accent);color:#fff;flex:1}
+  .btn.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+  .row{display:flex;gap:8px;align-items:center}
+  .msg{margin-top:10px;padding:10px;border-radius:10px;text-align:center;font-size:.85rem}
+  .err{background:rgba(209,52,56,.12);color:#fca5a5}
+  .ok{background:rgba(34,197,94,.12);color:#86efac}
+  .info{background:rgba(22,163,74,.12);color:#86efac}
+  table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:10px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-size:.7rem;text-transform:uppercase}
+  .pill{padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--border);font-size:.7rem}
+  #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="topnav"><a href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/assets">📋 Assets</a><a class="active" href="/admin">👤 Admin</a><a href="/">⌂ Home</a><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></nav>
+  <h1>Admin - Members</h1>
+  <p class="sub">Only <b>roystone@xanalife.com</b> can add/remove. One role <b>Allowed</b> = can scan + add.</p>
+  <div id="authState">Signing in…</div>
+  <div id="gate" class="hidden">
+    <div class="card">
+      <h2>Add member</h2>
+      <input type="text" id="email" placeholder="email e.g. itsupport@xanalife.com" autocomplete="off" />
+      <div class="row"><button id="btnAdd" class="btn">Add</button></div>
+      <div id="addMsg"></div>
+    </div>
+    <div class="card">
+      <h2>Current members</h2>
+      <div id="list"><div class="msg info">Loading…</div></div>
+    </div>
+  </div>
+  <div id="denied" class="hidden"><div class="card"><div class="msg err">🔒 Access required - Admin only. Contact <b>roystone@xanalife.com</b></div></div></div>
+</div>
+<script>
+"use strict";
+const CLIENT_ID="7caa51af-9f32-42d8-8264-da5b97c2f8eb";
+const AUTHORITY="https://login.microsoftonline.com/refrontiergroup.onmicrosoft.com";
+const LIST_NAME="Scanner Access";
+const ADMIN_EMAIL="roystone@xanalife.com";
+const SCOPES=["https://graph.microsoft.com/Sites.ReadWrite.All"];
+const STORAGE_THEME="xana_theme";
+function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
+applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
+function pickCacheLocation(){try{const k="__xana_cache_test__";localStorage.setItem(k,"1");localStorage.removeItem(k);return "localStorage";}catch(e){return "sessionStorage";}}
+const msalConfig={auth:{clientId:CLIENT_ID,authority:AUTHORITY,redirectUri:location.origin+location.pathname},cache:{cacheLocation:pickCacheLocation()}};
+const msalApp=new msal.PublicClientApplication(msalConfig);
+let account=null, SITE_ID=null, LIST_ID=null;
+async function initAuth(){await msalApp.initialize();try{const r=await msalApp.handleRedirectPromise();if(r&&r.account){account=r.account;return true;}}catch(e){document.getElementById("authState").textContent="🚫 Sign-in error: "+(e.message||e);return false;}
+const all=msalApp.getAllAccounts();if(all.length>0){account=all[0];return true;}
+msalApp.loginRedirect({scopes:SCOPES});return false;}
+async function getToken(){const req={scopes:SCOPES,account};try{const r=await msalApp.acquireTokenSilent(req);return r.accessToken;}catch(e){msalApp.acquireTokenRedirect(req);throw new Error("refreshing session");}
+}
+async function graphFetch(url,opts,tries){let a=0;for(;;){const r=await fetch(url,opts);if((r.status===429||r.status>=500)&&a<(tries||3)-1){const ra=parseFloat(r.headers.get("Retry-After"));const d=ra>0?ra*1000:500*Math.pow(2,a)+Math.random()*250;await new Promise(x=>setTimeout(x,d));a++;continue;}return r;}}
+async function graphGet(t,url,h){const r=await graphFetch(url,{headers:Object.assign({Authorization:"Bearer "+t},h||{})},3);if(!r.ok)throw new Error("Graph "+r.status+": "+(await r.text()).slice(0,200));return r.json();}
+async function graphPost(t,url,body){const r=await graphFetch(url,{method:"POST",headers:{Authorization:"Bearer "+t,"Content-Type":"application/json"},body:JSON.stringify(body)},3);if(!r.ok)throw new Error("Graph "+r.status+": "+(await r.text()).slice(0,200));return r.json();}
+async function graphDelete(t,url){const r=await graphFetch(url,{method:"DELETE",headers:{Authorization:"Bearer "+t}},3);if(!r.ok&&r.status!==204)throw new Error("Graph "+r.status+": "+(await r.text()).slice(0,200));}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+async function resolveSite(t){
+  const enc=encodeURIComponent("refrontiergroup.sharepoint.com:/sites/xanalifeTechData");
+  const site=await graphGet(t,"https://graph.microsoft.com/v1.0/sites/"+enc);
+  SITE_ID=site.id;
+  const lists=await graphGet(t,"https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists");
+  const l=lists.value.find(x=>(x.displayName||"").toLowerCase()===LIST_NAME.toLowerCase());
+  if(!l)throw new Error("List '"+LIST_NAME+"' not found - run Add-ScannerAccessList.ps1");
+  LIST_ID=l.id;
+}
+function isAdmin(){return (account.username||"").toLowerCase()===ADMIN_EMAIL.toLowerCase();}
+async function loadList(t){
+  const el=document.getElementById("list");
+  el.innerHTML='<div class="msg info">Loading…</div>';
+  let url="https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items?expand=fields&$top=200";
+  const items=[];
+  while(url){const d=await graphGet(t,url);for(const it of d.value)items.push(it);url=d["@odata.nextLink"]||null;}
+  if(!items.length){el.innerHTML='<div class="msg info">No members yet.</div>';return;}
+  el.innerHTML='<table><thead><tr><th>Email</th><th>Added</th><th></th></tr></thead><tbody>'+
+    items.map(it=>{const f=it.fields||{};const email=f.Email||f.Title||"";const when=f.Created?new Date(f.Created).toLocaleDateString():"";return '<tr><td><b>'+esc(email)+'</b></td><td>'+esc(when)+'</td><td><button class="pill" data-del="'+esc(it.id)+'">Remove</button></td></tr>';}).join("")+
+    '</tbody></table>';
+}
+async function boot(){
+  const state=document.getElementById("authState");
+  state.textContent="Signing in…";
+  const ok=await initAuth();
+  if(!ok) return;
+  state.textContent="✅ Signed in as "+account.username;
+  if(!isAdmin()){
+    document.getElementById("denied").classList.remove("hidden");
+    return;
+  }
+  document.getElementById("gate").classList.remove("hidden");
+  try{
+    const token=await getToken();
+    await resolveSite(token);
+    await loadList(token);
+  }catch(e){document.getElementById("list").innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
+}
+document.getElementById("btnAdd").addEventListener("click", async()=>{
+  const email=(document.getElementById("email").value||"").trim().toLowerCase();
+  const msg=document.getElementById("addMsg");
+  if(!email||email.indexOf("@")===-1){msg.innerHTML='<div class="msg err">Enter a valid email.</div>';return;}
+  msg.innerHTML='<div class="msg info">Adding…</div>';
+  try{
+    const token=await getToken();
+    if(!SITE_ID) await resolveSite(token);
+    await graphPost(token,"https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items",{fields:{Title:email,Email:email}});
+    msg.innerHTML='<div class="msg ok">Added '+esc(email)+' ✓</div>';
+    document.getElementById("email").value="";
+    await loadList(token);
+  }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
+});
+document.getElementById("list").addEventListener("click", async(e)=>{
+  const btn=e.target.closest("[data-del]");
+  if(!btn) return;
+  if(!confirm("Remove this member?")) return;
+  const id=btn.getAttribute("data-del");
+  try{
+    const token=await getToken();
+    await graphDelete(token,"https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items/"+id);
+    await loadList(token);
+  }catch(err){alert(err.message||err);}
+});
+boot();
+</script>
+</body>
+</html>

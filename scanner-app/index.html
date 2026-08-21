@@ -745,7 +745,7 @@
   </head>
   <body>
     <div class="wrap">
-      <nav class="topnav"><a class="active" href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/">⌂ Home</a><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></nav>
+      <nav class="topnav"><a class="active" href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/assets">📋 Assets</a><a href="/admin">👤 Admin</a><a href="/">⌂ Home</a><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></nav>
       <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" />
       <h1>Xana Asset Lookup</h1>
       <p class="sub">
@@ -885,6 +885,9 @@
           return "sessionStorage";
         }
       }
+      const ADMIN_EMAIL = "roystone@xanalife.com";
+      const ALLOWLIST_NAME = "Scanner Access";
+
       const msalConfig = {
         auth: {
           clientId: CLIENT_ID,
@@ -1030,6 +1033,7 @@
 
       let SITE_ID = null;
       let LIST_ID = null;
+      let ALLOWLIST_ID = null;
       const SITE_CACHE_KEY = "xana_site_ids";
 
       async function resolveSite(token) {
@@ -1071,6 +1075,41 @@
         } catch (e) {
           /* storage full/blocked - ignore */
         }
+        // Resolve allowlist id once per session (best-effort, not fatal if missing)
+        try {
+          const al = lists.value.find((l) => (l.displayName || "").toLowerCase() === ALLOWLIST_NAME.toLowerCase());
+          if (al) ALLOWLIST_ID = al.id;
+        } catch (e) { /* ignore */ }
+      }
+
+      async function isAllowlisted(token, email) {
+        const want = String(email || "").trim().toLowerCase();
+        if (!want) return false;
+        // Admin always allowed
+        if (want === ADMIN_EMAIL.toLowerCase()) return true;
+        if (!ALLOWLIST_ID) {
+          // Allowlist list not yet created - fail open for first setup, but log
+          console.warn("Scanner Access list not found - allowlisting open");
+          return true;
+        }
+        try {
+          const q = encodeURIComponent("fields/Email eq '" + want.replace(/'/g, "''") + "'");
+          const data = await graphGet(token, "https://graph.microsoft.com/v1.0/sites/" + SITE_ID + "/lists/" + ALLOWLIST_ID + "/items?expand=fields&$filter=" + q, { Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly" });
+          return (data.value || []).length > 0;
+        } catch (e) {
+          console.warn("allowlist check failed:", e);
+          // Fail open if check errors (list not indexed yet) - don't block admin setup
+          return true;
+        }
+      }
+
+      function showAccessRequired(email) {
+        const app = document.getElementById("app");
+        const state = document.getElementById("authState");
+        if (app) app.classList.add("hidden");
+        if (state) state.innerHTML = "🔒 Access required - Scanner is limited to IT. Contact IT Admin: <b>" + escapeHtml(ADMIN_EMAIL) + "</b> (" + escapeHtml(email || "") + ")";
+        const result = document.getElementById("result");
+        if (result) result.innerHTML = '<div class="msg err">🔒 Access required<br/>Your account <b>' + escapeHtml(email || "") + '</b> is not allowlisted for Scanner.<br/>Contact IT Admin: <b>' + escapeHtml(ADMIN_EMAIL) + '</b> to be added via /admin.</div>';
       }
       async function lookup(code) {
         code = cleanScanInput(code);
@@ -2683,6 +2722,15 @@
         });
         const ok = await initAuth();
         if (ok) {
+          // Allowlist gate - one role Allowed (scan + add)
+          try {
+            const token = await getToken();
+            if (!SITE_ID) await resolveSite(token);
+            const allowed = await isAllowlisted(token, account.username);
+            if (!allowed) { showAccessRequired(account.username); return; }
+          } catch (e) {
+            console.warn("allowlist gate error (fail open):", e);
+          }
           document.getElementById("app").classList.remove("hidden");
           renderHistory();
           renderSyncBadge();

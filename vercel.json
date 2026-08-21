@@ -2,6 +2,10 @@
   "version": 2,
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/admin/:path*", "destination": "/admin/:path*" },
+    { "source": "/admin", "destination": "/admin/index.html" },
+    { "source": "/assets/:path*", "destination": "/assets/:path*" },
+    { "source": "/assets", "destination": "/assets/index.html" },
     { "source": "/dashboard/:path*", "destination": "/summary/:path*" },
     { "source": "/dashboard", "destination": "/summary/index.html" },
     { "source": "/scan/:path*", "destination": "/scanner-app/:path*" },
