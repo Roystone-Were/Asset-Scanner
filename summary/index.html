@@ -96,9 +96,28 @@
   .spinner { width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%; margin:0 auto 12px; animation:spin .8s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
+  /* ---------- Exec one-pager (screen: hidden; print: replaces dashboard) ---------- */
+  #execPage { display:none; }
+  .ep-head h2 { font-size:1.3rem; font-weight:700; }
+  .ep-date { color:#444; font-size:.85rem; margin-top:2px; padding-bottom:10px; border-bottom:2px solid #333; margin-bottom:14px; }
+  .ep-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+  .ep-kpi { border:1px solid #ccc; background:#fafafa; padding:10px 12px; break-inside:avoid; }
+  .ep-kpi .l { font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:#555; }
+  .ep-kpi .v { font-size:1.25rem; font-weight:700; margin-top:4px; }
+  .ep-kpi .n { font-size:.7rem; color:#666; margin-top:2px; }
+  table.ep-fin th:nth-child(2), table.ep-fin td:nth-child(2) { width:38%; }
+  table.ep-fin td { padding:6px 8px; border-bottom:1px solid #ddd; vertical-align:top; }
+  table.ep-fin td:nth-child(3) { color:#555; font-size:.78rem; }
+  .ep-cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:14px; }
+  .ep-cols h3 { font-size:.85rem; margin-bottom:6px; border-bottom:1px solid #ddd; padding-bottom:4px; }
+  .ep-row { display:flex; justify-content:space-between; font-size:.8rem; padding:3px 0; border-bottom:1px dotted #eee; }
+  .ep-foot { font-size:.68rem; color:#666; margin-top:10px; border-top:1px solid #ccc; padding-top:6px; }
+
   /* Print-ready layout */
   @media print {
-    .theme-toggle, #signOutBtn, #exportCsv, #prevBtn, #nextBtn { display: none !important; }
+    .theme-toggle, #signOutBtn, #exportCsv, #prevBtn, #nextBtn, #execBtn { display: none !important; }
+    body.print-exec #main { display:none !important; }
+    body.print-exec #execPage { display:block !important; }
     body { background: #fff !important; color: #000 !important; padding: 0; }
     .wrap { max-width: 100%; margin: 0; padding: 0; }
     header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
@@ -154,6 +173,7 @@
         <button type="button" id="signOutBtn" style="background:transparent;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.75rem;cursor:pointer;width:auto;">Sign out</button>
       </span>
       <div class="meta" id="meta">Last fetched: —</div>
+      <button type="button" id="execBtn" style="display:none;background:#0d9488;">Exec report</button>
     </div>
   </header>
 
@@ -168,6 +188,9 @@
   <div id="main" style="display:none">
     <div class="loading"><div class="spinner"></div>Loading live data…</div>
   </div>
+
+  <!-- Print-only exec one-pager -->
+  <div id="execPage" style="display:none"></div>
 
   <footer>Xana Tech &amp; Data — auto-generated from SharePoint · straight-line depreciation · data refreshes on every open</footer>
 </div></div>

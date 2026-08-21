@@ -135,6 +135,7 @@ const DEP_COLORS = {
         ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
         ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
       </div>` +
+      financePanel(d.finance) +
       `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
       healthStrip(h) +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportCsv" style="margin-left:auto;background:var(--green);">📥 Export CSV</button></div></div>`;
@@ -145,6 +146,18 @@ const DEP_COLORS = {
     // Wire the export button
     const exportBtn = document.getElementById("exportCsv");
     if (exportBtn) exportBtn.onclick = exportToCsv;
+
+    // Build the print-only exec one-pager and enable its button
+    mountExecPage(d);
+    const execBtn = document.getElementById("execBtn");
+    if (execBtn) {
+      execBtn.style.display = "";
+      execBtn.onclick = () => {
+        document.body.classList.add("print-exec");
+        window.print();
+        setTimeout(() => document.body.classList.remove("print-exec"), 500);
+      };
+    }
 
     // Animate KPI numbers and bars
     animateKpis();
@@ -164,6 +177,65 @@ const DEP_COLORS = {
   function pct(part, total) {
     if (total === 0) return "0%";
     return Math.round(part / total * 100) + "%";
+  }
+
+  // ---------- Financial framing ----------
+  function financePanel(f) {
+    if (!f) return "";
+    const it = (c, l, v, s) => '<div class="item"><div class="h">' + l + '</div><div class="v ' + c + '">' + v + "</div>" + (s ? '<div class="s">' + s + "</div>" : "") + "</div>";
+    return (
+      '<div class="panel" style="margin:14px 0;"><h2>Financial Position</h2>' +
+      '<div class="fin-grid">' +
+      it("", "Annual Depreciation", money(f.annualDepreciation), "P&L impact per year") +
+      it("warn", "Replacement due ≤12mo", f.replacementDue12mo + " assets · " + money(f.replacementCost12mo), "Fully or nearly depreciated") +
+      it("good", "Idle stock (unassigned)", f.idleAssets + " assets · " + money(f.idleBookValue) + " book value", "Redeploy before buying new") +
+      it(lostAssetsClass(f.lostAssets), "Lost assets", f.lostAssets + " · " + money(f.lostCost) + " cost", "Write-off exposure") +
+      "</div></div>");
+  }
+  function lostAssetsClass(n) { return n > 0 ? "bad" : "good"; }
+
+  // ---------- Exec one-pager ----------
+  function mountExecPage(d) {
+    const host = document.getElementById("execPage");
+    if (!host) return;
+    const t = d.totals || {};
+    const f = d.finance || {};
+    const h = d.dataHealth || {};
+
+    const finRow = (l, v, note) =>
+      "<tr><td><b>" + esc(l) + "</b></td><td>" + esc(v) + "</td><td>" + esc(note || "") + "</td></tr>";
+    const distRow = (k, n, tot) =>
+      '<div class="ep-row"><span>' + esc(k) + '</span><span><b>' + n + '</b> (' + pct(n, tot || 1) + ')</span></div>';
+
+    const topList = (obj, label) => {
+      const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      return e.length
+        ? e.map(([k, v]) => distRow(k, v)).join("")
+        : '<div class="ep-row"><span>' + esc(label) + '</span><span>—</span></div>';
+    };
+
+    host.innerHTML =
+      '<div class="ep-head"><h2>Xana Asset Portfolio — Executive Summary</h2>' +
+      '<div class="ep-date">Refrontier Group · as of ' + new Date().toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", year: "numeric", month: "long", day: "numeric" }) + '</div></div>' +
+      '<div class="ep-kpis">' +
+      '<div class="ep-kpi"><div class="l">Portfolio size</div><div class="v">' + t.total + '</div><div class="n">assets on register</div></div>' +
+      '<div class="ep-kpi"><div class="l">Original cost</div><div class="v">' + money(t.purchaseValue) + '</div><div class="n">total purchase value</div></div>' +
+      '<div class="ep-kpi"><div class="l">Current value</div><div class="v">' + money(t.bookValue) + '</div><div class="n">net book value today</div></div>' +
+      '<div class="ep-kpi"><div class="l">Value lost to age</div><div class="v">' + money((t.purchaseValue - t.bookValue)) + '</div><div class="n">accumulated depreciation</div></div>' +
+      '</div>' +
+      '<table class="ep-fin"><thead><tr><th>Financial position</th><th></th><th></th></tr></thead><tbody>' +
+      finRow("Annual depreciation expense", money(f.annualDepreciation), "hits P&L each year") +
+      finRow("Replacement due within 12 months", f.replacementDue12mo + " assets · " + money(f.replacementCost12mo), "budget planning figure") +
+      finRow("Idle stock (unassigned)", f.idleAssets + " assets · " + money(f.idleBookValue), "redeploy before buying new") +
+      finRow("Lost assets", f.lostAssets + " · " + money(f.lostCost), "write-off exposure") +
+      finRow("Missing purchase records", String(h.missingPurchase ?? "—"), "limits valuation accuracy") +
+      "</tbody></table>" +
+      '<div class="ep-cols">' +
+      '<div><h3>Status</h3>' + topList(d.byStatus) + '</div>' +
+      '<div><h3>Top departments</h3>' + topList(d.byDepartment) + '</div>' +
+      '<div><h3>Locations</h3>' + topList(d.byLocation) + '</div>' +
+      '</div>' +
+      '<div class="ep-foot">Straight-line depreciation · Source of truth: SharePoint Xana Asset Inventory · Generated from live data</div>';
   }
 
   // ---------- KPI Animation ----------

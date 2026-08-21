@@ -3,7 +3,7 @@
 // Run: cd summary && npm install && npm test
 const { test } = require("node:test");
 const assert = require("node:assert");
-const mod = require("../api/summary.js");
+const mod = require("../../api/summary.js");
 
 const compute = mod.computeSummary;
 
@@ -55,4 +55,45 @@ test("counts byStatus and byType", () => {
   assert.equal(s.byStatus["In Use"], 1);
   assert.equal(s.byStatus["Lost"], 1);
   assert.equal(s.byType["Monitor"], 1);
+});
+
+test("finance: annual depreciation sums price/usefulLife per asset", () => {
+  const s = compute([
+    item({}), // Laptop 120000 / 3y (fixture default) = 40000/yr
+    item({ Title: "Xana002", "Asset Type": "Monitor", "Purchase Price": "50000", "Useful Life": 5 }), // 10000/yr
+  ]);
+  assert.ok(Math.abs(s.finance.annualDepreciation - 50000) < 1, `annualDepreciation=${s.finance.annualDepreciation}`);
+});
+
+test("finance: replacement forecast catches fully depreciated and near-end assets", () => {
+  const old = new Date(Date.now() - 1400 * 86400000).toISOString(); // > 3 yrs, fully depreciated
+  const near = new Date(Date.now() - (2 * 365.25 + 300) * 86400000).toISOString(); // ~2.82y of 3y
+  const fresh = new Date(Date.now() - 100 * 86400000).toISOString();
+  const s = compute([
+    item({ Title: "Xana001", "Purchase Date": old }),
+    item({ Title: "Xana002", "Purchase Date": near }),
+    item({ Title: "Xana003", "Purchase Date": fresh }),
+  ]);
+  assert.equal(s.finance.replacementDue12mo, 2);
+  assert.ok(s.finance.replacementCost12mo > 0);
+});
+
+test("finance: idle stock counts unassigned/available and values them at book", () => {
+  const s = compute([
+    item({ Status: "Available" }),
+    item({ Title: "Xana002", "Employee Name": "" }), // no employee, not retired/lost -> idle
+    item({ Title: "Xana003", Status: "Retired", "Employee Name": "" }),
+    item({ Title: "Xana004", Status: "In Use" }),
+  ]);
+  assert.equal(s.finance.idleAssets, 2);
+  assert.ok(s.finance.idleBookValue >= 0);
+});
+
+test("finance: lost assets valued at purchase cost", () => {
+  const s = compute([
+    item({ Status: "Lost" }),
+    item({ Title: "Xana002", Status: "In Use" }),
+  ]);
+  assert.equal(s.finance.lostAssets, 1);
+  assert.ok(Math.abs(s.finance.lostCost - 120000) < 1, `lostCost=${s.finance.lostCost}`);
 });

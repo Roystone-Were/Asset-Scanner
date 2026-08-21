@@ -177,6 +177,19 @@ function computeSummary(items) {
     byDepartment[i.department] = (byDepartment[i.department] || 0) + 1;
   }
 
+  // ---------- Financial framing ----------
+  const replacementDue = itemsComputed.filter(i =>
+    i.purchasePrice > 0 &&
+    (i.depStatus === "Fully depreciated" ||
+      (i.ageYears !== null && i.usefulLife > 0 && i.ageYears + 1 >= i.usefulLife)));
+  const replacementCost = replacementDue.reduce((s, i) => s + i.purchasePrice, 0);
+  const idleStock = itemsComputed.filter(i => i.status === "Available" || (!i.employee && i.status !== "Retired" && i.status !== "Lost"));
+  const idleBookValue = idleStock.reduce((s, i) => s + i.bookValue, 0);
+  const lostAssets = itemsComputed.filter(i => i.status === "Lost");
+  const lostCost = lostAssets.reduce((s, i) => s + i.purchasePrice, 0);
+  const annualDep = itemsComputed.reduce((s, i) =>
+    s + (i.usefulLife > 0 && i.purchasePrice > 0 ? i.purchasePrice / i.usefulLife : 0), 0);
+
   const missingSerial = itemsComputed.filter(i => !i.serial).length;
   const missingTag = itemsComputed.filter(i => !i.tag).length;
   const missingPurchase = itemsComputed.filter(i => !i.purchaseDate).length;
@@ -194,6 +207,15 @@ function computeSummary(items) {
       fullyDepreciated,
       expensedThisYear: parseFloat(expensedThisYear.toFixed(2)),
       missingPurchase,
+    },
+    finance: {
+      annualDepreciation: parseFloat(annualDep.toFixed(2)),
+      replacementDue12mo: replacementDue.length,
+      replacementCost12mo: parseFloat(replacementCost.toFixed(2)),
+      idleAssets: idleStock.length,
+      idleBookValue: parseFloat(idleBookValue.toFixed(2)),
+      lostAssets: lostAssets.length,
+      lostCost: parseFloat(lostCost.toFixed(2)),
     },
     byStatus, byType, byLocation, byDepartment,
     dataHealth: { missingSerial, missingTag, missingPurchase, unverified },
