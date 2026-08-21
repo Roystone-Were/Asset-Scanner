@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Xana Asset Lookup</title>
     <!-- MSAL.js v2 (auth code + PKCE) - local copy -->
-    <script src="lib/msal-browser.min.js"></script>
+    <script src="/scanner-app/lib/msal-browser.min.js"></script>
     <!-- html5-qrcode (camera barcode/QR scanner) - local copy -->
-    <script src="lib/html5-qrcode.min.js"></script>
+    <script src="/scanner-app/lib/html5-qrcode.min.js"></script>
     <!-- Pure lookup/display logic (unit-tested) -->
-    <script src="logic.js"></script>
-    <link rel="manifest" href="manifest.webmanifest" />
+    <script src="/scanner-app/logic.js"></script>
+    <link rel="manifest" href="/scanner-app/manifest.webmanifest" />
     <meta name="theme-color" content="#121212" />
-    <link rel="apple-touch-icon" href="icon-180.png" />
+    <link rel="apple-touch-icon" href="/scanner-app/icon-180.png" />
+    <link rel="icon" href="/scanner-app/icon-192.png" />
     <style>
       :root {
         /* Xana official palette (dark theme) */
@@ -726,7 +727,7 @@
   <body>
     <div class="wrap">
       <nav class="topnav"><a class="active" href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/">⌂ Home</a></nav>
-      <img src="xana-logo.png" alt="Xana" class="logo" />
+      <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" />
       <h1>Xana Asset Lookup</h1>
       <p class="sub">
         Scan the vendor barcode on a device (or type its Serial No.) to pull the
