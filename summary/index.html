@@ -17,7 +17,7 @@
     --green:#22c55e; --orange:#f59e0b; --red:#ef4444; --grey:#64748b; --purple:#a855f7;
     --radius:14px;
   }
-  .topnav{display:flex;gap:8px;justify-content:center;margin:8px 0 14px}
+  .topnav{display:flex;gap:8px;justify-content:center;align-items:center;margin:8px 0 14px;flex-wrap:wrap}
   link[rel="icon"]{display:none}
   .topnav a{padding:7px 14px;border-radius:999px;font-size:.78rem;font-weight:600;text-decoration:none;border:1px solid var(--line)}
   .topnav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -31,7 +31,7 @@
   h1 { font-size:1.35rem; font-weight:700; }
   h1 .dot { color:var(--accent); }
   .sub { color:var(--muted); font-size:.85rem; margin-top:2px; }
-  .hdr-right { display:flex; align-items:center; gap:12px; }
+   .hdr-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   .meta { font-size:.8rem; color:var(--muted); text-align:right; }
   button { background:var(--accent); color:#fff; border:0; border-radius:9px; padding:9px 14px; font-size:.85rem; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
@@ -113,7 +113,7 @@
 </head>
 <body>
 <div class="wrap">
-  <nav class="topnav"><a href="/scan">📷 Scan</a><a class="active" href="/dashboard">📊 Dashboard</a><a href="/">⌂ Home</a></nav>
+  <nav class="topnav"><a href="/scan">📷 Scan</a><a class="active" href="/dashboard">📊 Dashboard</a><a href="/">⌂ Home</a><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">☀️</button></nav>
   <header>
     <div>
       <h1>Asset Inventory Dashboard <span class="dot">·</span> Xana</h1>
@@ -126,7 +126,6 @@
         <button type="button" id="signOutBtn" style="background:transparent;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.75rem;cursor:pointer;width:auto;">Sign out</button>
       </span>
       <div class="meta" id="meta">Last fetched: —</div>
-      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">☀️</button>
     </div>
   </header>
 
