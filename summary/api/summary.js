@@ -1,4 +1,4 @@
-﻿// Vercel serverless function â€” Xana Asset Summary API
+﻿// Vercel serverless function — Xana Asset Summary API
 // Returns a JSON summary of the asset portfolio for the C-suite dashboard.
 // Endpoint: GET /api/summary?key=<access_key>
 // Env vars: TENANT, CLIENT_ID, CLIENT_SECRET, SITE_URL, LIST_NAME, SUMMARY_ACCESS_KEY
@@ -148,7 +148,7 @@ function computeSummary(items) {
       model: f(it, "Model"),
       serial: f(it, "Serial Number"),
       employee: f(it, "Employee Name"),
-      department: f(it, "Department") || "â€”",
+      department: f(it, "Department") || "—",
       location: f(it, "Location") || "Unassigned",
       status: f(it, "Status"),
       purchaseDate: getDate(it) ? getDate(it).toISOString().slice(0, 10) : "",
@@ -171,7 +171,7 @@ function computeSummary(items) {
 
   const byStatus = {}, byType = {}, byLocation = {}, byDepartment = {};
   for (const i of itemsComputed) {
-    byStatus[i.status || "â€”"] = (byStatus[i.status || "â€”"] || 0) + 1;
+    byStatus[i.status || "—"] = (byStatus[i.status || "—"] || 0) + 1;
     byType[i.type] = (byType[i.type] || 0) + 1;
     byLocation[i.location] = (byLocation[i.location] || 0) + 1;
     byDepartment[i.department] = (byDepartment[i.department] || 0) + 1;
@@ -216,7 +216,7 @@ async function handler(req, res) {
 
   const key = req.headers["x-summary-key"] || req.query.key || "";
   if (!userToken && ACCESS_KEY && key !== ACCESS_KEY) {
-    res.status(401).json({ error: "Unauthorized â€” invalid or missing access key" });
+    res.status(401).json({ error: "Unauthorized — invalid or missing access key" });
     return;
   }
 

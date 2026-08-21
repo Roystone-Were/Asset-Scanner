@@ -1,4 +1,4 @@
-﻿// app.js â€” Xana Asset Summary client: MSAL auth + theme toggle + dashboard
+﻿// app.js —” Xana Asset Summary client: MSAL auth + theme toggle + dashboard
 "use strict";
 (function () {
   // ---------- Config ----------
@@ -51,7 +51,7 @@ const DEP_COLORS = {
     } catch (e) { console.error("MSAL redirect error:", e); showSignIn("Sign-in error: " + (e.message || e)); return; }
     const all = msalApp.getAllAccounts();
     if (all.length > 0) { account = all[0]; onSignedIn(); return; }
-    // no sign-in yet â€” show the Microsoft sign-in button
+    // no sign-in yet —” show the Microsoft sign-in button
     showSignIn();
     document.getElementById("signInBtn").onclick = () => { msalApp.loginRedirect({ scopes: GRAPH_SCOPES }); };
   }
@@ -94,7 +94,7 @@ const DEP_COLORS = {
     const btn = document.getElementById("refresh"); if (btn) btn.disabled = true;
     const main = document.getElementById("main");
     const meta = document.getElementById("meta");
-    main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live dataâ€¦</div>';
+    main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live data—¦</div>';
     try {
       const token = await getToken();
       const res = await fetch("/api/summary", { cache: "no-store", headers: { Authorization: "Bearer " + token, "x-summary-key": token } });
@@ -113,8 +113,8 @@ const DEP_COLORS = {
   }
   async function apiError(res) {
     let body = ""; try { body = (await res.json()).error || res.statusText; } catch (e) { body = res.statusText; }
-    if (res.status === 401) return "Session expired â€” please refresh the page to sign in again.";
-    return "HTTP " + res.status + " â€” " + body;
+    if (res.status === 401) return "Session expired —” please refresh the page to sign in again.";
+    return "HTTP " + res.status + " —” " + body;
   }
   function render(d, main, meta) {
     if (meta) meta.textContent = "Last fetched: " + new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short" });
@@ -207,16 +207,44 @@ const DEP_COLORS = {
       total = e.reduce((s, x) => s + x[1], 0) || 1;
     let acc = 0,
       parts = [];
-    for (const [k, v] of e) { parts.push({ k, start: acc, end: acc + (v / total) * 100 }); acc += (v / total) * 100; }
-    const grad = parts.map((p) => statusColor(p.k) + " " + p.start + "% " + p.end + "%").join(", ");
+    for (const [k, v] of e) { parts.push({ k, start: acc, end: acc + (v / total) * 360 }); acc += (v / total) * 360; }
+
+    // Build SVG donut with hoverable segments
+    const R = 80;       // outer radius
+    const r = 56;       // inner radius (donut hole)
+    const cx = 90, cy = 90; // center (svg is 180x180)
+    let svgPaths = "";
+    let angle = -90; // start at 12 o'clock
+    for (const p of parts) {
+      const sweep = (p.end - p.start);
+      const largeArc = sweep > 180 ? 1 : 0;
+      const startRad = angle * Math.PI / 180;
+      const endRad = (angle + sweep) * Math.PI / 180;
+      const x1 = cx + R * Math.cos(startRad);
+      const y1 = cy + R * Math.sin(startRad);
+      const x2 = cx + R * Math.cos(endRad);
+      const y2 = cy + R * Math.sin(endRad);
+      const x3 = cx + r * Math.cos(endRad);
+      const y3 = cy + r * Math.sin(endRad);
+      const x4 = cx + r * Math.cos(startRad);
+      const y4 = cy + r * Math.sin(startRad);
+      const path = `M ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${r} ${r} 0 ${largeArc} 0 ${x4} ${y4} Z`;
+      const pct = total > 0 ? ((p.end - p.start) / 360 * 100).toFixed(1) : 0;
+      svgPaths += `<path d="${path}" fill="${statusColor(p.k)}" data-status="${esc(p.k)}" data-count="${Math.round((p.end - p.start) / 360 * total)}" data-pct="${pct}"><title>${esc(p.k)}: ${pct}% (${Math.round((p.end - p.start) / 360 * total)} assets)</title></path>`;
+      angle += sweep;
+    }
+
     const legend = e
       .map(
         ([k, v]) =>
-          '<div class="row" title="' + esc(k) + ": " + (total > 0 ? (v / total * 100).toFixed(1) : 0) + '%"><span class="swatch" style="background:' + (v === 0 ? "var(--line)" : statusColor(k)) + '"></span><span>' + esc(k) + '</span><span class="count">' + v + (v > 0 ? " · " + (v / total * 100).toFixed(1) + "%" : "") + "</span></div>",
+          '<div class="row"><span class="swatch" style="background:' + (v === 0 ? "var(--line)" : statusColor(k)) + '"></span><span>' + esc(k) + '</span><span class="count">' + v + (v > 0 ? " · " + (v / total * 100).toFixed(1) + "%" : "") + "</span></div>",
       )
       .join("");
+
     return (
-      '<div class="flex"><div class="donut-wrap"><div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(' + grad + ')"></div><div style="position:absolute;inset:26px;border-radius:50%;background:var(--panel)"></div><div class="donut-center"><div class="n">' + total + '</div><div class="t">assets</div></div></div><div class="legend">' + legend + "</div></div>");
+      '<div class="flex"><div class="donut-wrap" style="width:180px;height:180px;"><svg viewBox="0 0 180 180" style="width:100%;height:100%;transform:rotate(-90deg);">' +
+      svgPaths +
+      '</svg><div class="donut-center"><div class="n">' + total + '</div><div class="t">assets</div></div></div><div class="legend">' + legend + "</div></div>");
   }
   function bars(obj, color) {
     const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10),
