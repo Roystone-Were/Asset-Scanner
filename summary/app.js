@@ -25,16 +25,19 @@ const DEP_COLORS = {
     const stored = localStorage.getItem(STORAGE_THEME) || "dark";
     document.documentElement.setAttribute("data-theme", stored);
     const tog = document.getElementById("themeToggle");
-    if (tog) tog.textContent = stored === "light" ? "☽" : "☀";
+    if (tog) tog.textContent = stored === "light" ? "☽" : "☀️";
   }
+  applyTheme(); // apply immediately on script load
   document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("themeToggle").addEventListener("click", () => {
-      const cur = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
-      document.documentElement.setAttribute("data-theme", cur);
-      localStorage.setItem(STORAGE_THEME, cur);
-      document.getElementById("themeToggle").textContent = cur === "light" ? "☽" : "☀";
-    });
-    applyTheme();
+    const tog = document.getElementById("themeToggle");
+    if (tog) {
+      tog.addEventListener("click", () => {
+        const cur = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", cur);
+        localStorage.setItem(STORAGE_THEME, cur);
+        tog.textContent = cur === "light" ? "☽" : "☀️";
+      });
+    }
   });
   // ---------- MSAL ----------
   const msalConfig = { auth: { clientId: CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI }, cache: { cacheLocation: "localStorage" } };
