@@ -16,12 +16,26 @@
     <link rel="icon" href="/scanner-app/icon-192.png" />
     <style>
       :root {
-        /* Xana official palette (dark theme) */
+        /* Light theme (default - white) */
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --card2: #f1f5f9;
+        --border: #e2e8f0;
+        --accent: #16a34a; /* XanaLife brand green */
+        --accent-soft: rgba(22, 163, 74, 0.14);
+        --green: #22c55e;
+        --orange: #f59e0b;
+        --red: #d13438;
+        --grey: #6b7280;
+        --text: #0f172a;
+        --muted: #64748b;
+      }
+      [data-theme="dark"] {
         --bg: #121212;
         --card: #1e1e1e;
         --card2: #242424;
         --border: #2b2b2b;
-        --accent: #16a34a; /* XanaLife brand green */
+        --accent: #16a34a;
         --accent-soft: rgba(22, 163, 74, 0.14);
         --green: #22c55e;
         --orange: #f59e0b;
@@ -30,7 +44,8 @@
         --text: #f3f4f6;
         --muted: #9ca3af;
       }
-      .topnav{display:flex;gap:8px;justify-content:center;margin-bottom:14px}
+      .theme-toggle{background:transparent;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text)}
+      .topnav{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:14px;flex-wrap:wrap}
       .topnav a{flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:.78rem;font-weight:600;text-decoration:none;border:1px solid var(--border)}
       .topnav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
       .topnav a:not(.active){background:var(--card2);color:var(--muted)}
@@ -96,7 +111,7 @@
         padding: 12px;
         border-radius: 10px;
         border: 1px solid var(--border);
-        background: #181818;
+        background: var(--card);
         color: var(--text);
         font-size: 1rem;
         margin-bottom: 10px;
@@ -140,7 +155,7 @@
         justify-content: space-between;
         gap: 14px;
         padding: 11px 0;
-        border-bottom: 1px solid #262626;
+        border-bottom: 1px solid var(--border);
         font-size: 0.92rem;
       }
       .row span:last-child {
@@ -297,7 +312,7 @@
         width: 100%;
       }
       select.fieldpick {
-        background: #181818;
+        background: var(--card);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -470,7 +485,7 @@
       }
       .hrow {
         padding: 8px 0;
-        border-bottom: 1px solid #262626;
+        border-bottom: 1px solid var(--border);
         font-size: 0.8rem;
         display: flex;
         flex-direction: column;
@@ -726,7 +741,7 @@
   </head>
   <body>
     <div class="wrap">
-      <nav class="topnav"><a class="active" href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/">⌂ Home</a></nav>
+      <nav class="topnav"><a class="active" href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/">⌂ Home</a><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></nav>
       <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" />
       <h1>Xana Asset Lookup</h1>
       <p class="sub">
@@ -2629,6 +2644,26 @@
         if (b.dataset.code) {
           lookup(b.dataset.code);
         }
+      });
+
+      // ---------- Theme (light default, toggle persists) ----------
+      const STORAGE_THEME = "xana_theme";
+      function applyTheme() {
+        const stored = localStorage.getItem(STORAGE_THEME) || "light";
+        document.documentElement.setAttribute("data-theme", stored);
+        const tog = document.getElementById("themeToggle");
+        if (tog) tog.textContent = stored === "dark" ? "☀️" : "☽";
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = stored === "dark" ? "#121212" : "#f8fafc";
+      }
+      applyTheme();
+      document.getElementById("themeToggle")?.addEventListener("click", () => {
+        const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", cur);
+        localStorage.setItem(STORAGE_THEME, cur);
+        document.getElementById("themeToggle").textContent = cur === "dark" ? "☀️" : "☽";
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = cur === "dark" ? "#121212" : "#f8fafc";
       });
 
       (async function boot() {

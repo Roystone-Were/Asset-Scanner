@@ -18,23 +18,23 @@ const DEP_COLORS = {
     "Fully depreciated": "#ef4444", "In progress": "#f59e0b", "No data": "#64748b",
   };
 
-  // ---------- Theme ----------
+  // ---------- Theme (light default, shared key with scanner) ----------
   const STORAGE_THEME = "xana_theme";
   function applyTheme() {
-    const stored = localStorage.getItem(STORAGE_THEME) || "dark";
+    const stored = localStorage.getItem(STORAGE_THEME) || "light";
     document.documentElement.setAttribute("data-theme", stored);
     const tog = document.getElementById("themeToggle");
-    if (tog) tog.textContent = stored === "light" ? "☽" : "☀️";
+    if (tog) tog.textContent = stored === "dark" ? "☀️" : "☽";
   }
   applyTheme(); // apply immediately on script load
   document.addEventListener("DOMContentLoaded", () => {
     const tog = document.getElementById("themeToggle");
     if (tog) {
       tog.addEventListener("click", () => {
-        const cur = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+        const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", cur);
         localStorage.setItem(STORAGE_THEME, cur);
-        tog.textContent = cur === "light" ? "☽" : "☀️";
+        tog.textContent = cur === "dark" ? "☀️" : "☽";
       });
     }
   });
