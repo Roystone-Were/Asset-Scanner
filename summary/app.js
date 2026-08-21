@@ -12,7 +12,6 @@
     "In Use": "#22c55e", Available: "#f59e0b", "Under Repair": "#ef4444",
     Lost: "#dc2626", Retired: "#64748b", "Left With": "#a855f7",
   };
-  const ALL_STATUSES = ["In Use", "Available", "Under Repair", "Retired", "Left With"];
 const PAGE_SIZE = 50;
 let currentPage = 0, lastItems = [];
 const DEP_COLORS = {
@@ -127,17 +126,20 @@ const DEP_COLORS = {
       `<div class="kpis">${kpi("Total", t.total)}${kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing")}${kpi("Book Value", money(t.bookValue), "after depreciation", "acc")}${kpi("Fully Depreciated", t.fullyDepreciated, "of " + t.total)}${kpi("Annual Expense", money(t.expensedThisYear), "straight-line")}</div>` +
       `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
       healthStrip(d.dataHealth) +
-      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button></div></div>`;
+      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportCsv" style="margin-left:auto;background:var(--green);">📥 Export CSV</button></div></div>`;
     // Now populate the table after the DOM elements exist
     renderTable();
+    // Wire the export button
+    const exportBtn = document.getElementById("exportCsv");
+    if (exportBtn) exportBtn.onclick = exportToCsv;
   }
   function kpi(l, v, h, c) {
     return '<div class="kpi ' + (c || "") + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
   function panel(i, t) { return '<div class="panel"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
   function donut(byStatus) {
-    const complete = {}; ALL_STATUSES.forEach(s => { complete[s] = (byStatus && byStatus[s]) || 0; });
-    const e = Object.entries(complete).sort((a, b) => b[1] - a[1]),
+    // Derive statuses dynamically from API data instead of hardcoded list
+    const e = Object.entries(byStatus || {}).sort((a, b) => b[1] - a[1]),
       total = e.reduce((s, x) => s + x[1], 0) || 1;
     let acc = 0,
       parts = [];
@@ -204,6 +206,25 @@ const DEP_COLORS = {
   // exposed globally for onclick in HTML
   window.changePage = (dir) => { currentPage = Math.max(0, currentPage + dir); if (currentPage * PAGE_SIZE >= lastItems.length) currentPage = Math.max(0, Math.floor((lastItems.length - 1) / PAGE_SIZE)); renderTable(); };
 
+  // ---------- CSV Export ----------
+  function exportToCsv() {
+    if (!lastItems.length) return;
+    const headers = ["Tag", "Type", "Model", "Serial", "Employee", "Location", "Status", "Purchase Date", "Purchase Price", "Book Value", "Depreciation Status"];
+    const rows = lastItems.map(i => [
+      i.tag, i.type, i.model, i.serial, i.employee, i.location, i.status,
+      i.purchaseDate, i.purchasePrice, i.bookValue, i.depStatus
+    ].map(v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(","));
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "asset-register-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
 
   // ---------- Boot ----------
   initAuth();
