@@ -29,6 +29,10 @@
         --text: #f3f4f6;
         --muted: #9ca3af;
       }
+      .topnav{display:flex;gap:8px;justify-content:center;margin-bottom:14px}
+      .topnav a{flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:.78rem;font-weight:600;text-decoration:none;border:1px solid var(--border)}
+      .topnav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+      .topnav a:not(.active){background:var(--card2);color:var(--muted)}
       .logo {
         display: block;
         height: 64px;
@@ -721,6 +725,7 @@
   </head>
   <body>
     <div class="wrap">
+      <nav class="topnav"><a class="active" href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/">⌂ Home</a></nav>
       <img src="xana-logo.png" alt="Xana" class="logo" />
       <h1>Xana Asset Lookup</h1>
       <p class="sub">
@@ -864,7 +869,7 @@
         auth: {
           clientId: CLIENT_ID,
           authority: AUTHORITY,
-          redirectUri: "https://xana-asset-lookup.vercel.app",
+          redirectUri: location.origin + location.pathname,
         },
         cache: { cacheLocation: pickCacheLocation() },
       };

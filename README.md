@@ -1,19 +1,19 @@
-# Xana Asset Lookup
+# Xana Asset System
 
-Staff scan a physical asset barcode (or type a tag/serial) and instantly see that
-asset's metadata — pulled live from the **Xana Asset Inventory** SharePoint list.
+One unified system — **Scan** on the floor + **Dashboard** for execs — live from the **Xana Asset Inventory** SharePoint list.
 
-- **Live app:** https://xana-asset-lookup.vercel.app
-- **Data source:** SharePoint Online list `Xana Asset Inventory` (36 items) on
-  `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData`
-- **Auth:** Microsoft Entra (MSAL.js v2) — staff sign in with their own work
-  account; the app reads the list as the signed-in user via Microsoft Graph.
+- **Live app (unified):** `https://<your-project>.vercel.app` → `/` landing, `/scan` scanner, `/dashboard` dashboard
+  - Legacy: `https://xana-asset-lookup.vercel.app` (scanner) and `https://asset-scanner-iota.vercel.app` (dashboard) — now combined
+- **Data source:** SharePoint Online list `Xana Asset Inventory` on `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData`
+- **Auth:** Microsoft Entra (MSAL.js v2) — staff sign in with their own work account; the app reads the list as the signed-in user via Microsoft Graph.
 
 ## What's in this repo
 
 | Path | Purpose |
 |---|---|
-| `scanner-app/` | The web app (single-file `index.html` + vendored `lib/`). MSAL sign-in, camera + USB-scanner input, Graph lookup, walk mode, offline cache/queue, item history. `scanner-app/.vercelignore` keeps data snapshots and tests out of the public deployment. |
+| `/` (landing) | `index.html` — chooser: Scanner vs Dashboard. `vercel.json` routes `/scan` → `scanner-app/` and `/dashboard` + `/api/*` → `summary/` as one Vercel project. |
+| `scanner-app/` | The scanner web app (single-file `index.html` + vendored `lib/`). MSAL sign-in, camera + USB-scanner input, Graph lookup, walk mode, offline cache/queue, item history. `scanner-app/.vercelignore` keeps data snapshots and tests out of the public deployment. |
+| `summary/` | Exec dashboard (`index.html` + `app.js` + `api/summary.js` serverless). KPIs, depreciation, health, register with CSV export. Shares Entra auth with scanner. |
 | `Export-AssetLabels.ps1` | Silent cert-auth export of the list → `scanner-app/assets.csv` / `assets.json`. |
 | `Xana-Asset-Format.ps1` | Applies Status-column color + row formatting to the list. |
 | `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED (Aug 2026): the `Barcode` column was removed — the barcode on an asset label encodes the tag or serial, so tag/serial matching covers scans. Scripts kept for history. |
@@ -133,24 +133,28 @@ default — needs the `SMTP_*` secrets).
 ## Local development
 
 ```bash
-# Serve the app
-py -m http.server 8100 --directory scanner-app
+# Serve unified app (landing + scan + dashboard)
+py -m http.server 8100
+# Open http://localhost:8100/          (landing)
+#      http://localhost:8100/scan      (scanner)
+#      http://localhost:8100/dashboard (dashboard - needs vercel dev for /api)
+
+# Dashboard API locally needs Vercel dev (for /api/summary):
+# vercel dev  (from repo root, needs SUMMARY_* + CLIENT_SECRET env)
 ```
 
-Open `http://localhost:8100`. For local sign-in, temporarily set `redirectUri` in
-`scanner-app/index.html` to `http://localhost:8100`, then restore it before
-deploying (the hosted value is `https://xana-asset-lookup.vercel.app`).
+For local scanner sign-in, temporarily set `redirectUri` in `scanner-app/index.html` to `http://localhost:8100/scan`, then restore before deploying.
 
 ## Deploying to Vercel
 
-The project is linked to Vercel (see `.vercel/`, not committed). From `scanner-app/`:
+Unified project: root `vercel.json` routes `/scan` → `scanner-app/`, `/dashboard` + `/api` → `summary/`. Deploy from repo root:
 
 ```bash
 npx vercel deploy --prod --yes
+# or: npx vercel --prod  (first time, set project root to repo root)
 ```
 
-For CI auto-deploys, connect the GitHub repo in the Vercel dashboard
-(Project → Settings → Git).
+For CI auto-deploys, connect the GitHub repo in the Vercel dashboard (Project → Settings → Git, root directory = `/`). Legacy projects (`xana-asset-lookup` and `asset-scanner-iota`) can be archived after the unified URL is verified.
 
 ## Re-exporting the asset data
 
