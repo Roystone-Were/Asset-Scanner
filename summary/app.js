@@ -146,8 +146,9 @@ const DEP_COLORS = {
     const exportBtn = document.getElementById("exportCsv");
     if (exportBtn) exportBtn.onclick = exportToCsv;
 
-    // Animate KPI numbers
+    // Animate KPI numbers and bars
     animateKpis();
+    requestAnimationFrame(() => requestAnimationFrame(animateBars));
   }
 
   // ---------- Health Score Calculation ----------
@@ -255,11 +256,20 @@ const DEP_COLORS = {
         .map(
           ([k, v]) =>
             '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + v + "</span></div>" +
-            '<div class="bar-track"><div class="bar-fill" style="width:' + ((v / max) * 100) + "%;background:" + color + '"></div></div></div>',
+            '<div class="bar-track"><div class="bar-fill" data-w="' + ((v / max) * 100) + '" style="width:0;background:' + color + '"></div></div></div>',
         )
         .join("") +
       "</div>"
     );
+  }
+  function animateBars() {
+    const prefersReduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.querySelectorAll(".bar-fill").forEach((el, i) => {
+      const w = el.getAttribute("data-w") || "0";
+      if (prefersReduced) { el.style.width = w + "%"; return; }
+      // stagger slightly per row for a nicer sweep
+      setTimeout(() => { el.style.width = w + "%"; }, 120 + i * 70);
+    });
   }
   function healthStrip(h) {
     const it = (c, l, v) => '<div class="item"><div class="h">' + l + '</div><div class="v ' + c + '">' + v + "</div></div>";
