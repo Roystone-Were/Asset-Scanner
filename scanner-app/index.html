@@ -44,12 +44,22 @@
         --text: #f3f4f6;
         --muted: #9ca3af;
       }
-      .theme-toggle{background:transparent;border:0;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.2rem;cursor:pointer;color:var(--text);border-radius:8px;margin-left:auto}
+      :root{--navW:220px}
+      .sidenav{position:fixed;top:0;left:0;bottom:0;width:var(--navW);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 12px;z-index:20;overflow:auto}
+      .sidenav .brand{font-weight:700;font-size:.95rem;margin-bottom:18px;display:flex;align-items:center;gap:8px}
+      .sidenav .brand img{height:26px;width:auto}
+      .nav-links{display:flex;flex-direction:column;gap:6px}
+      .nav-links a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:.84rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
+      .nav-links a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
+      .nav-links a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
+      .nav-links a.active::before{content:"";width:3px;height:16px;border-radius:2px;background:var(--accent);margin-right:2px}
+      .nav-bottom{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+      .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
       .theme-toggle:hover{background:var(--card2)}
-      .topnav{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:14px;flex-wrap:wrap;position:relative}
-      .topnav a{flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:.78rem;font-weight:600;text-decoration:none;border:1px solid var(--border)}
-      .topnav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-      .topnav a:not(.active){background:var(--card);color:var(--text);border-color:var(--border)}
+      .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:30;background:var(--card);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+      .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
+      .overlay.open{display:block}
+      @media(max-width:900px){.sidenav{transform:translateX(-100%);transition:transform .25s ease}.sidenav.open{transform:translateX(0)}.hamburger{display:inline-flex}}
       .logo {
         display: block;
         height: 64px;
@@ -70,8 +80,9 @@
         background: var(--bg);
         color: var(--text);
         min-height: 100vh;
-        padding: 20px;
       }
+      .main{margin-left:var(--navW);padding:22px}
+      @media(max-width:900px){.main{margin-left:0;padding-top:56px}}
       .wrap {
         max-width: 460px;
         margin: 0 auto;
@@ -744,9 +755,21 @@
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <nav class="topnav"><a class="active" href="/scan">📷 Scan</a><a href="/dashboard">📊 Dashboard</a><a href="/assets">📋 Assets</a><a href="/admin">👤 Admin</a><a href="/">⌂ Home</a><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></nav>
-      <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" />
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <div class="overlay" id="overlay"></div>
+    <nav class="sidenav" id="sidenav">
+      <div class="brand"><img src="/scanner-app/xana-logo.png" alt="Xana" /> Xana Assets</div>
+      <div class="nav-links">
+        <a class="active" href="/scan">📷 Scan</a>
+        <a href="/dashboard">📊 Dashboard</a>
+        <a href="/assets">📋 Assets</a>
+        <a href="/admin">👤 Admin</a>
+        <a href="/">⌂ Home</a>
+      </div>
+      <div class="nav-bottom"><span style="font-size:.75rem;color:var(--muted)">Theme</span><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></div>
+    </nav>
+    <div class="main"><div class="wrap" style="padding-top:6px">
+      <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" style="margin-top:8px" />
       <h1>Xana Asset Lookup</h1>
       <p class="sub">
         Scan the vendor barcode on a device (or type its Serial No.) to pull the
@@ -807,7 +830,7 @@
         <div id="result"></div>
         <p id="kbdHint">W walk mode · / search · Esc exit walk</p>
       </div>
-    </div>
+    </div></div>
     <div id="sheet" class="hidden">
       <div class="sheet-backdrop" id="sheetBackdrop"></div>
       <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Add new asset">
@@ -2741,6 +2764,10 @@
         window.addEventListener("online", flushQueue);
         // Re-check every minute so chips expire even with the page left open.
         setInterval(renderHistory, 60 * 1000);
+        // sidenav hamburger
+        const hb=document.getElementById("hamburger"), sn=document.getElementById("sidenav"), ov=document.getElementById("overlay");
+        hb?.addEventListener("click",()=>{sn.classList.toggle("open");ov.classList.toggle("open");});
+        ov?.addEventListener("click",()=>{sn.classList.remove("open");ov.classList.remove("open");});
       })();
     </script>
   </body>
