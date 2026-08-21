@@ -8,26 +8,26 @@
 <style>
   :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b; --red:#d13438; --green:#22c55e; }
   [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; --red:#d13438; --green:#22c55e; }
-  :root{--navW:220px}
-  .sidenav{position:fixed;top:0;left:0;bottom:0;width:var(--navW);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 12px;z-index:20;overflow:auto}
-  .sidenav .brand{font-weight:700;font-size:.95rem;margin-bottom:18px;display:flex;align-items:center;gap:8px}
-  .nav-links{display:flex;flex-direction:column;gap:6px}
-  .nav-links a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:.84rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
-  .nav-links a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
-  .nav-links a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
-  .nav-links a.active::before{content:"";width:3px;height:16px;border-radius:2px;background:var(--accent);margin-right:2px}
-  .nav-bottom{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
+  .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
+  .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
+  .navbar_logo img{height:26px;width:auto}
+  .navbar_menu{display:flex;gap:6px;align-items:center}
+  .navbar_menu a{padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
+  .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
+  .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
+  .navbar_right{display:flex;align-items:center;gap:10px}
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  .main{margin-left:var(--navW);padding:22px}
-  @media(max-width:900px){.sidenav{transform:translateX(-100%);transition:transform .25s ease}.sidenav.open{transform:translateX(0)}.main{margin-left:0;padding-top:56px}}
+  .main{padding:22px;max-width:720px;margin:0 auto}
   .wrap{max-width:720px;margin:0 auto}
   .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
   .theme-toggle:hover{background:var(--card2)}
-  .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:30;background:var(--card);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+  .menu-button{display:none;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text)}
+  .menu-button .icon{font-size:1rem}
   .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
   .overlay.open{display:block}
-  @media(max-width:900px){.hamburger{display:inline-flex}}
+  @media(max-width:900px){.navbar_menu{display:none}.navbar_menu.open{display:flex;position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--card);border-right:1px solid var(--border);flex-direction:column;padding:18px 12px;z-index:40;overflow:auto;align-items:flex-start}.menu-button{display:inline-flex}}
   h1{font-size:1.3rem;margin-bottom:4px}
   p.sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:14px}
@@ -49,18 +49,22 @@
 </style>
 </head>
 <body>
-<button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
 <div class="overlay" id="overlay"></div>
-<nav class="sidenav" id="sidenav">
-  <div class="brand">👤 Xana Assets</div>
-  <div class="nav-links">
-    <a href="/scan">📷 Scan</a>
-    <a href="/dashboard">📊 Dashboard</a>
-    <a href="/assets">📋 Assets</a>
-    <a class="active" href="/admin">👤 Admin</a>
-    <a href="/">⌂ Home</a>
+<nav class="navbar">
+  <div class="navbar_container">
+    <a class="navbar_logo" href="/"><img src="/scanner-app/xana-logo.png" alt="Xana" /> Xana</a>
+    <div class="navbar_menu" id="navMenu">
+      <a href="/scan">Scan</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/assets">Assets</a>
+      <a class="active" href="/admin">Admin</a>
+      <a href="/">Home</a>
+    </div>
+    <div class="navbar_right">
+      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
+      <button class="menu-button" id="menuBtn"><span>Menu</span><span class="icon">☰</span></button>
+    </div>
   </div>
-  <div class="nav-bottom"><span style="font-size:.75rem;color:var(--muted)">Theme</span><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></div>
 </nav>
 <div class="main"><div class="wrap">
   <h1>Admin - Members</h1>
@@ -78,12 +82,12 @@
       <div id="list"><div class="msg info">Loading…</div></div>
     </div>
   </div>
-  <div id="denied" class="hidden"><div class="card"><div class="msg err">🔒 Access required - Admin only. Contact <b>roystone@xanalife.com</b></div></div></div>
+  <div id="denied" class="hidden"><div class="card"><div class="msg err">Access required - Admin only. Contact <b>roystone@xanalife.com</b></div></div></div>
 </div></div>
 <script>
-  const hb=document.getElementById("hamburger"), sn=document.getElementById("sidenav"), ov=document.getElementById("overlay");
-  hb?.addEventListener("click",()=>{sn.classList.toggle("open");ov.classList.toggle("open");});
-  ov?.addEventListener("click",()=>{sn.classList.remove("open");ov.classList.remove("open");});
+  const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
+  menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
+  overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
 </script>
 <script>
 "use strict";

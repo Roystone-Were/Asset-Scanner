@@ -7,32 +7,31 @@
 <script src="/scanner-app/lib/msal-browser.min.js"></script>
 <script src="/scanner-app/logic.js"></script>
 <style>
-  :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b; --red:#d13438; --green:#22c55e; --orange:#f59e0b; --book:#0d9488; --radius:12px; --navW:240px; }
+  :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b; --red:#d13438; --green:#22c55e; --orange:#f59e0b; --book:#0d9488; --radius:12px; }
   [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; --red:#d13438; --green:#22c55e; --orange:#f59e0b; --book:#14b8a6; --radius:12px; }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  /* --- side nav --- */
-  .sidenav{position:fixed;top:0;left:0;bottom:0;width:var(--navW);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 12px;z-index:20;overflow:auto}
-  .sidenav .brand{font-weight:700;font-size:1rem;margin-bottom:18px;display:flex;align-items:center;gap:8px}
-  .sidenav .brand img{height:28px;width:auto}
-  .nav-links{display:flex;flex-direction:column;gap:6px}
-  .nav-links a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:.85rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
-  .nav-links a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
-  .nav-links a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
-  .nav-links a.active::before{content:"";width:3px;height:16px;border-radius:2px;background:var(--accent);margin-right:2px}
-  .nav-bottom{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;justify-content:space-between}
+  /* --- Hurry-style top navbar --- */
+  .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
+  .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
+  .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
+  .navbar_logo img{height:26px;width:auto}
+  .navbar_menu{display:flex;gap:6px;align-items:center}
+  .navbar_menu a{padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
+  .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
+  .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
+  .navbar_right{display:flex;align-items:center;gap:10px}
   .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
   .theme-toggle:hover{background:var(--card2)}
-  .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:30;background:var(--card);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+  .menu-button{display:none;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text)}
+  .menu-button .icon{font-size:1rem}
   .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
   .overlay.open{display:block}
-  /* --- main --- */
-  .main{margin-left:var(--navW);padding:22px;max-width:1180px}
+  .main{padding:22px;max-width:1180px;margin:0 auto}
   @media(max-width:900px){
-    .sidenav{transform:translateX(-100%);transition:transform .25s ease}
-    .sidenav.open{transform:translateX(0)}
-    .main{margin-left:0;padding-top:56px}
-    .hamburger{display:inline-flex}
+    .navbar_menu{display:none}
+    .navbar_menu.open{display:flex;position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--card);border-right:1px solid var(--border);flex-direction:column;padding:18px 12px;z-index:40;overflow:auto;align-items:flex-start}
+    .menu-button{display:inline-flex}
   }
   h1{font-size:1.25rem;margin-bottom:4px}
   p.sub{color:var(--muted);font-size:.82rem;margin-bottom:14px}
@@ -79,20 +78,21 @@
 </style>
 </head>
 <body>
-<button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
 <div class="overlay" id="overlay"></div>
-<nav class="sidenav" id="sidenav">
-  <div class="brand"><img src="/scanner-app/xana-logo.png" alt="Xana" /> Xana Assets</div>
-  <div class="nav-links">
-    <a href="/scan">📷 Scan</a>
-    <a href="/dashboard">📊 Dashboard</a>
-    <a class="active" href="/assets">📋 Assets</a>
-    <a href="/admin">👤 Admin</a>
-    <a href="/">⌂ Home</a>
-  </div>
-  <div class="nav-bottom">
-    <span style="font-size:.75rem;color:var(--muted)">Theme</span>
-    <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
+<nav class="navbar">
+  <div class="navbar_container">
+    <a class="navbar_logo" href="/"><img src="/scanner-app/xana-logo.png" alt="Xana" /> Xana</a>
+    <div class="navbar_menu" id="navMenu">
+      <a href="/scan">Scan</a>
+      <a href="/dashboard">Dashboard</a>
+      <a class="active" href="/assets">Assets</a>
+      <a href="/admin">Admin</a>
+      <a href="/">Home</a>
+    </div>
+    <div class="navbar_right">
+      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
+      <button class="menu-button" id="menuBtn"><span>Menu</span><span class="icon">☰</span></button>
+    </div>
   </div>
 </nav>
 <div class="main">
@@ -104,7 +104,7 @@
       <input type="text" id="search" placeholder="Search tag, serial, model, employee…" autocomplete="off" />
       <select id="fStatus"><option value="">All Status</option><option>In Use</option><option>Available</option><option>Retired</option><option>Left With</option><option>Lost</option></select>
       <select id="fLocation"><option value="">All Location</option><option>Syokimau</option><option>Katani</option><option>Ruiru</option><option>Githurai</option><option>Lumumba Dr</option><option>TRM Dr</option></select>
-      <button class="btn book" id="btnScan">📷 Scan</button>
+      <button class="btn book" id="btnScan">Scan</button>
       <button class="btn" id="btnAdd">+ Add Asset</button>
     </div>
     <div id="main"><div class="msg info">Loading…</div></div>
@@ -236,7 +236,7 @@ function renderTable(){
 function showDetail(it){
   const c=statusColor(it.status);
   const detail=document.getElementById("detail");
-  detail.innerHTML='<div class="card"><h2>📦 '+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>'+
+  detail.innerHTML='<div class="card"><h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>'+
     '<div class="detail-grid">'+
     '<div class="row"><span>Serial No.</span><span>'+esc(it.serial||"—")+'</span></div>'+
     '<div class="row"><span>Asset Type</span><span>'+esc(it.type||"")+'</span></div>'+
@@ -251,7 +251,7 @@ function showDetail(it){
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+esc(it.lastVerified||"")+'</span></div>'+
-    '</div><div style="margin-top:12px;display:flex;gap:8px"><a class="btn secondary" href="/scan">📷 Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div></div>';
+    '</div><div style="margin-top:12px;display:flex;gap:8px"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   detail.scrollIntoView({behavior:"smooth"});
 }
@@ -317,6 +317,10 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
     await load();
   }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
 });
+// Hurry-style mobile menu
+const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
+menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
+overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
 async function boot(){
   const state=document.getElementById("authState");
   const ok=await initAuth();

@@ -44,22 +44,22 @@
         --text: #f3f4f6;
         --muted: #9ca3af;
       }
-      :root{--navW:220px}
-      .sidenav{position:fixed;top:0;left:0;bottom:0;width:var(--navW);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 12px;z-index:20;overflow:auto}
-      .sidenav .brand{font-weight:700;font-size:.95rem;margin-bottom:18px;display:flex;align-items:center;gap:8px}
-      .sidenav .brand img{height:26px;width:auto}
-      .nav-links{display:flex;flex-direction:column;gap:6px}
-      .nav-links a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:.84rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
-      .nav-links a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
-      .nav-links a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
-      .nav-links a.active::before{content:"";width:3px;height:16px;border-radius:2px;background:var(--accent);margin-right:2px}
-      .nav-bottom{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+      .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
+      .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
+      .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
+      .navbar_logo img{height:26px;width:auto}
+      .navbar_menu{display:flex;gap:6px;align-items:center}
+      .navbar_menu a{padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
+      .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
+      .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
+      .navbar_right{display:flex;align-items:center;gap:10px}
       .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
       .theme-toggle:hover{background:var(--card2)}
-      .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:30;background:var(--card);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+      .menu-button{display:none;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text)}
+      .menu-button .icon{font-size:1rem}
       .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
       .overlay.open{display:block}
-      @media(max-width:900px){.sidenav{transform:translateX(-100%);transition:transform .25s ease}.sidenav.open{transform:translateX(0)}.hamburger{display:inline-flex}}
+      @media(max-width:900px){.navbar_menu{display:none}.navbar_menu.open{display:flex;position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--card);border-right:1px solid var(--border);flex-direction:column;padding:18px 12px;z-index:40;overflow:auto;align-items:flex-start}.menu-button{display:inline-flex}}
       .logo {
         display: block;
         height: 64px;
@@ -81,8 +81,7 @@
         color: var(--text);
         min-height: 100vh;
       }
-      .main{margin-left:var(--navW);padding:22px}
-      @media(max-width:900px){.main{margin-left:0;padding-top:56px}}
+      .main{padding:22px}
       .wrap {
         max-width: 460px;
         margin: 0 auto;
@@ -757,17 +756,23 @@
   <body>
     <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
     <div class="overlay" id="overlay"></div>
-    <nav class="sidenav" id="sidenav">
-      <div class="brand"><img src="/scanner-app/xana-logo.png" alt="Xana" /> Xana Assets</div>
-      <div class="nav-links">
-        <a class="active" href="/scan">📷 Scan</a>
-        <a href="/dashboard">📊 Dashboard</a>
-        <a href="/assets">📋 Assets</a>
-        <a href="/admin">👤 Admin</a>
-        <a href="/">⌂ Home</a>
+    <nav class="navbar" id="navbar">
+      <div class="navbar_container">
+        <a class="navbar_logo" href="/"><img src="/scanner-app/xana-logo.png" alt="Xana" /> Xana</a>
+        <div class="navbar_menu" id="navMenu">
+          <a class="active" href="/scan">Scan</a>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/assets">Assets</a>
+          <a href="/admin">Admin</a>
+          <a href="/">Home</a>
+        </div>
+        <div class="navbar_right">
+          <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
+          <button class="menu-button" id="menuBtn"><span>Menu</span><span class="icon">☰</span></button>
+        </div>
       </div>
-      <div class="nav-bottom"><span style="font-size:.75rem;color:var(--muted)">Theme</span><button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button></div>
     </nav>
+    <div class="overlay" id="overlay"></div>
     <div class="main"><div class="wrap" style="padding-top:6px">
       <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" style="margin-top:8px" />
       <h1>Xana Asset Lookup</h1>
@@ -788,10 +793,10 @@
         </div>
         <div id="mainui">
           <div class="toolbar">
-            <button id="btnScan">📷 Scan</button>
-            <button id="btnStop" class="secondary hidden">⏹ Stop</button>
-            <button id="btnWalk" class="secondary">🚶 Walk</button>
-            <button id="btnPeople" class="secondary">👥 People</button>
+            <button id="btnScan">Scan</button>
+            <button id="btnStop" class="secondary hidden">Stop</button>
+            <button id="btnWalk" class="secondary">Walk</button>
+            <button id="btnPeople" class="secondary">People</button>
           </div>
           <input
             type="text"
@@ -812,8 +817,8 @@
             autocomplete="off"
           />
           <div class="toolbar">
-            <button id="walkCamera">📷 Camera</button>
-            <button id="walkExit" class="secondary">✕ Exit walk mode</button>
+            <button id="walkCamera">Camera</button>
+            <button id="walkExit" class="secondary">Exit walk mode</button>
           </div>
         </div>
         <div id="people" class="hidden">
@@ -835,8 +840,8 @@
       <div class="sheet-backdrop" id="sheetBackdrop"></div>
       <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Add new asset">
         <div class="sheet-handle"></div>
-        <h2>🆕 New asset
-          <button type="button" class="chip" id="sheetClose">✕ Close</button>
+        <h2>New asset
+          <button type="button" class="chip" id="sheetClose">Close</button>
         </h2>
         <input type="text" id="addTag" placeholder="Asset tag e.g. MICL0048" autocomplete="off" />
         <input type="text" id="addSerial" placeholder="Serial number" autocomplete="off" />
@@ -1362,7 +1367,7 @@
           .map((it) => browHtml(it))
           .join("");
         result.innerHTML =
-          '<div class="card"><h2>📋 ' +
+          '<div class="card"><h2>' +
           found.length +
           " asset" +
           (found.length === 1 ? "" : "s") +
@@ -1418,7 +1423,7 @@
           (via
             ? '<div class="matchvia">Matched by ' + escapeHtml(via) + "</div>"
             : "") +
-          "<h2>📦 " +
+          "<h2>" +
           escapeHtml(g(fieldV(item, "Asset Tag") || fieldV(item, "Title"))) +
           '<span class="badge" id="statusBadge" style="background:' +
           color +
@@ -1458,7 +1463,7 @@
           '<div class="row"><span>Verified By</span><span id="lastVerifiedByVal">' +
           escapeHtml(g(fieldV(item, "Last Verified By"))) +
           "</span></div>" +
-          '<div class="histbar"><button type="button" class="histbtn" data-history="1">🕘 History</button></div>' +
+          '<div class="histbar"><button type="button" class="histbtn" data-history="1">History</button></div>' +
           '<div id="historyPanel" class="hidden"></div>' +
           "</div>";
       }
@@ -1483,7 +1488,7 @@
             : "") +
           '<br/><button type="button" class="misscta" data-action="addasset" data-code="' +
           escapeHtml(code) +
-          '">🆕 Not in the list? Add this device</button>' +
+          '">Not in the list? Add this device</button>' +
           offlineNote +
           "</div>";
       }
@@ -2277,7 +2282,7 @@
         const rows = assets.map((it) => browHtml(it)).join("");
         view.innerHTML =
           '<button type="button" class="chip" id="peopleBack">← All people</button>' +
-          "<h2>👤 " +
+          "<h2>" +
           escapeHtml(name) +
           " · " +
           assets.length +
@@ -2413,7 +2418,7 @@
         document.getElementById("btnStop").classList.add("hidden");
         document.getElementById("btnScan").classList.remove("hidden");
         const wb = document.getElementById("walkCamera");
-        if (wb) wb.textContent = "📷 Camera";
+        if (wb) wb.textContent = "Camera";
       }
 
       async function camToggleTorch() {
@@ -2764,10 +2769,10 @@
         window.addEventListener("online", flushQueue);
         // Re-check every minute so chips expire even with the page left open.
         setInterval(renderHistory, 60 * 1000);
-        // sidenav hamburger
-        const hb=document.getElementById("hamburger"), sn=document.getElementById("sidenav"), ov=document.getElementById("overlay");
-        hb?.addEventListener("click",()=>{sn.classList.toggle("open");ov.classList.toggle("open");});
-        ov?.addEventListener("click",()=>{sn.classList.remove("open");ov.classList.remove("open");});
+        // Hurry-style mobile menu
+        const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
+        menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
+        overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
       })();
     </script>
   </body>
