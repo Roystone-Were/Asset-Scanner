@@ -119,22 +119,86 @@ const DEP_COLORS = {
   function render(d, main, meta) {
     if (meta) meta.textContent = "Last fetched: " + new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short" });
     const t = d.totals;
+    const h = d.dataHealth;
     // Store items for pagination and reset to first page
     lastItems = d.items || [];
     currentPage = 0;
+
+    // Calculate health score (0-100) for conditional coloring
+    const healthScore = calculateHealthScore(h, t.total);
+
     main.innerHTML =
-      `<div class="kpis">${kpi("Total", t.total)}${kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing")}${kpi("Book Value", money(t.bookValue), "after depreciation", "acc")}${kpi("Fully Depreciated", t.fullyDepreciated, "of " + t.total)}${kpi("Annual Expense", money(t.expensedThisYear), "straight-line")}</div>` +
+      `<div class="kpis">
+        ${kpi("Total Assets", t.total, null, null, "neutral")}
+        ${kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing", t.missingPurchase > t.total * 0.3 ? "warn" : "neutral")}
+        ${kpi("Book Value", money(t.bookValue), "after depreciation", "acc")}
+        ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
+        ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
+      </div>` +
       `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
-      healthStrip(d.dataHealth) +
+      healthStrip(h) +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportCsv" style="margin-left:auto;background:var(--green);">📥 Export CSV</button></div></div>`;
+
     // Now populate the table after the DOM elements exist
     renderTable();
+
     // Wire the export button
     const exportBtn = document.getElementById("exportCsv");
     if (exportBtn) exportBtn.onclick = exportToCsv;
+
+    // Animate KPI numbers
+    animateKpis();
   }
-  function kpi(l, v, h, c) {
-    return '<div class="kpi ' + (c || "") + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
+
+  // ---------- Health Score Calculation ----------
+  function calculateHealthScore(h, total) {
+    if (total === 0) return 100;
+    const tagScore = Math.max(0, 100 - (h.missingTag / total) * 100);
+    const serialScore = Math.max(0, 100 - (h.missingSerial / total) * 100);
+    const purchaseScore = Math.max(0, 100 - (h.missingPurchase / total) * 100);
+    const verifiedScore = Math.max(0, 100 - (h.unverified / total) * 100);
+    return Math.round((tagScore + serialScore + purchaseScore + verifiedScore) / 4);
+  }
+
+  function pct(part, total) {
+    if (total === 0) return "0%";
+    return Math.round(part / total * 100) + "%";
+  }
+
+  // ---------- KPI Animation ----------
+  function animateKpis() {
+    const kpiEls = document.querySelectorAll(".kpi .value");
+    kpiEls.forEach(el => {
+      const text = el.textContent;
+      // Extract numeric value for animation
+      const numMatch = text.match(/[\d,]+/);
+      if (!numMatch) return;
+
+      const target = parseInt(numMatch[0].replace(/,/g, ""), 10);
+      const prefix = text.substring(0, text.indexOf(numMatch[0]));
+      const suffix = text.substring(text.indexOf(numMatch[0]) + numMatch[0].length);
+
+      let current = 0;
+      const duration = 800;
+      const start = performance.now();
+
+      function tick(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        // Ease out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        current = Math.round(target * eased);
+        el.textContent = prefix + current.toLocaleString() + suffix;
+
+        if (progress < 1) requestAnimationFrame(tick);
+      }
+
+      requestAnimationFrame(tick);
+    });
+  }
+  function kpi(l, v, h, status, extraClass) {
+    const statusClass = status || "neutral";
+    return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
   function panel(i, t) { return '<div class="panel"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
   function donut(byStatus) {
