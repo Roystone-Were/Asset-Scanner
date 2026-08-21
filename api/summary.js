@@ -1,4 +1,4 @@
-﻿// Vercel serverless function — Xana Asset Summary API
+// Vercel serverless function — Xana Asset Summary API
 // Returns a JSON summary of the asset portfolio for the C-suite dashboard.
 // Endpoint: GET /api/summary?key=<access_key>
 // Env vars: TENANT, CLIENT_ID, CLIENT_SECRET, SITE_URL, LIST_NAME, SUMMARY_ACCESS_KEY
