@@ -43,11 +43,16 @@
   .kpi .hint { color:var(--muted); font-size:.75rem; margin-top:4px; }
   .kpi.acc .value { color:var(--accent2); }
 
-  /* KPI conditional coloring */
-  .kpi-good { border-left: 4px solid var(--green); }
-  .kpi-warn { border-left: 4px solid var(--orange); }
-  .kpi-bad { border-left: 4px solid var(--red); }
-  .kpi-neutral { border-left: 4px solid var(--accent); }
+  /* KPI accent - subtle, not AI obvious */
+  .kpi { border-left: 2px solid var(--line); position:relative; }
+  .kpi::before { content:""; position:absolute; left:-2px; top:14px; bottom:14px; width:2px; border-radius:2px; opacity:.75; }
+  .kpi-good::before { background: var(--green); }
+  .kpi-warn::before { background: var(--orange); opacity:.55; }
+  .kpi-bad::before { background: var(--red); opacity:.6; }
+  .kpi-neutral::before { background: var(--accent); opacity:.45; }
+  .kpi-good { background: linear-gradient(90deg, rgba(34,197,94,.06), transparent 55%); }
+  .kpi-warn { background: linear-gradient(90deg, rgba(245,158,11,.05), transparent 55%); }
+  .kpi-bad { background: linear-gradient(90deg, rgba(239,68,68,.05), transparent 55%); }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:820px){ .grid{ grid-template-columns:1fr; } }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; }
@@ -91,10 +96,8 @@
     h1 { color: #000 !important; }
     .sub, .meta, #userName, #roleBadge { color: #333 !important; }
     .kpi { border: 1px solid #ccc !important; background: #fafafa !important; break-inside: avoid; page-break-inside: avoid; }
-    .kpi-good { border-left: 4px solid #22c55e !important; }
-    .kpi-warn { border-left: 4px solid #f59e0b !important; }
-    .kpi-bad { border-left: 4px solid #ef4444 !important; }
-    .kpi-neutral { border-left: 4px solid #3b82f6 !important; }
+    .kpi::before { display:none !important; }
+    .kpi { background:#fafafa !important; }
     .panel { border: 1px solid #ccc !important; background: #fff !important; break-inside: avoid; page-break-inside: avoid; }
     .panel h2 { border-bottom: 1px solid #ddd; padding-bottom: 6px; margin-bottom: 12px; color: #000 !important; }
     .donut-wrap { width: 140px; height: 140px; }
