@@ -178,6 +178,20 @@
     "TRM Dr",
   ];
   const REGION_CHOICES = ["Nairobi", "Kiambu"];
+  const ASSET_TYPE_CHOICES = [
+    "Laptop",
+    "CPU",
+    "Monitor",
+    "Desktop",
+    "Printer",
+    "Mouse",
+    "Keyboard",
+    "Tablet",
+    "Phone",
+    "Server",
+    "Tower",
+    "Other",
+  ];
 
   // Find serial numbers that appear on more than one asset row. `rows` are
   // normalized records ({ id, serial, ... }); returns [{ serial, ids }] sorted.
@@ -390,6 +404,7 @@
     STATUS_CHOICES,
     LOCATION_CHOICES,
     REGION_CHOICES,
+    ASSET_TYPE_CHOICES,
     findDuplicateSerials,
   };
 });

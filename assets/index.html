@@ -11,8 +11,8 @@
   [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; --red:#d13438; --green:#22c55e; --orange:#f59e0b; --book:#14b8a6; --radius:12px; }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  /* --- Hurry-style top navbar --- */
-  .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
+  /* --- Hurry-style top navbar (green shade + blur, not transparent) --- */
+  .navbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--card) 88%, var(--accent) 12%);backdrop-filter:blur(10px) saturate(1.1);-webkit-backdrop-filter:blur(10px) saturate(1.1);border-bottom:1px solid var(--border)}
   .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
   .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
   .navbar_logo img{height:26px;width:auto}
@@ -121,7 +121,7 @@
     <label>Asset Tag *</label><input type="text" id="addTag" placeholder="e.g. MICL0048" />
     <label>Serial Number</label><input type="text" id="addSerial" placeholder="Serial" />
     <label>Model</label><input type="text" id="addModel" placeholder="Lenovo L13" />
-    <label>Asset Type</label><input type="text" id="addType" placeholder="Laptop" />
+    <label>Asset Type</label><select id="addType"></select>
     <label>Status</label><select id="addStatus"><option>In Use</option><option>Available</option><option>Retired</option><option>Left With</option><option>Lost</option></select>
     <label>Location</label><select id="addLocation"><option>Syokimau</option><option>Katani</option><option>Ruiru</option><option>Githurai</option><option>Lumumba Dr</option><option>TRM Dr</option></select>
     <label>Employee</label><input type="text" id="addEmployee" placeholder="Employee name" />
@@ -149,10 +149,7 @@ const SCOPES=["https://graph.microsoft.com/Sites.ReadWrite.All"];
 const STORAGE_THEME="xana_theme";
 function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
 applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
-// hamburger
-const hb=document.getElementById("hamburger"), sn=document.getElementById("sidenav"), ov=document.getElementById("overlay");
-hb?.addEventListener("click",()=>{sn.classList.toggle("open");ov.classList.toggle("open");});
-ov?.addEventListener("click",()=>{sn.classList.remove("open");ov.classList.remove("open");});
+
 function pickCacheLocation(){try{const k="__xana_cache_test__";localStorage.setItem(k,"1");localStorage.removeItem(k);return "localStorage";}catch(e){return "sessionStorage";}}
 const msalConfig={auth:{clientId:CLIENT_ID,authority:AUTHORITY,redirectUri:location.origin+location.pathname},cache:{cacheLocation:pickCacheLocation()}};
 const msalApp=new msal.PublicClientApplication(msalConfig);
@@ -321,6 +318,10 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
 const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
 menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
 overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
+// populate Asset Type dropdown
+const assetTypes = (typeof Xana !== 'undefined' && Xana.ASSET_TYPE_CHOICES) ? Xana.ASSET_TYPE_CHOICES : ["Laptop","CPU","Monitor","Desktop","Printer","Mouse","Keyboard","Tablet","Phone","Server","Tower","Other"];
+const atSel=document.getElementById("addType");
+if(atSel) atSel.innerHTML=assetTypes.map(c=>'<option value="'+c+'">'+c+'</option>').join("");
 async function boot(){
   const state=document.getElementById("authState");
   const ok=await initAuth();

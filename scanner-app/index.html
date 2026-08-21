@@ -44,7 +44,7 @@
         --text: #f3f4f6;
         --muted: #9ca3af;
       }
-      .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
+      .navbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--card) 88%, var(--accent) 12%);backdrop-filter:blur(10px) saturate(1.1);-webkit-backdrop-filter:blur(10px) saturate(1.1);border-bottom:1px solid var(--border)}
       .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
       .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
       .navbar_logo img{height:26px;width:auto}
@@ -846,7 +846,7 @@
         <input type="text" id="addTag" placeholder="Asset tag e.g. MICL0048" autocomplete="off" />
         <input type="text" id="addSerial" placeholder="Serial number" autocomplete="off" />
         <input type="text" id="addModel" placeholder="Model e.g. Lenovo L13" autocomplete="off" />
-        <input type="text" id="addType" placeholder="Asset type e.g. Laptop" autocomplete="off" />
+        <select class="fieldpick" id="addType"></select>
         <select class="fieldpick" id="addStatus"></select>
         <select class="fieldpick" id="addLocation"></select>
         <div class="confirmbar">
@@ -878,6 +878,7 @@
         parseIdListQuery,
         STATUS_CHOICES,
         LOCATION_CHOICES,
+        ASSET_TYPE_CHOICES,
       } = Xana;
 
       // State shared across lookup / edit handlers.
@@ -1569,7 +1570,6 @@
         document.getElementById("addTag").value = "";
         document.getElementById("addSerial").value = code || "";
         document.getElementById("addModel").value = "";
-        document.getElementById("addType").value = "";
         const fill = (id, choices) => {
           document.getElementById(id).innerHTML = choices
             .map(
@@ -1578,6 +1578,7 @@
             )
             .join("");
         };
+        fill("addType", ASSET_TYPE_CHOICES);
         fill("addStatus", statusChoices);
         fill("addLocation", locationChoices);
         document.getElementById("addMsg").innerHTML = "";
