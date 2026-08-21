@@ -120,11 +120,16 @@ const DEP_COLORS = {
   function render(d, main, meta) {
     if (meta) meta.textContent = "Last fetched: " + new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short" });
     const t = d.totals;
+    // Store items for pagination and reset to first page
+    lastItems = d.items || [];
+    currentPage = 0;
     main.innerHTML =
       `<div class="kpis">${kpi("Total", t.total)}${kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing")}${kpi("Book Value", money(t.bookValue), "after depreciation", "acc")}${kpi("Fully Depreciated", t.fullyDepreciated, "of " + t.total)}${kpi("Annual Expense", money(t.expensedThisYear), "straight-line")}</div>` +
       `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
       healthStrip(d.dataHealth) +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button></div></div>`;
+    // Now populate the table after the DOM elements exist
+    renderTable();
   }
   function kpi(l, v, h, c) {
     return '<div class="kpi ' + (c || "") + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
