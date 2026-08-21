@@ -113,6 +113,15 @@
   .ep-row { display:flex; justify-content:space-between; font-size:.8rem; padding:3px 0; border-bottom:1px dotted #eee; }
   .ep-foot { font-size:.68rem; color:#666; margin-top:10px; border-top:1px solid #ccc; padding-top:6px; }
 
+  .fin-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .fin-grid .item { border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .fin-grid .item .h { color:var(--muted); font-size:.72rem; text-transform:uppercase; }
+  .fin-grid .item .v { font-weight:700; margin-top:4px; font-size:.95rem; }
+  .fin-grid .item .v.warn { color:var(--orange); }
+  .fin-grid .item .v.bad { color:var(--red); }
+  .fin-grid .item .v.good { color:var(--green); }
+  .fin-grid .item .s { color:var(--muted); font-size:.72rem; margin-top:4px; }
+
   /* Print-ready layout */
   @media print {
     .theme-toggle, #signOutBtn, #exportCsv, #prevBtn, #nextBtn, #execBtn { display: none !important; }

@@ -187,8 +187,13 @@ function computeSummary(items) {
   const idleBookValue = idleStock.reduce((s, i) => s + i.bookValue, 0);
   const lostAssets = itemsComputed.filter(i => i.status === "Lost");
   const lostCost = lostAssets.reduce((s, i) => s + i.purchasePrice, 0);
-  const annualDep = itemsComputed.reduce((s, i) =>
-    s + (i.usefulLife > 0 && i.purchasePrice > 0 ? i.purchasePrice / i.usefulLife : 0), 0);
+  const annualDep = itemsComputed.reduce((s, i) => {
+    // Only assets still in service during the next 12 months contribute
+    if (!(i.purchasePrice > 0) || !(i.usefulLife > 0)) return s;
+    const age = i.ageYears === null ? null : i.ageYears;
+    if (age !== null && age >= i.usefulLife) return s; // fully depreciated: no further P&L
+    return s + i.purchasePrice / i.usefulLife;
+  }, 0);
 
   const missingSerial = itemsComputed.filter(i => !i.serial).length;
   const missingTag = itemsComputed.filter(i => !i.tag).length;

@@ -207,11 +207,12 @@ const DEP_COLORS = {
     const distRow = (k, n, tot) =>
       '<div class="ep-row"><span>' + esc(k) + '</span><span><b>' + n + '</b> (' + pct(n, tot || 1) + ')</span></div>';
 
-    const topList = (obj, label) => {
+    const topList = (obj) => {
       const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      const tot = e.reduce((s, x) => s + x[1], 0);
       return e.length
-        ? e.map(([k, v]) => distRow(k, v)).join("")
-        : '<div class="ep-row"><span>' + esc(label) + '</span><span>—</span></div>';
+        ? e.map(([k, v]) => distRow(k, v, tot)).join("")
+        : '<div class="ep-row"><span>—</span><span></span></div>';
     };
 
     host.innerHTML =
