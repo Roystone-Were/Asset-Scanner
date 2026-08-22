@@ -65,6 +65,21 @@ async function stitchUsers() {
   return (profiles || []).map((p) => ({ ...p, roles: byUser[p.id] || [] }));
 }
 
+// Exact-match lookup across all pages - never trusts server-side ?email=
+// filtering, which silently returns unrelated users.
+async function findUserIdByEmail(email) {
+  const want = String(email).trim().toLowerCase();
+  for (let page = 1; page <= 10; page++) {
+    const data = await authAdmin("admin/users?per_page=200&page=" + page);
+    const users = data.users || [];
+    if (!users.length) return null;
+    const hit = users.find((u) => String(u.email || "").toLowerCase() === want);
+    if (hit) return hit;
+    if (users.length < 200) return null;
+  }
+  return null;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "POST only" });
@@ -91,57 +106,51 @@ module.exports = async function handler(req, res) {
       if (!email.includes("@")) throw new Error("Valid email required");
       if (!roles.length) throw new Error("At least one role required");
 
-      // Does the account already exist?
-      let existing = null;
-      const page = await authAdmin("admin/users?email=" + encodeURIComponent(email)).catch(() => null);
-      existing = (page && page.users || [])[0] || null;
-
+      // Invite-first: POST /invite creates the account AND emails the
+      // button-style sign-in link (redirect lands on /login signed-in).
       let emailed = false;
-      if (!existing) {
-        // inviteUserByEmail equivalent: creates the user AND sends the invite
-        // email (default template = a big sign-in button). Redirect lands on
-        // /login where the session is picked up and they are routed by role.
-        await fetch(process.env.SUPABASE_URL + "/auth/v1/invite", {
-          method: "POST",
-          headers: serviceHeaders(),
-          body: JSON.stringify({
-            email,
-            redirect_to: process.env.INVITE_REDIRECT_TO || "https://asset-system-tau.vercel.app/login",
-          }),
-        }).then(async (res) => {
-          if (!res.ok) {
-            const t = await res.text();
-            if (!/already been registered|already exists/i.test(t)) throw new Error("Auth invite " + res.status + ": " + t.slice(0, 200));
-          } else {
-            emailed = true;
-          }
-        });
-        const page2 = await authAdmin("admin/users?email=" + encodeURIComponent(email));
-        existing = (page2.users || [])[0];
-        if (!existing) throw new Error("Invite sent but user not found afterwards");
+      let user = null;
+      const invRes = await fetch(process.env.SUPABASE_URL + "/auth/v1/invite", {
+        method: "POST",
+        headers: serviceHeaders(),
+        body: JSON.stringify({
+          email,
+          redirect_to: process.env.INVITE_REDIRECT_TO || "https://asset-system-tau.vercel.app/login",
+        }),
+      });
+      if (invRes.ok) {
+        emailed = true;
+        user = await invRes.json();
+      } else {
+        const t = await invRes.text();
+        if (/already been registered|already exists/i.test(t)) {
+          user = await findUserIdByEmail(email);
+          if (!user) throw new Error("Account exists but could not be located");
+        } else {
+          throw new Error("Auth invite " + invRes.status + ": " + t.slice(0, 200));
+        }
       }
 
       await sb("profiles", {
         method: "POST",
         headers: { Prefer: "resolution=merge-duplicates" },
-        body: JSON.stringify({ id: existing.id, email, full_name: body.fullName || null, invited_by: admin.email, active: true }),
+        body: JSON.stringify({ id: user.id, email, full_name: body.fullName || null, invited_by: admin.email, active: true }),
       });
-      await sb("user_roles?user_id=eq." + existing.id, { method: "DELETE" });
+      await sb("user_roles?user_id=eq." + user.id, { method: "DELETE" });
       await sb("user_roles", {
         method: "POST",
         headers: { Prefer: "resolution=merge-duplicates" },
-        body: JSON.stringify(roles.map((r) => ({ user_id: existing.id, role: r }))),
+        body: JSON.stringify(roles.map((r) => ({ user_id: user.id, role: r }))),
       });
 
       res.status(200).json({
         ok: true,
-        userId: existing.id,
+        userId: user.id,
         email,
         roles,
-        existedAlready: !!existing.last_sign_in_at || !emailed && !!existing.created_at,
         emailed,
         note: emailed
-          ? "Invite email sent — they tap the button and land signed-in."
+          ? "Invite email sent — they tap the button inside it and land signed-in."
           : "Account already existed (no email sent) — they can sign in at /login anytime.",
       });
       return;
