@@ -39,14 +39,17 @@
 
     <div id="stepEmail">
       <input type="email" id="email" placeholder="you@xanalife.com" autocomplete="email" />
-      <button id="btnSend">Send sign-in code</button>
+      <button id="btnSend">Email me a sign-in button</button>
       <div id="msg" class="msg"></div>
     </div>
 
     <div id="stepCode" style="display:none">
       <p class="sub" id="sentTo" style="margin-bottom:10px"></p>
-      <input type="text" id="code" placeholder="••••••" inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
-      <button id="btnVerify">Verify &amp; continue</button>
+      <div class="msg info show" style="text-align:left;line-height:1.5">
+        📩 <b>Open the email we just sent</b> and tap the sign-in button inside it.<br/>
+        That button logs you in right here — nothing to type.
+      </div>
+      <button class="secondary" id="btnResend">Send again</button>
       <button class="secondary" id="btnBack">Use a different email</button>
       <div id="msgCode" class="msg"></div>
     </div>
@@ -70,29 +73,19 @@ async function send(){
   const b=document.getElementById("btnSend");b.disabled=true;b.textContent="Sending…";
   try{
     await XanaSupabase.sendOtp(email);
-    document.getElementById("sentTo").textContent="Code sent to "+email;
+    document.getElementById("sentTo").textContent="Sent to "+email;
     show(document.getElementById("stepEmail"),false);
     show(document.getElementById("stepCode"),true);
-    document.getElementById("code").focus();
   }catch(e){
     msg("msg",e.message.includes("Signups not allowed")
       ? "No account found for that email — access is invite-only. Contact IT Admin (roystone@xanalife.com)."
       : e.message,true);
-  }finally{b.disabled=false;b.textContent="Send sign-in code";}
+  }finally{b.disabled=false;b.textContent="Email me a sign-in button";}
 }
 
 async function verify(){
-  const email=sessionStorage.getItem("xana_otp_email")||"";
-  const code=(document.getElementById("code").value||"").trim();
-  const b=document.getElementById("btnVerify");b.disabled=true;b.textContent="Checking…";
-  try{
-    await XanaSupabase.verifyOtp(email,code);
-    const l=await XanaSupabase.landingFor();
-    if(l){location.href=l;return;}
-    noAccess();
-  }catch(e){
-    msg("msgCode","Sign-in failed: "+(e.message||e),true);
-  }finally{b.disabled=false;b.textContent="Verify & continue";}
+  // Kept for compatibility; the link flow signs users in directly.
+  noAccess();
 }
 
 function noAccess(){
@@ -105,8 +98,7 @@ function noAccess(){
 
 document.getElementById("btnSend").addEventListener("click",send);
 document.getElementById("email").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
-document.getElementById("btnVerify").addEventListener("click",verify);
-document.getElementById("code").addEventListener("keydown",e=>{if(e.key==="Enter")verify();});
+document.getElementById("btnResend")?.addEventListener("click",send);
 document.getElementById("btnBack").addEventListener("click",()=>{
   sessionStorage.removeItem("xana_otp_email");
   show(document.getElementById("stepCode"),false);
@@ -125,7 +117,7 @@ document.getElementById("btnBack").addEventListener("click",()=>{
   }
   const saved=sessionStorage.getItem("xana_otp_email");
   if(saved){
-    document.getElementById("sentTo").textContent="Code sent to "+saved;
+    document.getElementById("sentTo").textContent="Sent to "+saved;
     show(document.getElementById("stepEmail"),false);
     show(document.getElementById("stepCode"),true);
   }
