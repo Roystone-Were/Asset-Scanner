@@ -4,7 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Admin - Members · Xana</title>
-<script src="/scanner-app/lib/msal-browser.min.js"></script>
+<script src="/scanner-app/lib/supabase.min.js"></script>
+<script src="/js/supabase-client.js"></script>
 <style>
   :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b; --red:#d13438; --green:#22c55e; --ease-out:cubic-bezier(0.22,1,0.36,1); --ease-spring:cubic-bezier(0.34,1.56,0.64,1); --duration-fast:120ms; --duration-base:200ms; --duration-slow:320ms; }
   [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; --red:#d13438; --green:#22c55e; }
@@ -100,65 +101,91 @@
 </script>
 <script>
 "use strict";
-const CLIENT_ID="7caa51af-9f32-42d8-8264-da5b97c2f8eb";
-const AUTHORITY="https://login.microsoftonline.com/refrontiergroup.onmicrosoft.com";
-const LIST_NAME="Scanner Access";
 const ADMIN_EMAIL="roystone@xanalife.com";
-const SCOPES=["https://graph.microsoft.com/Sites.ReadWrite.All"];
 const STORAGE_THEME="xana_theme";
 function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
 applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
-function pickCacheLocation(){try{const k="__xana_cache_test__";localStorage.setItem(k,"1");localStorage.removeItem(k);return "localStorage";}catch(e){return "sessionStorage";}}
-const msalConfig={auth:{clientId:CLIENT_ID,authority:AUTHORITY,redirectUri:location.origin+location.pathname},cache:{cacheLocation:pickCacheLocation()}};
-const msalApp=new msal.PublicClientApplication(msalConfig);
-let account=null, SITE_ID=null, LIST_ID=null;
-async function initAuth(){await msalApp.initialize();try{const r=await msalApp.handleRedirectPromise();if(r&&r.account){account=r.account;return true;}}catch(e){document.getElementById("authState").textContent="🚫 Sign-in error: "+(e.message||e);return false;}
-const all=msalApp.getAllAccounts();if(all.length>0){account=all[0];return true;}
-msalApp.loginRedirect({scopes:SCOPES});return false;}
-async function getToken(){const req={scopes:SCOPES,account};try{const r=await msalApp.acquireTokenSilent(req);return r.accessToken;}catch(e){msalApp.acquireTokenRedirect(req);throw new Error("refreshing session");}
+let account=null;
+// ---------- Auth (Supabase email OTP) ----------
+function renderOtpStep(step,presetEmail,notice){
+  const st=document.getElementById("authState"); if(!st) return;
+  const box='style="display:flex;flex-direction:column;gap:10px;max-width:340px;margin:16px auto;"';
+  const inp='style="padding:12px;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit;font-size:16px;"';
+  if(step==="email"){
+    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
+      '<input id="otpEmail" type="email" autocomplete="email" placeholder="you@xanalife.com" '+inp+' value="'+esc(presetEmail||"")+'" />'+
+      '<button id="otpSend" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Send sign-in code</button></div>';
+    document.getElementById("otpSend").addEventListener("click",sendOtpCode);
+    document.getElementById("otpEmail").addEventListener("keydown",e=>{if(e.key==="Enter")sendOtpCode();});
+  }else{
+    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
+      '<input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" '+inp+' />'+
+      '<button id="otpVerify" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Verify &amp; sign in</button>'+
+      '<button id="otpBack" style="padding:8px;border-radius:10px;border:1px solid var(--border,#ccc);background:transparent;color:inherit;">Use a different email</button></div>';
+    document.getElementById("otpVerify").addEventListener("click",verifyOtpCode);
+    document.getElementById("otpCode").addEventListener("keydown",e=>{if(e.key==="Enter")verifyOtpCode();});
+    document.getElementById("otpBack").addEventListener("click",()=>{sessionStorage.removeItem("xana_otp_email");renderOtpStep("email","","");});
+    document.getElementById("otpCode").focus();
+  }
 }
-async function graphFetch(url,opts,tries){let a=0;for(;;){const r=await fetch(url,opts);if((r.status===429||r.status>=500)&&a<(tries||3)-1){const ra=parseFloat(r.headers.get("Retry-After"));const d=ra>0?ra*1000:500*Math.pow(2,a)+Math.random()*250;await new Promise(x=>setTimeout(x,d));a++;continue;}return r;}}
-async function graphGet(t,url,h){const r=await graphFetch(url,{headers:Object.assign({Authorization:"Bearer "+t},h||{})},3);if(!r.ok)throw new Error("Graph "+r.status+": "+(await r.text()).slice(0,200));return r.json();}
-async function graphPost(t,url,body){const r=await graphFetch(url,{method:"POST",headers:{Authorization:"Bearer "+t,"Content-Type":"application/json"},body:JSON.stringify(body)},3);if(!r.ok)throw new Error("Graph "+r.status+": "+(await r.text()).slice(0,200));return r.json();}
-async function graphDelete(t,url){const r=await graphFetch(url,{method:"DELETE",headers:{Authorization:"Bearer "+t}},3);if(!r.ok&&r.status!==204)throw new Error("Graph "+r.status+": "+(await r.text()).slice(0,200));}
+async function sendOtpCode(){
+  const email=(document.getElementById("otpEmail")||{}).value||"";
+  if(!email.trim()||email.indexOf("@")<1){renderOtpStep("email",email,"Enter a valid email address first.");return;}
+  sessionStorage.setItem("xana_otp_email",email.trim());
+  const b=document.getElementById("otpSend");b.disabled=true;b.textContent="Sending…";
+  try{await XanaSupabase.sendOtp(email.trim());renderOtpStep("code","","📩 6-digit code sent to "+email.trim()+".");}
+  catch(e){renderOtpStep("email",email,"Could not send code: "+(e.message||e));}
+}
+async function verifyOtpCode(){
+  const email=sessionStorage.getItem("xana_otp_email")||"";
+  const code=(document.getElementById("otpCode")||{}).value||"";
+  const b=document.getElementById("otpVerify");b.disabled=true;b.textContent="Checking…";
+  try{
+    await XanaSupabase.verifyOtp(email,code);
+    account={username:email.toLowerCase()};
+    sessionStorage.removeItem("xana_otp_email");
+    await startApp();
+  }catch(e){renderOtpStep("code","","Sign-in failed: "+(e.message||e));}
+}
+async function initAuth(){
+  const session=await XanaSupabase.getSession().catch(()=>null);
+  if(session&&session.user){account={username:String(session.user.email||"").toLowerCase()};return true;}
+  const saved=sessionStorage.getItem("xana_otp_email");
+  renderOtpStep(saved?"code":"email",saved||"");
+  return false;
+}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-async function resolveSite(t){
-  const enc=encodeURIComponent("refrontiergroup.sharepoint.com:/sites/xanalifeTechData");
-  const site=await graphGet(t,"https://graph.microsoft.com/v1.0/sites/"+enc);
-  SITE_ID=site.id;
-  const lists=await graphGet(t,"https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists");
-  const l=lists.value.find(x=>(x.displayName||"").toLowerCase()===LIST_NAME.toLowerCase());
-  if(!l)throw new Error("List '"+LIST_NAME+"' not found - run Add-ScannerAccessList.ps1");
-  LIST_ID=l.id;
-}
 function isAdmin(){return (account.username||"").toLowerCase()===ADMIN_EMAIL.toLowerCase();}
-async function loadList(t){
+async function loadList(){
   const el=document.getElementById("list");
   el.innerHTML='<div class="msg info">Loading…</div>';
-  let url="https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items?expand=fields&$top=200";
-  const items=[];
-  while(url){const d=await graphGet(t,url);for(const it of d.value)items.push(it);url=d["@odata.nextLink"]||null;}
+  const {data,error}=await XanaSupabase.client()
+    .from("allowed_scanners")
+    .select("email,created_at")
+    .order("created_at",{ascending:true});
+  if(error){el.innerHTML='<div class="msg err">'+esc(error.message)+'</div>';return;}
+  const items=data||[];
   if(!items.length){el.innerHTML='<div class="msg info">No members yet.</div>';return;}
   el.innerHTML='<table><thead><tr><th>Email</th><th>Added</th><th></th></tr></thead><tbody>'+
-    items.map(it=>{const f=it.fields||{};const email=f.Email||f.Title||"";const when=f.Created?new Date(f.Created).toLocaleDateString():"";return '<tr><td><b>'+esc(email)+'</b></td><td>'+esc(when)+'</td><td><button class="pill" data-del="'+esc(it.id)+'">Remove</button></td></tr>';}).join("")+
+    items.map(it=>'<tr><td><b>'+esc(it.email)+'</b></td><td>'+esc(it.created_at?new Date(it.created_at).toLocaleDateString():"")+'</td><td><button class="pill" data-del="'+esc(it.email)+'">Remove</button></td></tr>').join("")+
     '</tbody></table>';
 }
-async function boot(){
+async function startApp(){
   const state=document.getElementById("authState");
-  state.textContent="Signing in…";
-  const ok=await initAuth();
-  if(!ok) return;
   state.textContent="✅ Signed in as "+account.username;
   if(!isAdmin()){
     document.getElementById("denied").classList.remove("hidden");
     return;
   }
   document.getElementById("gate").classList.remove("hidden");
-  try{
-    const token=await getToken();
-    await resolveSite(token);
-    await loadList(token);
-  }catch(e){document.getElementById("list").innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
+  await loadList();
+}
+async function boot(){
+  const state=document.getElementById("authState");
+  state.textContent="Signing in…";
+  const ok=await initAuth();
+  if(!ok) return;
+  await startApp();
 }
 document.getElementById("btnAdd").addEventListener("click", async()=>{
   const email=(document.getElementById("email").value||"").trim().toLowerCase();
@@ -166,23 +193,22 @@ document.getElementById("btnAdd").addEventListener("click", async()=>{
   if(!email||email.indexOf("@")===-1){msg.innerHTML='<div class="msg err">Enter a valid email.</div>';return;}
   msg.innerHTML='<div class="msg info">Adding…</div>';
   try{
-    const token=await getToken();
-    if(!SITE_ID) await resolveSite(token);
-    await graphPost(token,"https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items",{fields:{Title:email,Email:email}});
+    const {error}=await XanaSupabase.client().from("allowed_scanners").insert({email:email,added_by:account.username});
+    if(error) throw error;
     msg.innerHTML='<div class="msg ok">Added '+esc(email)+' ✓</div>';
     document.getElementById("email").value="";
-    await loadList(token);
+    await loadList();
   }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
 });
 document.getElementById("list").addEventListener("click", async(e)=>{
   const btn=e.target.closest("[data-del]");
   if(!btn) return;
   if(!confirm("Remove this member?")) return;
-  const id=btn.getAttribute("data-del");
+  const email=btn.getAttribute("data-del");
   try{
-    const token=await getToken();
-    await graphDelete(token,"https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items/"+id);
-    await loadList(token);
+    const {error}=await XanaSupabase.client().from("allowed_scanners").delete().eq("email",email);
+    if(error) throw error;
+    await loadList();
   }catch(err){alert(err.message||err);}
 });
 boot();

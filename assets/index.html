@@ -4,7 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Assets - Detailed · Xana</title>
-<script src="/scanner-app/lib/msal-browser.min.js"></script>
+<script src="/scanner-app/lib/supabase.min.js"></script>
+<script src="/js/supabase-client.js"></script>
 <script src="/scanner-app/logic.js"></script>
 <style>
   :root {
@@ -169,55 +170,75 @@
 
 <script>
 "use strict";
-const CLIENT_ID="7caa51af-9f32-42d8-8264-da5b97c2f8eb";
-const AUTHORITY="https://login.microsoftonline.com/refrontiergroup.onmicrosoft.com";
 const ADMIN_EMAIL="roystone@xanalife.com";
-const SCOPES=["https://graph.microsoft.com/Sites.ReadWrite.All"];
 const STORAGE_THEME="xana_theme";
 function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
 applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
 
-function pickCacheLocation(){try{const k="__xana_cache_test__";localStorage.setItem(k,"1");localStorage.removeItem(k);return "localStorage";}catch(e){return "sessionStorage";}}
-const msalConfig={auth:{clientId:CLIENT_ID,authority:AUTHORITY,redirectUri:location.origin+location.pathname},cache:{cacheLocation:pickCacheLocation()}};
-const msalApp=new msal.PublicClientApplication(msalConfig);
 let account=null, allItems=[], filtered=[], sortKey="tag", sortDir=1, currentPage=0; const PAGE_SIZE=30;
-let SITE_ID=null, LIST_ID=null;
-async function initAuth(){await msalApp.initialize();try{const r=await msalApp.handleRedirectPromise();if(r&&r.account){account=r.account;return true;}}catch(e){document.getElementById("authState").textContent="🚫 "+(e.message||e);return false;}
-const all=msalApp.getAllAccounts();if(all.length>0){account=all[0];return true;}
-msalApp.loginRedirect({scopes:SCOPES});return false;}
-async function getToken(){const req={scopes:SCOPES,account};try{const r=await msalApp.acquireTokenSilent(req);return r.accessToken;}catch(e){msalApp.acquireTokenRedirect(req);throw new Error("refreshing");}}
+// ---------- Auth (Supabase email OTP) ----------
+function authStateEl(){return document.getElementById("authState");}
+function renderOtpStep(step,presetEmail,notice){
+  const st=authStateEl(); if(!st) return;
+  const box='style="display:flex;flex-direction:column;gap:10px;max-width:340px;margin:24px auto;"';
+  const inp='style="padding:12px;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit;font-size:16px;"';
+  if(step==="email"){
+    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
+      '<input id="otpEmail" type="email" autocomplete="email" placeholder="you@xanalife.com" '+inp+' value="'+esc(presetEmail||"")+'" />'+
+      '<button id="otpSend" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Send sign-in code</button></div>';
+    document.getElementById("otpSend").addEventListener("click",sendOtpCode);
+    document.getElementById("otpEmail").addEventListener("keydown",e=>{if(e.key==="Enter")sendOtpCode();});
+  }else{
+    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
+      '<input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" '+inp+' />'+
+      '<button id="otpVerify" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Verify &amp; sign in</button>'+
+      '<button id="otpBack" style="padding:8px;border-radius:10px;border:1px solid var(--border,#ccc);background:transparent;color:inherit;">Use a different email</button></div>';
+    document.getElementById("otpVerify").addEventListener("click",verifyOtpCode);
+    document.getElementById("otpCode").addEventListener("keydown",e=>{if(e.key==="Enter")verifyOtpCode();});
+    document.getElementById("otpBack").addEventListener("click",()=>{sessionStorage.removeItem("xana_otp_email");renderOtpStep("email","","");});
+    document.getElementById("otpCode").focus();
+  }
+}
+async function sendOtpCode(){
+  const email=(document.getElementById("otpEmail")||{}).value||"";
+  if(!email.trim()||email.indexOf("@")<1){renderOtpStep("email",email,"Enter a valid email address first.");return;}
+  sessionStorage.setItem("xana_otp_email",email.trim());
+  const b=document.getElementById("otpSend");b.disabled=true;b.textContent="Sending…";
+  try{await XanaSupabase.sendOtp(email.trim());renderOtpStep("code","","📩 6-digit code sent to "+email.trim()+".");}
+  catch(e){renderOtpStep("email",email,"Could not send code: "+(e.message||e));}
+}
+async function verifyOtpCode(){
+  const email=sessionStorage.getItem("xana_otp_email")||"";
+  const code=(document.getElementById("otpCode")||{}).value||"";
+  const b=document.getElementById("otpVerify");b.disabled=true;b.textContent="Checking…";
+  try{
+    await XanaSupabase.verifyOtp(email,code);
+    account={username:email.toLowerCase()};
+    sessionStorage.removeItem("xana_otp_email");
+    await startApp();
+  }catch(e){renderOtpStep("code","","Sign-in failed: "+(e.message||e));}
+}
+async function initAuth(){
+  const session=await XanaSupabase.getSession().catch(()=>null);
+  if(session&&session.user){account={username:String(session.user.email||"").toLowerCase()};return true;}
+  const saved=sessionStorage.getItem("xana_otp_email");
+  renderOtpStep(saved?"code":"email",saved||"");
+  return false;
+}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("lost"))return "#d13438";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
-async function isAllowlisted(token){
+async function isAllowlisted(){
   const email=(account.username||"").toLowerCase();
   if(email===ADMIN_EMAIL.toLowerCase()) return true;
   try{
-    const site=await fetch("https://graph.microsoft.com/v1.0/sites/refrontiergroup.sharepoint.com:/sites/xanalifeTechData",{headers:{Authorization:"Bearer "+token}}).then(r=>r.json());
-    SITE_ID=site.id;
-    const lists=await fetch("https://graph.microsoft.com/v1.0/sites/"+site.id+"/lists",{headers:{Authorization:"Bearer "+token}}).then(r=>r.json());
-    const al=lists.value.find(l=>(l.displayName||"").toLowerCase()==="scanner access");
-    if(!al) return true;
-    const q=encodeURIComponent("fields/Email eq '"+email.replace(/'/g,"''")+"'");
-    const data=await fetch("https://graph.microsoft.com/v1.0/sites/"+site.id+"/lists/"+al.id+"/items?expand=fields&$filter="+q,{headers:{Authorization:"Bearer "+token,Prefer:"HonorNonIndexedQueriesWarningMayFailRandomly"}}).then(r=>r.json());
-    return (data.value||[]).length>0;
+    const {data,error}=await XanaSupabase.client().from("allowed_scanners").select("email").eq("email",email).limit(1);
+    if(error) throw error;
+    return (data||[]).length>0;
   }catch(e){console.warn(e);return true;}
-}
-async function resolveSite(token){
-  if(SITE_ID&&LIST_ID) return;
-  const site=await fetch("https://graph.microsoft.com/v1.0/sites/refrontiergroup.sharepoint.com:/sites/xanalifeTechData",{headers:{Authorization:"Bearer "+token}}).then(r=>r.json());
-  SITE_ID=site.id;
-  const lists=await fetch("https://graph.microsoft.com/v1.0/sites/"+site.id+"/lists",{headers:{Authorization:"Bearer "+token}}).then(r=>r.json());
-  const l=lists.value.find(x=>(x.displayName||"").toLowerCase()==="xana asset inventory");
-  if(!l) throw new Error("List not found");
-  LIST_ID=l.id;
 }
 function money(n){return "KES "+Math.round(n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");}
 async function load(){
-  const token=await getToken();
-  const res=await fetch("/api/summary",{headers:{Authorization:"Bearer "+token,"x-summary-key":token}});
-  if(!res.ok) throw new Error(await res.text());
-  const d=await res.json();
-  allItems=d.items||[];
+  allItems=await XanaSupabase.listAssetsDetailed();
   const pid=new URLSearchParams(location.search).get("id");
   if(pid){const it=allItems.find(x=>String(x.tag).toLowerCase()===pid.toLowerCase()||String(x.serial).toLowerCase()===pid.toLowerCase()); if(it) showDetail(it);}
   applyFilters();
@@ -322,15 +343,12 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(pDate) fields.PurchaseDate=pDate;
   if(pPrice) fields.PurchasePrice=pPrice;
   try{
-    const token=await getToken();
-    await resolveSite(token);
-    const created=await fetch("https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({fields})}).then(async r=>{if(!r.ok)throw new Error(await r.text());return r.json();});
-    // try image upload as list item attachment if image selected
+    const created=await XanaSupabase.insertAsset(fields);
+    // optional image -> Supabase Storage (non-fatal on failure)
     if(pendingImage){
       try{
-        const base64=pendingImage.split(",")[1];
-        await fetch("https://graph.microsoft.com/v1.0/sites/"+SITE_ID+"/lists/"+LIST_ID+"/items/"+created.id+"/attachments",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({name:pendingImageName||"asset.jpg",contentBytes:base64})});
-      }catch(e){console.warn("image attachment failed (list may not support attachments):",e);}
+        await XanaSupabase.uploadAssetImage(created.id,pendingImage,pendingImageName||"asset.jpg");
+      }catch(e){console.warn("image upload failed:",e);}
     }
     msg.innerHTML='<div class="msg ok">Added as '+(tag||serial)+' ✓</div>';
     pendingImage=null; document.getElementById("imgPreview").style.display="none"; document.getElementById("imgName").textContent="";
@@ -349,14 +367,11 @@ overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.
 const assetTypes = (typeof Xana !== 'undefined' && Xana.ASSET_TYPE_CHOICES) ? Xana.ASSET_TYPE_CHOICES : ["Laptop","CPU","Monitor","Desktop","Printer","Mouse","Keyboard","Tablet","Phone","Server","Tower","Other"];
 const atSel=document.getElementById("addType");
 if(atSel) atSel.innerHTML=assetTypes.map(c=>'<option value="'+c+'">'+c+'</option>').join("");
-async function boot(){
+async function startApp(){
   const state=document.getElementById("authState");
-  const ok=await initAuth();
-  if(!ok) return;
   state.textContent="✅ Signed in as "+account.username;
   try{
-    const token=await getToken();
-    const allowed=await isAllowlisted(token);
+    const allowed=await isAllowlisted();
     if(!allowed){document.getElementById("denied").classList.remove("hidden");state.textContent="🔒 Not allowlisted: "+account.username;return;}
   }catch(e){console.warn(e);}
   document.getElementById("gate").classList.remove("hidden");
@@ -365,6 +380,10 @@ async function boot(){
   document.getElementById("fLocation").addEventListener("change",applyFilters);
   document.getElementById("btnScan").addEventListener("click",()=> location.href="/scan");
   try{await load();}catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
+}
+async function boot(){
+  const ok=await initAuth();
+  if(ok) await startApp();
 }
 boot();
 </script>

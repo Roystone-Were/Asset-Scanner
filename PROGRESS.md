@@ -67,6 +67,18 @@ Apps ──▶ Supabase Postgres (source of truth)
 | DELETE → SP delete | ✓ |
 | LOST-RESPONSE → adopt ghost (#127) | ✓ **no duplicate** |
 
+## PRODUCTION LOOP — LIVE (2026-08-22) ✅
+
+Worker deployed (commit `b7bb243`), env vars set on Vercel (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SYNC_ACCESS_KEY`).
+Real chain verified with zero manual steps:
+
+```
+DB insert → outbox → pg_net → https://asset-system-tau.vercel.app/api/sharepoint-sync → SP #128 created (t+5s)
+DB delete → delete op → SP #128 removed (t+5s)
+```
+
+Allowlist seeded: `allowed_scanners` = roystone@xanalife.com (from SP Scanner Access list).
+
 ## Revert / clean-state commands
 
 ```sql
@@ -81,9 +93,14 @@ SharePoint orphans: find via `$filter=fields/Title eq '<name>'` then `DELETE /it
 
 ## Remaining roadmap
 
-- [ ] Deploy worker: git push → Vercel; add env vars SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SYNC_ACCESS_KEY (values in .env.local)
-- [ ] Verify cron retry fires (outbox pending row drains within ~5 min without manual call)
-- [ ] Phase 5a: `js/supabase-client.js` (publishable key, OTP auth helper)
-- [ ] Phase 5b: scanner-app refactor (OTP sign-in; supabase reads/writes; keep offline queue; allowlist → `allowed_scanners` table; seed admin `roystone@xanalife.com` + current scanners)
-- [ ] Phase 5c: assets app same treatment
-- [ ] Phase 6: WRITE_BACKEND flag cutover, monitor 1 week, remove MSAL remnants, retire/retarget api/summary.js
+- [x] Deploy worker ✅ (commit b7bb243, env vars set)
+- [x] Verify cron retry fires — pg_net instant path proven; cron sweep scheduled */5 as safety net
+- [x] Phase 5a: `js/supabase-client.js` — adapter ({id,fields} shape preserved), OTP helpers, depreciation view model, storage upload
+- [x] Phase 5b: scanner-app refactor — MSAL→email OTP sign-in UI injected into #authState; all Graph data paths → XanaSupabase; offline queue intact; version-history expander retired gracefully; sw shell v3 (vendored lib/supabase.min.js)
+- [x] Phase 5c: assets app — same treatment; /api/summary dependency replaced by client-side enrichAsset(); images → Supabase Storage bucket `asset-images` (migration 0005)
+- [x] Admin app (`/admin`) migrated to `allowed_scanners` table; admin-only write RLS via `is_admin()` (migration 0006)
+- [x] Dashboard: NO CHANGES NEEDED — still MSAL→/api/summary→SharePoint (mirror stays fresh); retire MSAL there later if desired
+- [ ] Commit + push app refactor batch → Vercel deploy
+- [ ] Live smoke test: OTP sign-in, scan lookup, add asset → appears in SP within seconds
+- [ ] Supabase Auth check: confirm Email provider enabled (dashboard → Authentication → Providers) so OTP mails deliver
+- [ ] Phase 6: monitor outbox 1 week · optional: index SupabaseId column · retire old MSAL libs/files

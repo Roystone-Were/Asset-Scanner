@@ -1,6 +1,6 @@
 // Xana Asset Lookup - offline app shell.
 // Cache name is versioned; bump it to force a refresh of the shell.
-const CACHE = "xana-shell-v2";
+const CACHE = "xana-shell-v3";
 const SHELL = [
   "index.html",
   "logic.js",
@@ -8,8 +8,9 @@ const SHELL = [
   "icon-192.png",
   "icon-512.png",
   "xana-logo.png",
-  "lib/msal-browser.min.js",
+  "lib/supabase.min.js",
   "lib/html5-qrcode.min.js",
+  "../js/supabase-client.js",
 ];
 
 self.addEventListener("install", (e) => {

@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Xana Asset Lookup</title>
-    <!-- MSAL.js v2 (auth code + PKCE) - local copy -->
-    <script src="/scanner-app/lib/msal-browser.min.js"></script>
+    <!-- Supabase (auth + database) - local copy for offline support -->
+    <script src="/scanner-app/lib/supabase.min.js"></script>
+    <script src="/js/supabase-client.js"></script>
     <!-- html5-qrcode (camera barcode/QR scanner) - local copy -->
     <script src="/scanner-app/lib/html5-qrcode.min.js"></script>
     <!-- Pure lookup/display logic (unit-tested) -->
@@ -950,244 +951,148 @@
       let peopleOpen = false; // people (offboarding) view active
 
       // ---------- Config ----------
-      const CLIENT_ID = "7caa51af-9f32-42d8-8264-da5b97c2f8eb";
-      const AUTHORITY =
-        "https://login.microsoftonline.com/refrontiergroup.onmicrosoft.com";
+      // Identity and data now live in Supabase (window.XanaSupabase).
+      // SharePoint remains a read-only mirror fed by the sync worker.
       const LIST_NAME = "Xana Asset Inventory";
-      const GRAPH_SCOPES = ["https://graph.microsoft.com/Sites.ReadWrite.All"];
 
-      // ---------- MSAL ----------
-      // In-app browsers / private modes sometimes block localStorage (MSAL's
-      // default cache), which caused sign-in loops. Detect it once, before
-      // MSAL initializes, and fall back to sessionStorage so sign-in still
-      // works there.
-      function pickCacheLocation() {
-        try {
-          const k = "__xana_cache_test__";
-          localStorage.setItem(k, "1");
-          localStorage.removeItem(k);
-          return "localStorage";
-        } catch (e) {
-          console.warn(
-            "localStorage blocked - falling back to sessionStorage for MSAL cache",
-          );
-          return "sessionStorage";
-        }
-      }
+      // ---------- Auth (Supabase email OTP) ----------
       const ADMIN_EMAIL = "roystone@xanalife.com";
       const ALLOWLIST_NAME = "Scanner Access";
 
-      const msalConfig = {
-        auth: {
-          clientId: CLIENT_ID,
-          authority: AUTHORITY,
-          redirectUri: location.origin + location.pathname,
-        },
-        cache: { cacheLocation: pickCacheLocation() },
-      };
-      const msalInstance = new msal.PublicClientApplication(msalConfig);
+      let account = null; // { username: email } once signed in
 
-      let account = null;
+      function authStateEl() {
+        return document.getElementById("authState");
+      }
+
+      function renderOtpStep(step, presetEmail, notice) {
+        const state = authStateEl();
+        if (!state) return;
+        const box =
+          'style="display:flex;flex-direction:column;gap:10px;max-width:340px;margin:24px auto;"';
+        const inputStyle =
+          'style="padding:12px;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit;font-size:16px;"';
+        if (step === "email") {
+          state.innerHTML =
+            '<div ' + box + ">" +
+            (notice ? '<div class="msg info">' + escapeHtml(notice) + "</div>" : "") +
+            '<input id="otpEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@xanalife.com" ' + inputStyle + ' value="' + escapeHtml(presetEmail || "") + '" />' +
+            '<button id="otpSend" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Send sign-in code</button>' +
+            "</div>";
+          document.getElementById("otpSend").addEventListener("click", sendOtpCode);
+          document.getElementById("otpEmail").addEventListener("keydown", function (e) {
+            if (e.key === "Enter") sendOtpCode();
+          });
+        } else {
+          state.innerHTML =
+            '<div ' + box + ">" +
+            (notice ? '<div class="msg info">' + escapeHtml(notice) + "</div>" : "") +
+            '<input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" ' + inputStyle + ' />' +
+            '<button id="otpVerify" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Verify &amp; sign in</button>' +
+            '<button id="otpBack" style="padding:8px;border-radius:10px;border:1px solid var(--border,#ccc);background:transparent;color:inherit;">Use a different email</button>' +
+            "</div>";
+          document.getElementById("otpVerify").addEventListener("click", verifyOtpCode);
+          document.getElementById("otpCode").addEventListener("keydown", function (e) {
+            if (e.key === "Enter") verifyOtpCode();
+          });
+          document.getElementById("otpBack").addEventListener("click", function () {
+            sessionStorage.removeItem("xana_otp_email");
+            renderOtpStep("email", "", "");
+          });
+          document.getElementById("otpCode").focus();
+        }
+      }
+
+      async function sendOtpCode() {
+        const email = (document.getElementById("otpEmail") || {}).value || "";
+        const clean = email.trim();
+        if (!clean || clean.indexOf("@") < 1) {
+          renderOtpStep("email", clean, "Enter a valid email address first.");
+          return;
+        }
+        sessionStorage.setItem("xana_otp_email", clean);
+        const btn = document.getElementById("otpSend");
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        try {
+          await XanaSupabase.sendOtp(clean);
+          renderOtpStep("code", "", "📩 6-digit code sent to " + clean + ". Check your inbox.");
+        } catch (e) {
+          renderOtpStep("email", clean, "Could not send code: " + ((e && e.message) || e));
+        }
+      }
+
+      async function verifyOtpCode() {
+        const email = sessionStorage.getItem("xana_otp_email") || "";
+        const code = (document.getElementById("otpCode") || {}).value || "";
+        const btn = document.getElementById("otpVerify");
+        btn.disabled = true;
+        btn.textContent = "Checking…";
+        try {
+          await XanaSupabase.verifyOtp(email, code);
+          account = { username: email.toLowerCase() };
+          sessionStorage.removeItem("xana_otp_email");
+          authStateEl().textContent = "✅ Signed in as " + account.username;
+          await startApp();
+        } catch (e) {
+          renderOtpStep("code", "", "Sign-in failed: " + ((e && e.message) || e));
+        }
+      }
 
       async function initAuth() {
-        await msalInstance.initialize();
-        const state = document.getElementById("authState");
-
-        // NOTE: do NOT manually clear MSAL's own sessionStorage keys here.
-        // MSAL sets an "interaction.status" flag before redirecting away and
-        // clears it itself once handleRedirectPromise() below successfully
-        // matches the returning response. Deleting it ourselves on every load
-        // was breaking that match on the exact load that mattered, which is
-        // what caused the sign-in loop.
-
-        // Process an authorization response if we just came back from Entra
-        try {
-          const resp = await msalInstance.handleRedirectPromise();
-          if (resp && resp.account) {
-            account = resp.account;
-            sessionStorage.setItem("xana_redirects", "0");
-            state.textContent = "✅ Signed in as " + account.username;
-            return true;
-          }
-        } catch (err) {
-          console.error("MSAL redirect error:", err && err.errorCode, err);
-          state.textContent =
-            "🚫 Sign-in error: " +
-            (err &&
-              (err.errorCodes
-                ? err.errorCodes.join(",")
-                : err.errorMessage || err.message || err));
-          return false; // stop and show it - do NOT loop
-        }
-
-        const all = msalInstance.getAllAccounts();
-        if (all.length > 0) {
-          account = all[0];
-          sessionStorage.setItem("xana_redirects", "0");
-          state.textContent = "✅ Signed in as " + account.username;
+        const session = await XanaSupabase.getSession().catch(function () { return null; });
+        if (session && session.user) {
+          account = { username: String(session.user.email || "").toLowerCase() };
+          authStateEl().textContent = "✅ Signed in as " + account.username;
           return true;
         }
-
-        // No session yet - redirect to Microsoft, but cap attempts to prevent an endless loop
-        let n =
-          parseInt(sessionStorage.getItem("xana_redirects") || "0", 10) + 1;
-        sessionStorage.setItem("xana_redirects", String(n));
-        if (n > 2) {
-          state.textContent =
-            "⚠️ Sign-in looped " +
-            n +
-            " times without completing. Try clearing site data (Application tab > Clear site data) and reloading fresh.";
-          return false;
-        }
-        state.textContent = "Taking you to sign in… (redirect #" + n + ")";
-        msalInstance.loginRedirect({ scopes: GRAPH_SCOPES });
+        const saved = sessionStorage.getItem("xana_otp_email");
+        renderOtpStep(saved ? "code" : "email", saved || "");
         return false;
       }
 
-      async function getToken() {
-        const request = { scopes: GRAPH_SCOPES, account: account };
-        try {
-          const res = await msalInstance.acquireTokenSilent(request);
-          return res.accessToken;
-        } catch (e) {
-          console.error("silent token failed, doing redirect:", e);
-          msalInstance.acquireTokenRedirect(request);
-          throw new Error("refreshing session…");
-        }
-      }
+      // ---------- Data access (Supabase via XanaSupabase adapter) ----------
+      // Items keep the { id, fields } shape the UI was built around, where
+      // id is the stable item_id and fields use SharePoint display names.
 
-      // ---------- Graph ----------
-      // Graph throttles with 429 and throws transient 5xx; retry those with
-      // exponential backoff + jitter (or Retry-After when provided) so a
-      // throttled lookup succeeds instead of failing. Never retries 4xx
-      // (permission errors must surface immediately).
-      async function graphFetch(url, options, tries) {
-        let attempt = 0;
-        for (;;) {
-          const res = await fetch(url, options);
-          if (
-            (res.status === 429 || res.status >= 500) &&
-            attempt < (tries || 3) - 1
-          ) {
-            const retryAfter = parseFloat(res.headers.get("Retry-After"));
-            const delay =
-              retryAfter > 0
-                ? retryAfter * 1000
-                : 500 * Math.pow(2, attempt) + Math.random() * 250;
-            await new Promise((r) => setTimeout(r, delay));
-            attempt++;
-            continue;
+      let dataLoadedAt = 0;
+      const DATA_TTL = 5 * 60 * 1000;
+
+      async function ensureDataLoaded(force) {
+        const fresh = !force && dataLoadedAt && Date.now() - dataLoadedAt < DATA_TTL;
+        if (fresh && allItems.length) return allItems;
+        if (!navigator.onLine) {
+          const cached = loadCache();
+          if (cached && cached.items.length) {
+            allItems = cached.items;
+            return allItems;
           }
-          return res;
+          throw new Error("You are offline and there is no saved data yet.");
         }
-      }
-
-      async function graphPatch(token, url, body) {
-        const res = await graphFetch(
-          url,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: "Bearer " + token,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          },
-          3,
-        );
-        if (!res.ok)
-          throw new Error(
-            "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
-          );
-        return res.json();
-      }
-
-      async function graphGet(token, url, extraHeaders) {
-        const res = await graphFetch(
-          url,
-          {
-            headers: Object.assign(
-              { Authorization: "Bearer " + token },
-              extraHeaders || {},
-            ),
-          },
-          3,
-        );
-        if (!res.ok)
-          throw new Error(
-            "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
-          );
-        return res.json();
-      }
-
-      let SITE_ID = null;
-      let LIST_ID = null;
-      let ALLOWLIST_ID = null;
-      const SITE_CACHE_KEY = "xana_site_ids";
-
-      async function resolveSite(token) {
-        // Site/list ids are stable - reuse them across loads to skip two
-        // Graph calls on every visit.
-        try {
-          const c = JSON.parse(localStorage.getItem(SITE_CACHE_KEY) || "");
-          if (c && c.site && c.list) {
-            SITE_ID = c.site;
-            LIST_ID = c.list;
-            return;
-          }
-        } catch (e) {
-          /* cache corrupt - ignore */
+        const items = await XanaSupabase.listAssets();
+        if (items && items.length) {
+          allItems = items;
+          mergeCache(items);
+          dataLoadedAt = Date.now();
         }
-        const encoded = encodeURIComponent(
-          "refrontiergroup.sharepoint.com:/sites/xanalifeTechData",
-        );
-        const site = await graphGet(
-          token,
-          "https://graph.microsoft.com/v1.0/sites/" + encoded,
-        );
-        SITE_ID = site.id;
-        const lists = await graphGet(
-          token,
-          "https://graph.microsoft.com/v1.0/sites/" + SITE_ID + "/lists",
-        );
-        const list = lists.value.find(
-          (l) =>
-            (l.displayName || "").toLowerCase() === LIST_NAME.toLowerCase(),
-        );
-        if (!list) throw new Error("List '" + LIST_NAME + "' not found");
-        LIST_ID = list.id;
-        try {
-          localStorage.setItem(
-            SITE_CACHE_KEY,
-            JSON.stringify({ site: SITE_ID, list: LIST_ID }),
-          );
-        } catch (e) {
-          /* storage full/blocked - ignore */
-        }
-        // Resolve allowlist id once per session (best-effort, not fatal if missing)
-        try {
-          const al = lists.value.find((l) => (l.displayName || "").toLowerCase() === ALLOWLIST_NAME.toLowerCase());
-          if (al) ALLOWLIST_ID = al.id;
-        } catch (e) { /* ignore */ }
+        return allItems;
       }
 
-      async function isAllowlisted(token, email) {
+      async function isAllowlisted(email) {
         const want = String(email || "").trim().toLowerCase();
         if (!want) return false;
-        // Admin always allowed
         if (want === ADMIN_EMAIL.toLowerCase()) return true;
-        if (!ALLOWLIST_ID) {
-          // Allowlist list not yet created - fail open for first setup, but log
-          console.warn("Scanner Access list not found - allowlisting open");
-          return true;
-        }
         try {
-          const q = encodeURIComponent("fields/Email eq '" + want.replace(/'/g, "''") + "'");
-          const data = await graphGet(token, "https://graph.microsoft.com/v1.0/sites/" + SITE_ID + "/lists/" + ALLOWLIST_ID + "/items?expand=fields&$filter=" + q, { Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly" });
-          return (data.value || []).length > 0;
+          const { data, error } = await XanaSupabase.client()
+            .from("allowed_scanners")
+            .select("email")
+            .eq("email", want)
+            .limit(1);
+          if (error) throw error;
+          return (data || []).length > 0;
         } catch (e) {
           console.warn("allowlist check failed:", e);
-          // Fail open if check errors (list not indexed yet) - don't block admin setup
+          // Server-side RLS still enforces writes; this gate is UX only.
           return true;
         }
       }
@@ -1209,115 +1114,47 @@
           escapeHtml(code) +
           '"…</div>';
         try {
-          const token = await getToken();
-          if (!SITE_ID) await resolveSite(token);
-          const base =
-            "https://graph.microsoft.com/v1.0/sites/" +
-            SITE_ID +
-            "/lists/" +
-            LIST_ID +
-            "/items?expand=fields";
+          const items = await ensureDataLoaded();
           const clean = (code || "").trim().toLowerCase();
           let item = null;
           let itemId = null;
           let matchedField = "";
 
-          // Fast path: let SharePoint filter server-side so the lookup cost
-          // stays constant as the list grows. Custom columns must be indexed
-          // for this to work (see Index-LookupFields.ps1); an unindexed or
-          // missing field errors out and we just try the next candidate.
           const raw = (code || "").trim();
 
-          // Batch asset-number path ("39,98,23"): fetch each item by id and
-          // show them as one tappable list. Runs before the single paths.
+          // Batch asset-number path ("39,98,23"): show each id as one
+          // tappable list. Runs before the single paths.
           const idList = parseIdListQuery(raw);
           if (idList) {
-            await batchLookup(token, idList);
+            await batchLookup(idList, items);
             return "batch";
           }
 
-          // Direct asset-number path ("#98"): fetch the item by its id, so a
-          // row with no tag and no serial is still findable. Needs no index.
+          // Direct asset-number path ("#98"): match by id so a row with no
+          // tag and no serial is still findable.
           const idq = parseIdQuery(raw);
-          if (idq) {
-            try {
-              const it = await graphGet(
-                token,
-                "https://graph.microsoft.com/v1.0/sites/" +
-                  SITE_ID +
-                  "/lists/" +
-                  LIST_ID +
-                  "/items/" +
-                  idq +
-                  "?expand=fields",
-              );
-              if (it && it.fields) {
+          const candidates = [];
+          for (const it of items) {
+            if (idq) {
+              if (String(it.id) === idq) {
                 item = it.fields;
                 itemId = it.id;
                 matchedField = "Id";
+                break;
               }
-            } catch (e2) {
-              /* no such item - fall through to the miss screen */
+              continue;
+            }
+            candidates.push.apply(candidates, collectCandidates(it.fields));
+            const key = matchFields(it.fields, clean);
+            if (key) {
+              item = it.fields;
+              itemId = it.id;
+              matchedField = key;
+              break;
             }
           }
 
-          for (const fname of ["Title", "SerialNumber", "AssetTag"]) {
-            if (item) break;
-            try {
-              const q = encodeURIComponent(
-                "fields/" + fname + " eq '" + raw.replace(/'/g, "''") + "'",
-              );
-              // Lookup columns (SerialNumber / Title) are indexed
-              // via Index-LookupFields.ps1. This header is only a safety net
-              // for any unindexed column - harmless when the query is indexed.
-              const data = await graphGet(token, base + "&$filter=" + q, {
-                Prefer:
-                  "HonorNonIndexedQueriesWarningMayFailRandomly",
-              });
-              for (const it of data.value) {
-                const key = matchFields(it.fields, clean);
-                if (key) {
-                  item = it.fields;
-                  itemId = it.id;
-                  matchedField = key;
-                  break;
-                }
-              }
-              if (item) break;
-            } catch (e) {
-              // Field not present or not indexed - try the next one.
-            }
-          }
-
-          // Fallback: fetch everything with paging (no $top ceiling) and
-          // match client-side, same as before. Also collect candidate values
-          // (for the fuzzy "did you mean") and the full item list (which
-          // also seeds the offline cache) when nothing matches.
-          const candidates = [];
-          allItems = [];
-          if (!item) {
-            let url = base + "&$top=200";
-            while (url) {
-              const data = await graphGet(token, url);
-              for (const it of data.value) {
-                allItems.push({ id: it.id, fields: it.fields });
-                candidates.push.apply(candidates, collectCandidates(it.fields));
-                const key = matchFields(it.fields, clean);
-                if (key) {
-                  item = it.fields;
-                  itemId = it.id;
-                  matchedField = key;
-                  break;
-                }
-              }
-              if (item) break;
-              url = data["@odata.nextLink"] || null;
-            }
-          }
-          // Write-through the offline data cache: the full list when the
-          // fallback fetch ran to completion, or the matched item otherwise.
-          if (!item && allItems.length) mergeCache(allItems);
-          if (item) mergeCache([{ id: itemId, fields: item }]);
+          mergeCache([{ id: itemId, fields: item }].filter(Boolean));
           if (!item) {
             lastItem = null;
             renderMiss(code, candidates, {});
@@ -1331,8 +1168,8 @@
           renderHit(code, itemId, item, matchedField, {});
           return "hit";
         } catch (e) {
-          // Offline (or the session is being refreshed): serve from the
-          // local data cache so scans keep working in dead-zone storerooms.
+          // Offline (or a network hiccup): serve from the local data cache so
+          // scans keep working in dead-zone storerooms.
           if (isOfflineish(e)) return offlineLookup(code);
           console.error(e);
           result.innerHTML =
@@ -1344,36 +1181,23 @@
       }
 
       // ---------- Batch asset-number lookup ("39,98,23") ----------
-      // Fetches each id directly and renders one tappable list; ids that
-      // don't exist are listed at the bottom so nothing disappears silently.
-      async function batchLookup(token, ids) {
+      // Resolves ids from the loaded data set and renders one tappable list;
+      // ids that don't exist are listed at the bottom so nothing disappears
+      // silently.
+      async function batchLookup(ids, items) {
         const result = document.getElementById("result");
         result.innerHTML =
           '<div class="msg info">Looking up ' +
           escapeHtml(String(ids.length)) +
           " assets…</div>";
+        const byId = new Map((items || []).map((it) => [String(it.id), it]));
         const found = [];
         const missing = [];
-        await Promise.all(
-          ids.map(async (id) => {
-            try {
-              const it = await graphGet(
-                token,
-                "https://graph.microsoft.com/v1.0/sites/" +
-                  SITE_ID +
-                  "/lists/" +
-                  LIST_ID +
-                  "/items/" +
-                  id +
-                  "?expand=fields",
-              );
-              if (it && it.fields) found.push({ id: it.id, fields: it.fields });
-              else missing.push(id);
-            } catch (e) {
-              missing.push(id);
-            }
-          }),
-        );
+        for (const id of ids) {
+          const it = byId.get(String(id));
+          if (it) found.push(it);
+          else missing.push(id);
+        }
         renderBatchList(found, missing);
       }
 
@@ -1591,39 +1415,11 @@
       }
 
       // ---------- Add asset from the field ----------
-      // The mid-walk counterpart to adding rows in SharePoint: a minimal
-      // form for a device that isn't in the list at all. POSTs a new item,
-      // or queues one (id "new-*") when offline - the queue flush knows to
-      // POST those instead of PATCHing an item id.
-      function itemsUrl() {
-        return (
-          "https://graph.microsoft.com/v1.0/sites/" +
-          SITE_ID +
-          "/lists/" +
-          LIST_ID +
-          "/items"
-        );
-      }
-
-      async function graphPost(token, url, body) {
-        const res = await graphFetch(
-          url,
-          {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer " + token,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          },
-          3,
-        );
-        if (!res.ok)
-          throw new Error(
-            "Graph " + res.status + ": " + (await res.text()).slice(0, 200),
-          );
-        return res.json();
-      }
+      // The mid-walk counterpart to adding rows in the assets app: a minimal
+      // form for a device that isn't in the list at all. Inserts into
+      // Supabase (the outbox trigger mirrors it to SharePoint), or queues
+      // one (id "new-*") when offline - the queue flush knows to insert
+      // those instead of updating an item id.
 
       function renderAddPanel(code) {
         // Most vendor barcodes ARE the serial - prefill it with the scan.
@@ -1693,10 +1489,9 @@
           return { queued: true };
         }
         try {
-          const token = await getToken();
-          if (!SITE_ID) await resolveSite(token);
-          const created = await graphPost(token, itemsUrl(), { fields: fields });
+          const created = await XanaSupabase.insertAsset(fields);
           mergeCache([{ id: created.id, fields: fields }]);
+          dataLoadedAt = 0;
           return { ok: true, id: created.id };
         } catch (e) {
           if (isOfflineish(e)) {
@@ -1888,9 +1683,9 @@
           " waiting to sync…";
       }
 
-      // Every item write goes through here: PATCH directly when online,
-      // queue + optimistic cache update when offline. 4xx errors are thrown
-      // to the caller (they'd fail queued too - surface them now).
+      // Every item write goes through here: write directly when online,
+      // queue + optimistic cache update when offline. 4xx-style errors are
+      // thrown to the caller (they'd fail queued too - surface them now).
       async function writeFields(id, patch) {
         mergeCache([{ id: id, fields: patch }]);
         if (!navigator.onLine) {
@@ -1898,9 +1693,7 @@
           return { queued: true };
         }
         try {
-          const token = await getToken();
-          if (!SITE_ID) await resolveSite(token);
-          await graphPatch(token, fieldsUrl(id), patch);
+          await XanaSupabase.updateAsset(id, patch);
           return { ok: true };
         } catch (e) {
           if (isOfflineish(e)) {
@@ -1918,27 +1711,27 @@
         if (!q.length || !navigator.onLine) return;
         flushing = true;
         try {
-          const token = await getToken();
-          if (!SITE_ID) await resolveSite(token);
         let i = 0;
         let synced = 0;
         for (; i < q.length; i++) {
           try {
             if (String(q[i].id).indexOf("new-") === 0) {
-              // Queued "add asset" entry - create instead of patch.
-              await graphPost(token, itemsUrl(), { fields: q[i].patch });
+              // Queued "add asset" entry - insert instead of update.
+              const created = await XanaSupabase.insertAsset(q[i].patch);
+              mergeCache([{ id: created.id, fields: q[i].patch }]);
             } else {
-              await graphPatch(token, fieldsUrl(q[i].id), q[i].patch);
+              await XanaSupabase.updateAsset(q[i].id, q[i].patch);
             }
             synced++;
           } catch (err) {
-              if (String((err && err.message) || "").indexOf("Graph 4") === 0) {
-                // e.g. 403 for a read-only user or 400 for a bad choice -
-                // retrying will never help. Drop it and keep going.
-                console.warn("dropping queued write that cannot succeed:", q[i]);
+              const msg = String((err && err.message) || "");
+              if (msg.indexOf("Supabase 4") === 0 || /row-level security|duplicate key/i.test(msg)) {
+                // e.g. 403-equivalent (RLS) for a read-only user or a bad
+                // value - retrying will never help. Drop it and keep going.
+                console.warn("dropping queued write that cannot succeed:", q[i], msg);
                 continue;
               }
-              break; // offline again / throttled - keep the rest for later
+              break; // offline again - keep the rest for later
             }
           }
           setQueue(q.slice(i));
@@ -1967,6 +1760,9 @@
         if (Array.isArray(location) && location.length) locationChoices = location;
       }
 
+      // Choices now come from the built-in constants (and whatever the user's
+      // device cached earlier). The old live refresh from SharePoint choice
+      // columns is retired along with the Graph data layer.
       function loadCachedChoices() {
         try {
           const c = JSON.parse(localStorage.getItem(CHOICES_CACHE_KEY) || "null");
@@ -1978,57 +1774,23 @@
 
       async function refreshChoices() {
         try {
-          const token = await getToken();
-          if (!SITE_ID) await resolveSite(token);
-          const cols = await graphGet(
-            token,
-            "https://graph.microsoft.com/v1.0/sites/" +
-              SITE_ID +
-              "/lists/" +
-              LIST_ID +
-              "/columns",
+          localStorage.setItem(
+            CHOICES_CACHE_KEY,
+            JSON.stringify({
+              status: statusChoices,
+              location: locationChoices,
+              t: Date.now(),
+            }),
           );
-          const found = {};
-          for (const c of cols.value || []) {
-            if (!Array.isArray(c.choices) || !c.choices.length) continue;
-            const n = (c.displayName || "").toLowerCase();
-            if (n === "status") found.status = c.choices.slice();
-            if (n === "location") found.location = c.choices.slice();
-          }
-          applyChoices(found.status, found.location);
-          try {
-            localStorage.setItem(
-              CHOICES_CACHE_KEY,
-              JSON.stringify({
-                status: statusChoices,
-                location: locationChoices,
-                t: Date.now(),
-              }),
-            );
-          } catch (e) {
-            /* storage full/blocked - ignore */
-          }
         } catch (e) {
-          console.warn("choice refresh failed - using built-ins/cache:", e);
+          /* storage full/blocked - ignore */
         }
       }
 
       // ---------- Inline field editing (Status / Location) ----------
-      // Both are SharePoint Choice columns; only the choices the column
-      // actually allows are offered (Choice columns reject other values).
-      // One PATCH per save; failures surface inline (a read-only staff
-      // member simply can't save).
-      function fieldsUrl(id) {
-        return (
-          "https://graph.microsoft.com/v1.0/sites/" +
-          SITE_ID +
-          "/lists/" +
-          LIST_ID +
-          "/items/" +
-          id +
-          "/fields"
-        );
-      }
+      // Both map to the Supabase status/location columns; only values the
+      // app knows are offered. One update per save; failures surface inline
+      // (a read-only staff member simply can't save - RLS rejects it).
 
       function renderValueCell(field, value) {
         const id = field === "Status" ? "statusVal" : "locVal";
@@ -2170,10 +1932,9 @@
           ).join("");
       }
 
-      // ---------- Item history (SharePoint version history via Graph) ----------
-      // Every scan and edit creates a list-item version. The history expander
-      // fetches the last 30 versions and shows who changed what, when -
-      // verification-only versions render as one compact "verified scan" line.
+      // ---------- Item history ----------
+      // SharePoint kept per-edit list versions via Graph; the Supabase mirror
+      // does not carry version history, so the expander now explains that.
       async function toggleHistory() {
         const panel = document.getElementById("historyPanel");
         if (!panel) return;
@@ -2182,85 +1943,8 @@
           return;
         }
         panel.classList.remove("hidden");
-        panel.innerHTML = '<div class="msg info">Loading history…</div>';
-        try {
-          if (!lastItem || !lastItem.id) throw new Error("No active asset");
-          const token = await getToken();
-          if (!SITE_ID) await resolveSite(token);
-          const data = await graphGet(
-            token,
-            "https://graph.microsoft.com/v1.0/sites/" +
-              SITE_ID +
-              "/lists/" +
-              LIST_ID +
-              "/items/" +
-              lastItem.id +
-              "/versions?$top=30",
-          );
-          panel.innerHTML = renderHistory(data.value);
-        } catch (e) {
-          panel.innerHTML =
-            '<div class="msg err">History unavailable: ' +
-            escapeHtml((e && e.message) || e) +
-            "</div>";
-        }
-      }
-
-      function renderHistory(versions) {
-        if (!versions || !versions.length)
-          return '<div class="msg info">No history yet.</div>';
-        const rows = [];
-        for (let i = 0; i < versions.length; i++) {
-          const v = versions[i];
-          const who =
-            (v.lastModifiedBy &&
-              v.lastModifiedBy.user &&
-              (v.lastModifiedBy.user.displayName ||
-                v.lastModifiedBy.user.userPrincipalName)) ||
-            "N/A";
-          const when = v.lastModifiedDateTime
-            ? new Date(v.lastModifiedDateTime).toLocaleString()
-            : "";
-          let what = "";
-          if (i === versions.length - 1 || !versions[i + 1].fields) {
-            what = "Created / oldest available version";
-          } else {
-            const d = diffFields(versions[i + 1].fields, v.fields);
-            if (d.length === 0) {
-              what = "Edited (no tracked field changed)";
-            } else if (
-              d.every(
-                (x) => x.key === "lastverified" || x.key === "lastverifiedby",
-              )
-            ) {
-              what = "✓ Verification scan";
-            } else {
-              what = d
-                .filter(
-                  (x) => x.key !== "lastverified" && x.key !== "lastverifiedby",
-                )
-                .map(
-                  (x) =>
-                    escapeHtml(x.label) +
-                    ": " +
-                    escapeHtml(g(x.from)) +
-                    " → " +
-                    escapeHtml(g(x.to)),
-                )
-                .join("<br/>");
-            }
-          }
-          rows.push(
-            '<div class="hrow"><span class="hwhen">' +
-              escapeHtml(when) +
-              '</span><span class="hwho">' +
-              escapeHtml(who) +
-              '</span><span class="hwhat">' +
-              what +
-              "</span></div>",
-          );
-        }
-        return '<div class="hlist">' + rows.join("") + "</div>";
+        panel.innerHTML =
+          '<div class="msg info">Per-edit history moved with the data migration. Last verified info is still shown on the asset card.</div>';
       }
 
       // ---------- People (offboarding) view ----------
@@ -2275,15 +1959,7 @@
         peopleItems = cache ? cache.items : [];
         if (!navigator.onLine) return;
         try {
-          const token = await getToken();
-          if (!SITE_ID) await resolveSite(token);
-          let url = itemsUrl() + "?expand=fields&$top=200";
-          const items = [];
-          while (url) {
-            const data = await graphGet(token, url);
-            for (const it of data.value) items.push({ id: it.id, fields: it.fields });
-            url = data["@odata.nextLink"] || null;
-          }
+          const items = await XanaSupabase.listAssets();
           if (items.length) {
             peopleItems = items;
             mergeCache(items);
@@ -2798,6 +2474,27 @@
         if (meta) meta.content = cur === "dark" ? "#121212" : "#f8fafc";
       });
 
+      // Reveal the app after sign-in: allowlist gate (one role: Allowed =
+      // scan + add), then boot the UI pieces.
+      async function startApp() {
+        try {
+          const allowed = await isAllowlisted(account.username);
+          if (!allowed) { showAccessRequired(account.username); return false; }
+        } catch (e) {
+          console.warn("allowlist gate error (fail open):", e);
+        }
+        document.getElementById("app").classList.remove("hidden");
+        renderHistory();
+        renderSyncBadge();
+        flushQueue();
+        loadCachedChoices();
+        refreshChoices();
+        ensureDataLoaded().catch(function (e) {
+          console.warn("initial data load failed:", e);
+        });
+        return true;
+      }
+
       (async function boot() {
         if ("serviceWorker" in navigator) {
           navigator.serviceWorker.register("sw.js").catch((e) => {
@@ -2810,23 +2507,7 @@
             el.textContent = "⚠️ Script error: " + (e.message || e.error);
         });
         const ok = await initAuth();
-        if (ok) {
-          // Allowlist gate - one role Allowed (scan + add)
-          try {
-            const token = await getToken();
-            if (!SITE_ID) await resolveSite(token);
-            const allowed = await isAllowlisted(token, account.username);
-            if (!allowed) { showAccessRequired(account.username); return; }
-          } catch (e) {
-            console.warn("allowlist gate error (fail open):", e);
-          }
-          document.getElementById("app").classList.remove("hidden");
-          renderHistory();
-          renderSyncBadge();
-          flushQueue();
-          loadCachedChoices();
-          refreshChoices();
-        }
+        if (ok) await startApp();
         window.addEventListener("online", flushQueue);
         // Re-check every minute so chips expire even with the page left open.
         setInterval(renderHistory, 60 * 1000);
