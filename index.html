@@ -5,9 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Xana Asset System</title>
 <style>
-  :root { --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b; }
+  :root {
+    --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --duration-fast: 120ms; --duration-base: 200ms; --duration-slow: 320ms;
+  }
   [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; }
-  *{box-sizing:border-box;margin:0;padding:0}
+  *{box-sizing:border-box;margin:0;padding:0;scrollbar-width:none;-ms-overflow-style:none}
+  *::-webkit-scrollbar{display:none}
   body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
   .wrap{max-width:560px;width:100%;text-align:center}
   .logo{height:64px;margin:0 auto 16px;display:block}
@@ -15,9 +21,10 @@
   p.sub{color:var(--muted);font-size:.9rem;margin-bottom:28px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:520px){.grid{grid-template-columns:1fr}}
-  a.card{display:block;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;text-decoration:none;color:var(--text);transition:transform .15s,border-color .15s}
-  a.card:hover{transform:translateY(-3px);border-color:var(--accent)}
-  a.card.dashboard:hover{border-color:var(--accent2)}
+  a.card{display:block;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;text-decoration:none;color:var(--text);transition:transform var(--duration-base) var(--ease-out),border-color var(--duration-fast) var(--ease-out),box-shadow var(--duration-base) var(--ease-out)}
+  a.card:hover{transform:translateY(-3px);border-color:var(--accent);box-shadow:0 12px 28px -12px rgba(22,163,74,.18)}
+  a.card:active{transform:translateY(-1px) scale(.99)}
+  a.card.dashboard:hover{border-color:var(--accent2);box-shadow:0 12px 28px -12px rgba(59,130,246,.18)}
   .icon{font-size:2rem;margin-bottom:10px}
   .card h2{font-size:1.05rem;margin-bottom:6px}
   .card p{color:var(--muted);font-size:.82rem;line-height:1.4}
@@ -25,6 +32,11 @@
   .pill.scan{background:var(--accent)}
   .pill.dash{background:var(--accent2)}
   footer{margin-top:24px;color:var(--muted);font-size:.7rem}
+  .wrap > * { animation: rise var(--duration-base) var(--ease-out); }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .grid{animation-delay:60ms}
+  footer{animation-delay:100ms}
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>

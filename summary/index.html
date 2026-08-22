@@ -10,6 +10,8 @@
     --text:#0f172a; --muted:#64748b; --accent:#3b82f6; --accent2:#38bdf8;
     --green:#22c55e; --orange:#f59e0b; --red:#ef4444; --grey:#64748b; --purple:#a855f7;
     --book:#0d9488; --radius:14px;
+    --ease-out:cubic-bezier(0.22,1,0.36,1); --ease-spring:cubic-bezier(0.34,1.56,0.64,1);
+    --duration-fast:120ms; --duration-base:200ms; --duration-slow:320ms;
   }
   [data-theme="dark"] {
     --bg:#121212; --panel:#1e1e1e; --panel2:#242424; --line:#2b2b2b;
@@ -33,7 +35,8 @@
   .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
   .overlay.open{display:block}
   @media(max-width:900px){.navbar_menu{display:none}.navbar_menu.open{display:flex;position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--card);border-right:1px solid var(--border);flex-direction:column;padding:18px 12px;z-index:40;overflow:auto;align-items:flex-start}.menu-button{display:inline-flex}}
-  * { box-sizing:border-box; margin:0; padding:0; }
+  * { box-sizing:border-box; margin:0; padding:0; scrollbar-width:none; -ms-overflow-style:none; }
+  *::-webkit-scrollbar { display: none; }
   body { font-family:'Segoe UI', system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
   .main{padding:22px;max-width:1180px;margin:0 auto}
   .wrap { max-width:1180px; margin:0 auto; }
@@ -81,6 +84,21 @@
   .bar-fill { height:100%; border-radius:5px; width:0; transition: width .9s cubic-bezier(.2,.8,.2,1); }
   @media (prefers-reduced-motion: reduce) { .bar-fill { transition: none; } }
   .health { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin:14px 0; }
+  /* Motion tokens and animations */
+  .kpi, .panel, .health .item, .fin-grid .item { animation: rise var(--duration-base) var(--ease-out); }
+  .grid { animation: rise var(--duration-base) var(--ease-out); animation-delay: 40ms; }
+  .fin-grid { animation: rise var(--duration-base) var(--ease-out); animation-delay: 60ms; }
+  .kpis .kpi:nth-child(1) { animation-delay: 0ms; }
+  .kpis .kpi:nth-child(2) { animation-delay: 40ms; }
+  .kpis .kpi:nth-child(3) { animation-delay: 80ms; }
+  .kpis .kpi:nth-child(4) { animation-delay: 120ms; }
+  .kpis .kpi:nth-child(5) { animation-delay: 160ms; }
+  .kpis .kpi:nth-child(6) { animation-delay: 200ms; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .kpi, .panel, button, .pill, .bar-fill, .donut-wrap { transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-fast) var(--ease-out), width var(--duration-slow) var(--ease-spring); }
+  .kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -8px rgba(0,0,0,.15); }
+  button:active { transform: scale(0.97); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .bar-fill { transition: none !important; } }
   .health .item { border:1px solid var(--line); border-radius:10px; padding:12px; font-size:.85rem; }
   .health .item .h { color:var(--muted); font-size:.72rem; text-transform:uppercase; }
   .health .item .v { font-weight:700; margin-top:4px; }
