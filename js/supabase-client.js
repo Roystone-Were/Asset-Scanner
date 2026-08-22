@@ -52,28 +52,27 @@
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: true,
       },
     });
   }
 
-  // If a user clicks the emailed link anyway (instead of typing the code),
-  // Supabase lands them on the site with #error=... or #access_token=...
-  // Strip it so the hash never confuses the router, and surface a hint.
+  // If a user clicks an emailed link and auth FAILS (expired/used token),
+  // Supabase lands back with #error=... - surface a friendly hint and clean
+  // the URL. Successful-link fragments (#access_token=...) are left alone
+  // for supabase-js to consume into a session.
   function sanitizeAuthHash() {
     try {
       if (!location.hash || location.hash.indexOf("#") !== 0) return;
       const params = new URLSearchParams(location.hash.slice(1));
       const err = params.get("error_description") || params.get("error");
-      if (!err && !params.get("access_token")) return;
+      if (!err) return;
       history.replaceState(null, "", location.pathname + location.search);
-      if (err) {
-        const msg = err.indexOf("expired") !== -1 || err.indexOf("invalid") !== -1
-          ? "That email link expired - just request a fresh code and type it into the page."
-          : err;
-        sessionStorage.setItem("xana_auth_notice", msg);
-        console.warn("[auth]", msg);
-      }
+      const msg = err.indexOf("expired") !== -1 || err.indexOf("invalid") !== -1
+        ? "That email link expired or was already used - go to /login and request a fresh code."
+        : err;
+      sessionStorage.setItem("xana_auth_notice", msg);
+      console.warn("[auth]", msg);
     } catch (e) { /* never block boot */ }
   }
   sanitizeAuthHash();
