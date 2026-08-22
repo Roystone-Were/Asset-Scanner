@@ -87,10 +87,20 @@ async function verify(){
   const b=document.getElementById("btnVerify");b.disabled=true;b.textContent="Checking…";
   try{
     await XanaSupabase.verifyOtp(email,code);
-    location.href=await XanaSupabase.landingFor()||(nextUrl||"/scan");
+    const l=await XanaSupabase.landingFor();
+    if(l){location.href=l;return;}
+    noAccess();
   }catch(e){
     msg("msgCode","Sign-in failed: "+(e.message||e),true);
   }finally{b.disabled=false;b.textContent="Verify & continue";}
+}
+
+function noAccess(){
+  msg("msg","✅ Signed in — but your account has no access assigned yet. Contact roystone@xanalife.com.",true);
+  const b=document.createElement("button");
+  b.className="secondary";b.textContent="Sign out";b.style.marginTop="8px";
+  b.onclick=async()=>{await XanaSupabase.signOut();location.reload();};
+  document.getElementById("stepCode").appendChild(b);
 }
 
 document.getElementById("btnSend").addEventListener("click",send);
@@ -107,7 +117,12 @@ document.getElementById("btnBack").addEventListener("click",()=>{
   const notice=XanaSupabase.popAuthNotice();
   if(notice) msg("msg",notice,true);
   const session=await XanaSupabase.getSession().catch(()=>null);
-  if(session&&session.user){location.href=await XanaSupabase.landingFor()||(nextUrl||"/scan");return;}
+  if(session&&session.user){
+    const l=await XanaSupabase.landingFor();
+    if(l){location.href=l;return;}
+    noAccess();
+    return;
+  }
   const saved=sessionStorage.getItem("xana_otp_email");
   if(saved){
     document.getElementById("sentTo").textContent="Code sent to "+saved;

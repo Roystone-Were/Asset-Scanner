@@ -275,12 +275,12 @@ async function loadSync(){
   accessToken=session.access_token;
   const roles=await XanaSupabase.myRoles();
   if(!roles.includes("admin")){
-    document.getElementById("denied").style.display="block";
-    state.textContent="Signed in as "+account.username+" (not an admin)";
+    const l=await XanaSupabase.landingFor();
+    location.href=l||"/login";
     return;
   }
-  XanaSupabase.applyRoleNav(roles);
   state.textContent="✅ Signed in as "+account.username;
+  XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").style.display="block";
   await Promise.all([loadUsers(),loadChoices()]);
 })();

@@ -2394,12 +2394,14 @@
       });
 
       // Reveal the app after sign-in: role gate (scanner or admin only),
-      // then boot the UI pieces.
+      // then boot the UI pieces. Wrong-role users are sent to their
+      // assigned view instead of a dead end.
       async function startApp() {
         let roles = [];
         try { roles = await XanaSupabase.myRoles(); } catch (e) {}
         if (!(roles.includes("scanner") || roles.includes("admin"))) {
-          showAccessRequired(account.username);
+          const l = await XanaSupabase.landingFor();
+          location.href = l || "/login";
           return false;
         }
         XanaSupabase.applyRoleNav(roles);

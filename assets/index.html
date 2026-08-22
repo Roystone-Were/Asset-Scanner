@@ -323,8 +323,8 @@ async function startApp(){
   let roles=[];
   try{roles=await XanaSupabase.myRoles();}catch(e){}
   if(!(roles.includes("asset_viewer")||roles.includes("admin"))){
-    document.getElementById("denied").classList.remove("hidden");
-    state.textContent="🔒 No assets access: "+account.username;
+    const l=await XanaSupabase.landingFor();
+    location.href=l||"/login";
     return;
   }
   XanaSupabase.applyRoleNav(roles);

@@ -43,9 +43,8 @@ const DEP_COLORS = {
     account = { username: String(session.user.email || "").toLowerCase(), name: session.user.email };
     const roles = await XanaSupabase.myRoles();
     if (!(roles.includes("dashboard_viewer") || roles.includes("admin"))) {
-      showSignIn("Your account has no dashboard access. Contact IT Admin (roystone@xanalife.com).");
-      const btn = document.getElementById("signInBtn");
-      if (btn) btn.onclick = () => { location.href = "/login?next=/dashboard"; };
+      const l = await XanaSupabase.landingFor();
+      location.href = l || "/login";
       return false;
     }
     XanaSupabase.applyRoleNav(roles);

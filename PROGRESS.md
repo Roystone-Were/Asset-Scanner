@@ -106,6 +106,9 @@ SharePoint orphans: find via `$filter=fields/Title eq '<name>'` then `DELETE /it
 
 ## Remaining roadmap
 
-- [ ] Commit + push RBAC batch → deploy → live smoke tests (invite flow, role gating, choices)
-- [ ] Optional cleanup: index SupabaseId column · delete old MSAL libs · retire api/summary.js once dashboard confirmed stable
+- [x] Site URL + uri_allow_list fixed via Management API (was localhost) — emailed links now land correctly
+- [x] App update deployed: clicking an emailed magic link signs the user in automatically
+- [ ] Custom SMTP via API — WAITING ON USER: add `SMTP_PASS=<noreply mailbox password>` to .env.local, then I patch smtp.office365.com:587 + sender + flip email templates to code-style (template editing is locked until custom SMTP exists on free tier)
+- [ ] USER ACCEPTANCE: sign-in at /login · invite a colleague from /admin · verify role gating · scan an asset · confirm it mirrors to SharePoint
+- [ ] Optional cleanup: index SupabaseId column (SP UI) · delete old MSAL lib files · retire api/summary.js once dashboard confirmed stable
 - [ ] Monitor outbox 1 week
