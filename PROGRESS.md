@@ -91,16 +91,21 @@ delete from public.sharepoint_sync where payload->>'item_id' like 'SYNC-TEST%';
 ```
 SharePoint orphans: find via `$filter=fields/Title eq '<name>'` then `DELETE /items/{id}`.
 
+## RBAC + unified login rollout (2026-08-22)
+
+- `0007_rbac_core.sql`: profiles · user_roles (admin/scanner/asset_viewer/dashboard_viewer) · has_role()/is_admin() · assets writes → role-based · RLS on profiles/roles
+- `0008_app_choices.sql`: admin-managed dropdown lists (asset_type/status/location/region), seeded
+- Admin auth account bootstrapped with all 4 roles (id f99f8c54…)
+- `api/admin-users.js`: invite / set_roles / set_active / delete_user — verifies caller JWT + admin server-side; invite-only enforced client-side (`shouldCreateUser:false`)
+- `/login` page: single sign-in for everything, lands users by strongest role
+- All apps: inline OTP forms removed → redirect to /login; role gates per app; navbars filtered by roles
+- Scanner: dropdowns now live from app_choices (cached offline)
+- Dashboard: MSAL retired entirely — reads Supabase + computes summary client-side (port of computeSummary into adapter)
+- Admin page rewritten: Users tab · Lists tab · Sync-health tab (shows pending/failed outbox rows)
+- SharePoint Status/Location columns converted to plain text (user did in SP UI) so new choice values mirror freely
+
 ## Remaining roadmap
 
-- [x] Deploy worker ✅ (commit b7bb243, env vars set)
-- [x] Verify cron retry fires — pg_net instant path proven; cron sweep scheduled */5 as safety net
-- [x] Phase 5a: `js/supabase-client.js` — adapter ({id,fields} shape preserved), OTP helpers, depreciation view model, storage upload
-- [x] Phase 5b: scanner-app refactor — MSAL→email OTP sign-in UI injected into #authState; all Graph data paths → XanaSupabase; offline queue intact; version-history expander retired gracefully; sw shell v3 (vendored lib/supabase.min.js)
-- [x] Phase 5c: assets app — same treatment; /api/summary dependency replaced by client-side enrichAsset(); images → Supabase Storage bucket `asset-images` (migration 0005)
-- [x] Admin app (`/admin`) migrated to `allowed_scanners` table; admin-only write RLS via `is_admin()` (migration 0006)
-- [x] Dashboard: NO CHANGES NEEDED — still MSAL→/api/summary→SharePoint (mirror stays fresh); retire MSAL there later if desired
-- [ ] Commit + push app refactor batch → Vercel deploy
-- [ ] Live smoke test: OTP sign-in, scan lookup, add asset → appears in SP within seconds
-- [ ] Supabase Auth check: confirm Email provider enabled (dashboard → Authentication → Providers) so OTP mails deliver
-- [ ] Phase 6: monitor outbox 1 week · optional: index SupabaseId column · retire old MSAL libs/files
+- [ ] Commit + push RBAC batch → deploy → live smoke tests (invite flow, role gating, choices)
+- [ ] Optional cleanup: index SupabaseId column · delete old MSAL libs · retire api/summary.js once dashboard confirmed stable
+- [ ] Monitor outbox 1 week

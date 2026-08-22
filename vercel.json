@@ -2,6 +2,8 @@
   "version": 2,
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/login/:path*", "destination": "/login/:path*" },
+    { "source": "/login", "destination": "/login/index.html" },
     { "source": "/admin/:path*", "destination": "/admin/:path*" },
     { "source": "/admin", "destination": "/admin/index.html" },
     { "source": "/assets/:path*", "destination": "/assets/:path*" },

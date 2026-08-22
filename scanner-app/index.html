@@ -955,88 +955,13 @@
       // SharePoint remains a read-only mirror fed by the sync worker.
       const LIST_NAME = "Xana Asset Inventory";
 
-      // ---------- Auth (Supabase email OTP) ----------
+      // ---------- Auth (single sign-in page at /login) ----------
       const ADMIN_EMAIL = "roystone@xanalife.com";
-      const ALLOWLIST_NAME = "Scanner Access";
 
       let account = null; // { username: email } once signed in
 
       function authStateEl() {
         return document.getElementById("authState");
-      }
-
-      function renderOtpStep(step, presetEmail, notice) {
-        const state = authStateEl();
-        if (!state) return;
-        const box =
-          'style="display:flex;flex-direction:column;gap:10px;max-width:340px;margin:24px auto;"';
-        const inputStyle =
-          'style="padding:12px;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit;font-size:16px;"';
-        if (step === "email") {
-          state.innerHTML =
-            '<div ' + box + ">" +
-            (notice ? '<div class="msg info">' + escapeHtml(notice) + "</div>" : "") +
-            '<input id="otpEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@xanalife.com" ' + inputStyle + ' value="' + escapeHtml(presetEmail || "") + '" />' +
-            '<button id="otpSend" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Send sign-in code</button>' +
-            "</div>";
-          document.getElementById("otpSend").addEventListener("click", sendOtpCode);
-          document.getElementById("otpEmail").addEventListener("keydown", function (e) {
-            if (e.key === "Enter") sendOtpCode();
-          });
-        } else {
-          state.innerHTML =
-            '<div ' + box + ">" +
-            (notice ? '<div class="msg info">' + escapeHtml(notice) + "</div>" : "") +
-            '<input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" ' + inputStyle + ' />' +
-            '<button id="otpVerify" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Verify &amp; sign in</button>' +
-            '<button id="otpBack" style="padding:8px;border-radius:10px;border:1px solid var(--border,#ccc);background:transparent;color:inherit;">Use a different email</button>' +
-            "</div>";
-          document.getElementById("otpVerify").addEventListener("click", verifyOtpCode);
-          document.getElementById("otpCode").addEventListener("keydown", function (e) {
-            if (e.key === "Enter") verifyOtpCode();
-          });
-          document.getElementById("otpBack").addEventListener("click", function () {
-            sessionStorage.removeItem("xana_otp_email");
-            renderOtpStep("email", "", "");
-          });
-          document.getElementById("otpCode").focus();
-        }
-      }
-
-      async function sendOtpCode() {
-        const email = (document.getElementById("otpEmail") || {}).value || "";
-        const clean = email.trim();
-        if (!clean || clean.indexOf("@") < 1) {
-          renderOtpStep("email", clean, "Enter a valid email address first.");
-          return;
-        }
-        sessionStorage.setItem("xana_otp_email", clean);
-        const btn = document.getElementById("otpSend");
-        btn.disabled = true;
-        btn.textContent = "Sending…";
-        try {
-          await XanaSupabase.sendOtp(clean);
-          renderOtpStep("code", "", "📩 6-digit code sent to " + clean + ". Check your inbox.");
-        } catch (e) {
-          renderOtpStep("email", clean, "Could not send code: " + ((e && e.message) || e));
-        }
-      }
-
-      async function verifyOtpCode() {
-        const email = sessionStorage.getItem("xana_otp_email") || "";
-        const code = (document.getElementById("otpCode") || {}).value || "";
-        const btn = document.getElementById("otpVerify");
-        btn.disabled = true;
-        btn.textContent = "Checking…";
-        try {
-          await XanaSupabase.verifyOtp(email, code);
-          account = { username: email.toLowerCase() };
-          sessionStorage.removeItem("xana_otp_email");
-          authStateEl().textContent = "✅ Signed in as " + account.username;
-          await startApp();
-        } catch (e) {
-          renderOtpStep("code", "", "Sign-in failed: " + ((e && e.message) || e));
-        }
       }
 
       async function initAuth() {
@@ -1046,8 +971,7 @@
           authStateEl().textContent = "✅ Signed in as " + account.username;
           return true;
         }
-        const saved = sessionStorage.getItem("xana_otp_email");
-        renderOtpStep(saved ? "code" : "email", saved || "");
+        location.href = "/login?next=" + encodeURIComponent(location.pathname);
         return false;
       }
 
@@ -1078,25 +1002,7 @@
         return allItems;
       }
 
-      async function isAllowlisted(email) {
-        const want = String(email || "").trim().toLowerCase();
-        if (!want) return false;
-        if (want === ADMIN_EMAIL.toLowerCase()) return true;
-        try {
-          const { data, error } = await XanaSupabase.client()
-            .from("allowed_scanners")
-            .select("email")
-            .eq("email", want)
-            .limit(1);
-          if (error) throw error;
-          return (data || []).length > 0;
-        } catch (e) {
-          console.warn("allowlist check failed:", e);
-          // Server-side RLS still enforces writes; this gate is UX only.
-          return true;
-        }
-      }
-
+      // ---------- Access gate helper ----------
       function showAccessRequired(email) {
         const app = document.getElementById("app");
         const state = document.getElementById("authState");
@@ -1434,7 +1340,7 @@
             )
             .join("");
         };
-        fill("addType", ASSET_TYPE_CHOICES);
+        fill("addType", typeChoices);
         fill("addStatus", statusChoices);
         fill("addLocation", locationChoices);
         document.getElementById("addMsg").innerHTML = "";
@@ -1747,26 +1653,24 @@
         }
       }
 
-      // ---------- Choice lists (Status / Location) ----------
-      // The built-in constants are the offline fallback; after sign-in the
-      // real choice values are fetched from the list columns, so a choice
-      // added in SharePoint shows up in the app without a code change.
-      const CHOICES_CACHE_KEY = "xana_choices_v1";
+      // ---------- Choice lists (Status / Location / Type) ----------
+      // Live values come from the admin-managed app_choices table, cached
+      // offline; the built-in constants remain the fallback.
+      const CHOICES_CACHE_KEY = "xana_choices_v2";
       let statusChoices = STATUS_CHOICES;
       let locationChoices = LOCATION_CHOICES;
+      let typeChoices = ASSET_TYPE_CHOICES;
 
-      function applyChoices(status, location) {
+      function applyChoices(status, location, type) {
         if (Array.isArray(status) && status.length) statusChoices = status;
         if (Array.isArray(location) && location.length) locationChoices = location;
+        if (Array.isArray(type) && type.length) typeChoices = type;
       }
 
-      // Choices now come from the built-in constants (and whatever the user's
-      // device cached earlier). The old live refresh from SharePoint choice
-      // columns is retired along with the Graph data layer.
       function loadCachedChoices() {
         try {
           const c = JSON.parse(localStorage.getItem(CHOICES_CACHE_KEY) || "null");
-          if (c) applyChoices(c.status, c.location);
+          if (c) applyChoices(c.status, c.location, c.type);
         } catch (e) {
           /* corrupt - ignore */
         }
@@ -1774,16 +1678,31 @@
 
       async function refreshChoices() {
         try {
-          localStorage.setItem(
-            CHOICES_CACHE_KEY,
-            JSON.stringify({
-              status: statusChoices,
-              location: locationChoices,
-              t: Date.now(),
-            }),
-          );
+          const { data, error } = await XanaSupabase.client()
+            .from("app_choices")
+            .select("category,value,sort_order")
+            .order("sort_order");
+          if (error) throw error;
+          const grouped = { status: [], location: [], asset_type: [] };
+          for (const row of data || []) {
+            if (grouped[row.category]) grouped[row.category].push(row.value);
+          }
+          applyChoices(grouped.status, grouped.location, grouped.asset_type);
+          try {
+            localStorage.setItem(
+              CHOICES_CACHE_KEY,
+              JSON.stringify({
+                status: statusChoices,
+                location: locationChoices,
+                type: typeChoices,
+                t: Date.now(),
+              }),
+            );
+          } catch (e) {
+            /* storage full/blocked - ignore */
+          }
         } catch (e) {
-          /* storage full/blocked - ignore */
+          console.warn("choice refresh failed - using built-ins/cache:", e);
         }
       }
 
@@ -2474,15 +2393,16 @@
         if (meta) meta.content = cur === "dark" ? "#121212" : "#f8fafc";
       });
 
-      // Reveal the app after sign-in: allowlist gate (one role: Allowed =
-      // scan + add), then boot the UI pieces.
+      // Reveal the app after sign-in: role gate (scanner or admin only),
+      // then boot the UI pieces.
       async function startApp() {
-        try {
-          const allowed = await isAllowlisted(account.username);
-          if (!allowed) { showAccessRequired(account.username); return false; }
-        } catch (e) {
-          console.warn("allowlist gate error (fail open):", e);
+        let roles = [];
+        try { roles = await XanaSupabase.myRoles(); } catch (e) {}
+        if (!(roles.includes("scanner") || roles.includes("admin"))) {
+          showAccessRequired(account.username);
+          return false;
         }
+        XanaSupabase.applyRoleNav(roles);
         document.getElementById("app").classList.remove("hidden");
         renderHistory();
         renderSyncBadge();

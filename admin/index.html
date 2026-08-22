@@ -1,217 +1,289 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Admin - Members · Xana</title>
-<script src="/scanner-app/lib/supabase.min.js"></script>
-<script src="/js/supabase-client.js"></script>
-<style>
-  :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b; --red:#d13438; --green:#22c55e; --ease-out:cubic-bezier(0.22,1,0.36,1); --ease-spring:cubic-bezier(0.34,1.56,0.64,1); --duration-fast:120ms; --duration-base:200ms; --duration-slow:320ms; }
-  [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; --red:#d13438; --green:#22c55e; }
-  .navbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--card) 88%, var(--accent) 12%);backdrop-filter:blur(10px) saturate(1.1);-webkit-backdrop-filter:blur(10px) saturate(1.1);border-bottom:1px solid var(--border)}
-  .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
-  .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
-  .navbar_logo img{height:26px;width:auto}
-  .navbar_menu{display:flex;gap:6px;align-items:center}
-  .navbar_menu a{padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
-  .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
-  .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
-  .navbar_right{display:flex;align-items:center;gap:10px}
-  *{box-sizing:border-box;margin:0;padding:0;scrollbar-width:none;-ms-overflow-style:none}
-  *::-webkit-scrollbar{display:none}
-  body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  .main{padding:22px;max-width:720px;margin:0 auto}
-  .wrap{max-width:720px;margin:0 auto}
-  .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
-  .theme-toggle:hover{background:var(--card2)}
-  .menu-button{display:none;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text)}
-  .menu-button .icon{font-size:1rem}
-  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
-  .overlay.open{display:block}
-  @media(max-width:900px){.navbar_menu{display:none}.navbar_menu.open{display:flex;position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--card);border-right:1px solid var(--border);flex-direction:column;padding:18px 12px;z-index:40;overflow:auto;align-items:flex-start}.menu-button{display:inline-flex}}
-  h1{font-size:1.3rem;margin-bottom:4px}
-  p.sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:14px}
-  input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:1rem;margin-bottom:10px}
-  input:focus{outline:none;border-color:var(--accent)}
-  button{border:0;border-radius:10px;padding:12px 16px;font-weight:600;cursor:pointer}
-  .btn{background:var(--accent);color:#fff;flex:1}
-  .btn.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
-  .row{display:flex;gap:8px;align-items:center}
-  .msg{margin-top:10px;padding:10px;border-radius:10px;text-align:center;font-size:.85rem}
-  .err{background:rgba(209,52,56,.12);color:#fca5a5}
-  .ok{background:rgba(34,197,94,.12);color:#86efac}
-  .info{background:rgba(22,163,74,.12);color:#86efac}
-  table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:10px}
-  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
-  th{color:var(--muted);font-size:.7rem;text-transform:uppercase}
-  .pill{padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--border);font-size:.7rem}
-  #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
-  /* Motion */
-  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .card, .msg { animation: rise var(--duration-base) var(--ease-out); }
-  button, .btn, .pill, input {
-    transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), filter var(--duration-fast) var(--ease-out);
-  }
-  button:active, .btn:active { transform: scale(0.97); }
-  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Xana</title>
+  <script src="/scanner-app/lib/supabase.min.js"></script>
+  <script src="/js/supabase-client.js"></script>
+  <style>
+    :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --blue:#2563eb; --text:#0f172a; --muted:#64748b; --red:#d13438; }
+    [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --text:#f3f4f6; --muted:#9ca3af; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
+    .navbar_container{max-width:1080px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
+    .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
+    .navbar_logo img{height:26px;width:auto}
+    .navbar_menu{display:flex;gap:6px;align-items:center}
+    .navbar_menu a{padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
+    .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
+    .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
+    .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
+    .main{padding:22px;max-width:1080px;margin:0 auto}
+    h1{font-size:1.3rem;margin-bottom:4px}
+    p.sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:14px}
+    input[type=text],input[type=email],select{padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.9rem}
+    input:focus,select:focus{outline:none;border-color:var(--accent)}
+    button{border:0;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff}
+    button.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+    button.danger{background:rgba(209,52,56,.12);color:#dc2626}
+    button.small{padding:5px 9px;font-size:.75rem;border-radius:999px}
+    button:disabled{opacity:.55}
+    .tabs{display:flex;gap:8px;margin-top:16px}
+    .tab{flex:1;text-align:center;padding:11px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-weight:600;font-size:.88rem;cursor:pointer}
+    .tab.active{background:var(--card2);color:var(--text);border-color:var(--accent)}
+    label.chk{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;color:var(--muted);margin-right:10px;cursor:pointer}
+    .msg{margin-top:10px;padding:10px;border-radius:10px;text-align:center;font-size:.85rem;display:none}
+    .msg.show{display:block}
+    .err{background:rgba(209,52,56,.12);color:#dc2626}
+    .ok{background:rgba(34,197,94,.12);color:#16a34a}
+    .info{background:rgba(37,99,235,.10);color:var(--blue)}
+    table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:10px}
+    th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+    th{color:var(--muted);font-size:.7rem;text-transform:uppercase}
+    .pill{padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--border);font-size:.7rem}
+    #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
+    .grid2{display:flex;gap:10px;flex-wrap:wrap}
+    .grid2 > *{flex:1;min-width:180px}
+    .choice-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:10px;margin-top:6px}
+    @media(max-width:760px){table thead{display:none}table tr{display:block;margin-bottom:10px;border:1px solid var(--border);border-radius:10px;padding:8px}table td{display:block;border:0;padding:4px 8px}}
+  </style>
 </head>
 <body>
-<div class="overlay" id="overlay"></div>
 <nav class="navbar">
   <div class="navbar_container">
-    <a class="navbar_logo" href="/"><img src="/scanner-app/xana-logo.png" alt="Xana" /> Xana</a>
-    <div class="navbar_menu" id="navMenu">
-      <a href="/scan">Scan</a>
-      <a href="/dashboard">Dashboard</a>
-      <a href="/assets">Assets</a>
-      <a class="active" href="/admin">Admin</a>
-      <a href="/">Home</a>
+    <a class="navbar_logo" href="/"><img src="/scanner-app/xana-logo.png" alt="Xana"/> Xana</a>
+    <div class="navbar_menu">
+      <a href="/scan">Scan</a><a href="/assets">Assets</a><a href="/dashboard">Dashboard</a><a class="active" href="/admin">Admin</a><a href="/">Home</a>
     </div>
-    <div class="navbar_right">
-      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
-      <button class="menu-button" id="menuBtn"><span>Menu</span><span class="icon">☰</span></button>
-    </div>
+    <button type="button" class="theme-toggle" id="themeToggle">☀️</button>
   </div>
 </nav>
-<div class="main"><div class="wrap">
-  <h1>Admin - Members</h1>
-  <p class="sub">Only <b>roystone@xanalife.com</b> can add/remove. One role <b>Allowed</b> = can scan + add.</p>
-  <div id="authState">Signing in…</div>
-  <div id="gate" class="hidden">
-    <div class="card">
-      <h2>Add member</h2>
-      <input type="text" id="email" placeholder="email e.g. itsupport@xanalife.com" autocomplete="off" />
-      <div class="row"><button id="btnAdd" class="btn">Add</button></div>
-      <div id="addMsg"></div>
+
+<div class="main">
+  <h1>Admin</h1>
+  <p class="sub">Manage who can access what, and the dropdown lists used across the apps.</p>
+  <div id="authState">Checking session…</div>
+
+  <div id="denied" class="hidden"><div class="card"><div class="pill" style="color:#dc2626">Admin access required — contact roystone@xanalife.com</div></div></div>
+
+  <div id="gate" style="display:none">
+    <div class="tabs">
+      <div class="tab active" data-tab="users">Users</div>
+      <div class="tab" data-tab="lists">Lists</div>
+      <div class="tab" data-tab="sync">Sync health</div>
     </div>
-    <div class="card">
-      <h2>Current members</h2>
-      <div id="list"><div class="msg info">Loading…</div></div>
-    </div>
+
+    <!-- ================= USERS ================= -->
+    <section id="pane-users">
+      <div class="card">
+        <h3 style="margin-bottom:10px">Invite a user</h3>
+        <div class="grid2">
+          <input type="email" id="invEmail" placeholder="email e.g. itsupport@xanalife.com" />
+          <input type="text" id="invName" placeholder="full name (optional)" />
+        </div>
+        <div style="margin:10px 0 12px" id="invRoles">
+          <label class="chk"><input type="checkbox" value="scanner" checked /> Scanner</label>
+          <label class="chk"><input type="checkbox" value="asset_viewer" /> Asset viewer</label>
+          <label class="chk"><input type="checkbox" value="dashboard_viewer" /> Dashboard viewer</label>
+          <label class="chk"><input type="checkbox" value="admin" /> Admin</label>
+        </div>
+        <button id="btnInvite">Send invite &amp; create account</button>
+        <div id="invMsg" class="msg"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:4px">All users</h3>
+        <div id="usersList"><div class="msg info show">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ================= LISTS ================= -->
+    <section id="pane-lists" style="display:none">
+      <div class="card"><h3>Asset types</h3><div id="list-asset_type"></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-asset_type" placeholder="new asset type" style="flex:1"/><button class="small" data-addcat="asset_type">Add</button></div>
+      </div>
+      <div class="card"><h3>Statuses</h3><div id="list-status"></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-status" placeholder="new status" style="flex:1"/><button class="small" data-addcat="status">Add</button></div>
+      </div>
+      <div class="card"><h3>Locations</h3><div id="list-location"></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-location" placeholder="new location" style="flex:1"/><button class="small" data-addcat="location">Add</button></div>
+      </div>
+      <div class="card"><h3>Regions</h3><div id="list-region"></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-region" placeholder="new region" style="flex:1"/><button class="small" data-addcat="region">Add</button></div>
+      </div>
+      <div id="listMsg" class="msg"></div>
+    </section>
+
+    <!-- ================= SYNC HEALTH ================= -->
+    <section id="pane-sync" style="display:none">
+      <div class="card">
+        <h3>SharePoint mirror queue</h3>
+        <p class="sub" style="margin-top:4px">Rows pending/failed = not yet mirrored to SharePoint. Failed rows stop retrying after 5 attempts.</p>
+        <div id="syncList"><div class="msg info show">Loading…</div></div>
+      </div>
+    </section>
   </div>
-  <div id="denied" class="hidden"><div class="card"><div class="msg err">Access required - Admin only. Contact <b>roystone@xanalife.com</b></div></div></div>
-</div></div>
-<script>
-  const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
-  menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
-  overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
-</script>
+</div>
+
 <script>
 "use strict";
-const ADMIN_EMAIL="roystone@xanalife.com";
 const STORAGE_THEME="xana_theme";
-function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
-applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
-let account=null;
-// ---------- Auth (Supabase email OTP) ----------
-function renderOtpStep(step,presetEmail,notice){
-  const st=document.getElementById("authState"); if(!st) return;
-  const box='style="display:flex;flex-direction:column;gap:10px;max-width:340px;margin:16px auto;"';
-  const inp='style="padding:12px;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit;font-size:16px;"';
-  if(step==="email"){
-    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
-      '<input id="otpEmail" type="email" autocomplete="email" placeholder="you@xanalife.com" '+inp+' value="'+esc(presetEmail||"")+'" />'+
-      '<button id="otpSend" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Send sign-in code</button></div>';
-    document.getElementById("otpSend").addEventListener("click",sendOtpCode);
-    document.getElementById("otpEmail").addEventListener("keydown",e=>{if(e.key==="Enter")sendOtpCode();});
-  }else{
-    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
-      '<input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" '+inp+' />'+
-      '<button id="otpVerify" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Verify &amp; sign in</button>'+
-      '<button id="otpBack" style="padding:8px;border-radius:10px;border:1px solid var(--border,#ccc);background:transparent;color:inherit;">Use a different email</button></div>';
-    document.getElementById("otpVerify").addEventListener("click",verifyOtpCode);
-    document.getElementById("otpCode").addEventListener("keydown",e=>{if(e.key==="Enter")verifyOtpCode();});
-    document.getElementById("otpBack").addEventListener("click",()=>{sessionStorage.removeItem("xana_otp_email");renderOtpStep("email","","");});
-    document.getElementById("otpCode").focus();
+function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);document.getElementById("themeToggle").textContent=s==="dark"?"☀️":"☽";}
+applyTheme();document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
+
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+let account=null, accessToken=null;
+const ROLES=[["admin","Admin"],["scanner","Scanner"],["asset_viewer","Assets"],["dashboard_viewer","Dashboard"]];
+
+async function api(action,payload){
+  const r=await fetch("/api/admin-users",{
+    method:"POST",
+    headers:{Authorization:"Bearer "+accessToken,"Content-Type":"application/json"},
+    body:JSON.stringify({action,...payload})
+  });
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error||("HTTP "+r.status));
+  return d;
+}
+
+// ---------- tabs ----------
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+  ["users","lists","sync"].forEach(n=>{document.getElementById("pane-"+n).style.display=t.dataset.tab===n?"block":"none";});
+  if(t.dataset.tab==="sync") loadSync();
+}));
+
+// ---------- users ----------
+async function loadUsers(){
+  const el=document.getElementById("usersList");
+  try{
+    const d=await api("list");
+    if(!(d.users||[]).length){el.innerHTML='<div class="msg info show">No users yet.</div>';return;}
+    el.innerHTML='<table><thead><tr><th>User</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
+      d.users.map(u=>{
+        const boxes=ROLES.map(([val,label])=>'<label class="chk"><input type="checkbox" data-role="'+val+'" data-user="'+u.id+'" '+(u.roles.includes(val)?"checked":"")+"/> "+label+"</label>").join("");
+        return "<tr><td><b>"+esc(u.email)+"</b><br/><span class='pill'>"+esc(u.full_name||"—")+"</span></td>"+
+          "<td>"+boxes+"</td>"+
+          "<td><label class='chk'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+"/> Active</label></td>"+
+          "<td><button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
+      }).join("")+"</tbody></table>";
+  }catch(e){el.innerHTML='<div class="msg err show">'+esc(e.message)+"</div>";}
+}
+
+document.getElementById("btnInvite").addEventListener("click",async()=>{
+  const email=(document.getElementById("invEmail").value||"").trim().toLowerCase();
+  const name=(document.getElementById("invName").value||"").trim();
+  const roles=[...document.querySelectorAll("#invRoles input:checked")].map(c=>c.value);
+  const msgEl=document.getElementById("invMsg");
+  if(!email.includes("@")){msgEl.className="msg err show";msgEl.textContent="Enter a valid email.";return;}
+  if(!roles.length){msgEl.className="msg err show";msgEl.textContent="Pick at least one role.";return;}
+  msgEl.className="msg info show";msgEl.textContent="Creating account…";
+  try{
+    const d=await api("invite",{email,fullName:name,roles});
+    msgEl.className="msg ok show";
+    msgEl.textContent="✓ "+email+" invited ("+roles.join(", ")+"). They sign in at /login with a code sent to their email.";
+    document.getElementById("invEmail").value="";document.getElementById("invName").value="";
+    await loadUsers();
+  }catch(e){msgEl.className="msg err show";msgEl.textContent=e.message;}
+});
+
+document.getElementById("usersList").addEventListener("change",async(e)=>{
+  const t=e.target;
+  try{
+    if(t.matches("input[data-role]")){
+      const row=t.closest("tr");
+      const roles=[...row.querySelectorAll("input[data-role]:checked")].map(c=>c.dataset.role);
+      await api("set_roles",{userId:t.dataset.user,roles});
+    }else if(t.hasAttribute("data-active")){
+      await api("set_active",{userId:t.dataset.user,active:t.checked});
+    }
+  }catch(err){alert("Save failed: "+err.message);loadUsers();}
+});
+
+document.getElementById("usersList").addEventListener("click",async(e)=>{
+  const b=e.target.closest("[data-del]");
+  if(!b)return;
+  if(!confirm("Delete "+b.dataset.email+" permanently? Their sign-in access ends immediately."))return;
+  try{await api("delete_user",{userId:b.dataset.del});await loadUsers();}
+  catch(err){alert(err.message);}
+});
+
+// ---------- lists ----------
+const CAT_LABELS={asset_type:"asset type",status:"status",location:"location",region:"region"};
+async function loadChoices(){
+  for(const cat of Object.keys(CAT_LABELS)){
+    const el=document.getElementById("list-"+cat);
+    try{
+      const {data,error}=await XanaSupabase.client().from("app_choices").select("value,sort_order").eq("category",cat).order("sort_order");
+      if(error)throw error;
+      el.innerHTML=(data||[]).map(v=>"<div class='choice-row'><span>"+esc(v.value)+"</span><button class='small danger' data-cat='"+cat+"' data-val='"+esc(v.value)+"'>✕</button></div>").join("")||"<span style='color:var(--muted);font-size:.8rem'>empty</span>";
+    }catch(err){el.innerHTML='<span style="color:#dc2626;font-size:.8rem">'+esc(err.message)+"</span>";}
   }
 }
-async function sendOtpCode(){
-  const email=(document.getElementById("otpEmail")||{}).value||"";
-  if(!email.trim()||email.indexOf("@")<1){renderOtpStep("email",email,"Enter a valid email address first.");return;}
-  sessionStorage.setItem("xana_otp_email",email.trim());
-  const b=document.getElementById("otpSend");b.disabled=true;b.textContent="Sending…";
-  try{await XanaSupabase.sendOtp(email.trim());renderOtpStep("code","","📩 6-digit code sent to "+email.trim()+".");}
-  catch(e){renderOtpStep("email",email,"Could not send code: "+(e.message||e));}
-}
-async function verifyOtpCode(){
-  const email=sessionStorage.getItem("xana_otp_email")||"";
-  const code=(document.getElementById("otpCode")||{}).value||"";
-  const b=document.getElementById("otpVerify");b.disabled=true;b.textContent="Checking…";
+document.querySelectorAll("[data-addcat]").forEach(b=>b.addEventListener("click",async()=>{
+  const cat=b.getAttribute("data-addcat");
+  const inp=document.getElementById("add-"+cat);
+  const val=(inp.value||"").trim();
+  if(!val)return;
   try{
-    await XanaSupabase.verifyOtp(email,code);
-    account={username:email.toLowerCase()};
-    sessionStorage.removeItem("xana_otp_email");
-    await startApp();
-  }catch(e){renderOtpStep("code","","Sign-in failed: "+(e.message||e));}
+    const {error}=await XanaSupabase.client().from("app_choices").insert({category:cat,value:val,sort_order:99});
+    if(error)throw error;
+    inp.value="";
+    loadChoices();
+  }catch(err){showListMsg((err.message||err)+(err.code==="23505"?" — already exists":""));}
+}));
+document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("click",async(e)=>{
+  const b=e.target.closest("button[data-val]");
+  if(!b)return;
+  try{
+    const {error}=await XanaSupabase.client().from("app_choices").delete().eq("category",b.dataset.cat).eq("value",b.dataset.val);
+    if(error)throw error;
+    loadChoices();
+  }catch(err){showListMsg(err.message);}
+}));
+function showListMsg(text,isErr){
+  const m=document.getElementById("listMsg");
+  m.textContent=text;m.className="msg show "+(isErr?"err":"info");
+  setTimeout(()=>{m.className="msg";},4000);
 }
-async function initAuth(){
-  const session=await XanaSupabase.getSession().catch(()=>null);
-  if(session&&session.user){account={username:String(session.user.email||"").toLowerCase()};return true;}
-  const saved=sessionStorage.getItem("xana_otp_email");
-  renderOtpStep(saved?"code":"email",saved||"");
-  return false;
+
+// ---------- sync health ----------
+async function loadSync(){
+  const el=document.getElementById("syncList");
+  try{
+    const {data,error}=await XanaSupabase.client().from("sharepoint_sync")
+      .select("op,status,attempts,last_error,created_at")
+      .in_("status",["pending","failed","processing"])
+      .order("created_at",{ascending:false})
+      .limit(50);
+    if(error)throw error;
+    if(!(data||[]).length){el.innerHTML='<div class="msg ok show">✓ Everything is mirrored to SharePoint.</div>';return;}
+    el.innerHTML="<table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
+      data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill'>"+esc(r.status)+"</span></td><td>"+r.attempts+"</td><td>"+new Date(r.created_at).toLocaleString()+"</td><td style='color:#dc2626;font-size:.75rem'>"+esc(r.last_error||"")+"</td></tr>").join("")+
+      "</tbody></table>";
+  }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
 }
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function isAdmin(){return (account.username||"").toLowerCase()===ADMIN_EMAIL.toLowerCase();}
-async function loadList(){
-  const el=document.getElementById("list");
-  el.innerHTML='<div class="msg info">Loading…</div>';
-  const {data,error}=await XanaSupabase.client()
-    .from("allowed_scanners")
-    .select("email,created_at")
-    .order("created_at",{ascending:true});
-  if(error){el.innerHTML='<div class="msg err">'+esc(error.message)+'</div>';return;}
-  const items=data||[];
-  if(!items.length){el.innerHTML='<div class="msg info">No members yet.</div>';return;}
-  el.innerHTML='<table><thead><tr><th>Email</th><th>Added</th><th></th></tr></thead><tbody>'+
-    items.map(it=>'<tr><td><b>'+esc(it.email)+'</b></td><td>'+esc(it.created_at?new Date(it.created_at).toLocaleDateString():"")+'</td><td><button class="pill" data-del="'+esc(it.email)+'">Remove</button></td></tr>').join("")+
-    '</tbody></table>';
-}
-async function startApp(){
+
+// ---------- boot ----------
+(async function boot(){
   const state=document.getElementById("authState");
-  state.textContent="✅ Signed in as "+account.username;
-  if(!isAdmin()){
-    document.getElementById("denied").classList.remove("hidden");
+  const session=await XanaSupabase.getSession().catch(()=>null);
+  if(!session||!session.user){location.href="/login?next=/admin";return;}
+  account={username:String(session.user.email||"").toLowerCase()};
+  accessToken=session.access_token;
+  const roles=await XanaSupabase.myRoles();
+  if(!roles.includes("admin")){
+    document.getElementById("denied").style.display="block";
+    state.textContent="Signed in as "+account.username+" (not an admin)";
     return;
   }
-  document.getElementById("gate").classList.remove("hidden");
-  await loadList();
-}
-async function boot(){
-  const state=document.getElementById("authState");
-  state.textContent="Signing in…";
-  const ok=await initAuth();
-  if(!ok) return;
-  await startApp();
-}
-document.getElementById("btnAdd").addEventListener("click", async()=>{
-  const email=(document.getElementById("email").value||"").trim().toLowerCase();
-  const msg=document.getElementById("addMsg");
-  if(!email||email.indexOf("@")===-1){msg.innerHTML='<div class="msg err">Enter a valid email.</div>';return;}
-  msg.innerHTML='<div class="msg info">Adding…</div>';
-  try{
-    const {error}=await XanaSupabase.client().from("allowed_scanners").insert({email:email,added_by:account.username});
-    if(error) throw error;
-    msg.innerHTML='<div class="msg ok">Added '+esc(email)+' ✓</div>';
-    document.getElementById("email").value="";
-    await loadList();
-  }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
-});
-document.getElementById("list").addEventListener("click", async(e)=>{
-  const btn=e.target.closest("[data-del]");
-  if(!btn) return;
-  if(!confirm("Remove this member?")) return;
-  const email=btn.getAttribute("data-del");
-  try{
-    const {error}=await XanaSupabase.client().from("allowed_scanners").delete().eq("email",email);
-    if(error) throw error;
-    await loadList();
-  }catch(err){alert(err.message||err);}
-});
-boot();
+  XanaSupabase.applyRoleNav(roles);
+  state.textContent="✅ Signed in as "+account.username;
+  document.getElementById("gate").style.display="block";
+  await Promise.all([loadUsers(),loadChoices()]);
+})();
 </script>
 </body>
 </html>

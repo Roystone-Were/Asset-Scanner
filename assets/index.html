@@ -176,66 +176,16 @@ function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";docum
 applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
 
 let account=null, allItems=[], filtered=[], sortKey="tag", sortDir=1, currentPage=0; const PAGE_SIZE=30;
-// ---------- Auth (Supabase email OTP) ----------
+// ---------- Auth (single sign-in page at /login) ----------
 function authStateEl(){return document.getElementById("authState");}
-function renderOtpStep(step,presetEmail,notice){
-  const st=authStateEl(); if(!st) return;
-  const box='style="display:flex;flex-direction:column;gap:10px;max-width:340px;margin:24px auto;"';
-  const inp='style="padding:12px;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit;font-size:16px;"';
-  if(step==="email"){
-    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
-      '<input id="otpEmail" type="email" autocomplete="email" placeholder="you@xanalife.com" '+inp+' value="'+esc(presetEmail||"")+'" />'+
-      '<button id="otpSend" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Send sign-in code</button></div>';
-    document.getElementById("otpSend").addEventListener("click",sendOtpCode);
-    document.getElementById("otpEmail").addEventListener("keydown",e=>{if(e.key==="Enter")sendOtpCode();});
-  }else{
-    st.innerHTML='<div '+box+'>'+(notice?'<div class="msg info">'+esc(notice)+'</div>':'')+
-      '<input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" '+inp+' />'+
-      '<button id="otpVerify" style="padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:600;">Verify &amp; sign in</button>'+
-      '<button id="otpBack" style="padding:8px;border-radius:10px;border:1px solid var(--border,#ccc);background:transparent;color:inherit;">Use a different email</button></div>';
-    document.getElementById("otpVerify").addEventListener("click",verifyOtpCode);
-    document.getElementById("otpCode").addEventListener("keydown",e=>{if(e.key==="Enter")verifyOtpCode();});
-    document.getElementById("otpBack").addEventListener("click",()=>{sessionStorage.removeItem("xana_otp_email");renderOtpStep("email","","");});
-    document.getElementById("otpCode").focus();
-  }
-}
-async function sendOtpCode(){
-  const email=(document.getElementById("otpEmail")||{}).value||"";
-  if(!email.trim()||email.indexOf("@")<1){renderOtpStep("email",email,"Enter a valid email address first.");return;}
-  sessionStorage.setItem("xana_otp_email",email.trim());
-  const b=document.getElementById("otpSend");b.disabled=true;b.textContent="Sending…";
-  try{await XanaSupabase.sendOtp(email.trim());renderOtpStep("code","","📩 6-digit code sent to "+email.trim()+".");}
-  catch(e){renderOtpStep("email",email,"Could not send code: "+(e.message||e));}
-}
-async function verifyOtpCode(){
-  const email=sessionStorage.getItem("xana_otp_email")||"";
-  const code=(document.getElementById("otpCode")||{}).value||"";
-  const b=document.getElementById("otpVerify");b.disabled=true;b.textContent="Checking…";
-  try{
-    await XanaSupabase.verifyOtp(email,code);
-    account={username:email.toLowerCase()};
-    sessionStorage.removeItem("xana_otp_email");
-    await startApp();
-  }catch(e){renderOtpStep("code","","Sign-in failed: "+(e.message||e));}
-}
 async function initAuth(){
   const session=await XanaSupabase.getSession().catch(()=>null);
   if(session&&session.user){account={username:String(session.user.email||"").toLowerCase()};return true;}
-  const saved=sessionStorage.getItem("xana_otp_email");
-  renderOtpStep(saved?"code":"email",saved||"");
+  location.href="/login?next="+encodeURIComponent(location.pathname);
   return false;
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("lost"))return "#d13438";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
-async function isAllowlisted(){
-  const email=(account.username||"").toLowerCase();
-  if(email===ADMIN_EMAIL.toLowerCase()) return true;
-  try{
-    const {data,error}=await XanaSupabase.client().from("allowed_scanners").select("email").eq("email",email).limit(1);
-    if(error) throw error;
-    return (data||[]).length>0;
-  }catch(e){console.warn(e);return true;}
-}
 function money(n){return "KES "+Math.round(n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");}
 async function load(){
   allItems=await XanaSupabase.listAssetsDetailed();
@@ -370,10 +320,14 @@ if(atSel) atSel.innerHTML=assetTypes.map(c=>'<option value="'+c+'">'+c+'</option
 async function startApp(){
   const state=document.getElementById("authState");
   state.textContent="✅ Signed in as "+account.username;
-  try{
-    const allowed=await isAllowlisted();
-    if(!allowed){document.getElementById("denied").classList.remove("hidden");state.textContent="🔒 Not allowlisted: "+account.username;return;}
-  }catch(e){console.warn(e);}
+  let roles=[];
+  try{roles=await XanaSupabase.myRoles();}catch(e){}
+  if(!(roles.includes("asset_viewer")||roles.includes("admin"))){
+    document.getElementById("denied").classList.remove("hidden");
+    state.textContent="🔒 No assets access: "+account.username;
+    return;
+  }
+  XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").classList.remove("hidden");
   document.getElementById("search").addEventListener("input",applyFilters);
   document.getElementById("fStatus").addEventListener("change",applyFilters);

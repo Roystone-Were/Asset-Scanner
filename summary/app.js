@@ -1,11 +1,7 @@
-﻿// app.js —” Xana Asset Summary client: MSAL auth + theme toggle + dashboard
+﻿// app.js —” Xana Asset Summary client: Supabase auth + theme toggle + dashboard
 "use strict";
 (function () {
   // ---------- Config ----------
-  const CLIENT_ID = "7caa51af-9f32-42d8-8264-da5b97c2f8eb";
-  const AUTHORITY = "https://login.microsoftonline.com/refrontiergroup.onmicrosoft.com";
-  const REDIRECT_URI = location.origin + location.pathname;
-  const GRAPH_SCOPES = ["https://graph.microsoft.com/Sites.Read.All"];
   const CURRENCY = "KES";
 
   const STATUS_COLORS = {
@@ -38,28 +34,23 @@ const DEP_COLORS = {
       });
     }
   });
-  // ---------- MSAL ----------
-  const msalConfig = { auth: { clientId: CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI }, cache: { cacheLocation: "localStorage" } };
-  const msalApp = new msal.PublicClientApplication(msalConfig);
+  // ---------- Auth (single sign-in page at /login) ----------
   let account = null;
 
   async function initAuth() {
-    await msalApp.initialize();
-    try {
-      const resp = await msalApp.handleRedirectPromise();
-      if (resp && resp.account) { account = resp.account; onSignedIn(); return; }
-    } catch (e) { console.error("MSAL redirect error:", e); showSignIn("Sign-in error: " + (e.message || e)); return; }
-    const all = msalApp.getAllAccounts();
-    if (all.length > 0) { account = all[0]; onSignedIn(); return; }
-    // no sign-in yet —” show the Microsoft sign-in button
-    showSignIn();
-    document.getElementById("signInBtn").onclick = () => { msalApp.loginRedirect({ scopes: GRAPH_SCOPES }); };
-  }
-
-  async function getToken() {
-    const req = { scopes: GRAPH_SCOPES, account };
-    try { const r = await msalApp.acquireTokenSilent(req); return r.accessToken; }
-    catch (e) { console.warn("silent token failed, retrying redirect:", e); msalApp.acquireTokenRedirect(req); throw new Error("refreshing session"); }
+    const session = await XanaSupabase.getSession().catch(() => null);
+    if (!session || !session.user) return false;
+    account = { username: String(session.user.email || "").toLowerCase(), name: session.user.email };
+    const roles = await XanaSupabase.myRoles();
+    if (!(roles.includes("dashboard_viewer") || roles.includes("admin"))) {
+      showSignIn("Your account has no dashboard access. Contact IT Admin (roystone@xanalife.com).");
+      const btn = document.getElementById("signInBtn");
+      if (btn) btn.onclick = () => { location.href = "/login?next=/dashboard"; };
+      return false;
+    }
+    XanaSupabase.applyRoleNav(roles);
+    onSignedIn();
+    return true;
   }
 
   // ---------- Auth UI helpers ----------
@@ -68,9 +59,8 @@ const DEP_COLORS = {
     const m = document.getElementById("main"); if (m) m.style.display = "none";
     const ui = document.getElementById("userInfo"); if (ui) ui.style.display = "none";
     if (msg) { const me = document.getElementById("signinMsg"); if (me) me.textContent = msg; }
-    // always wire the sign-in button so it works regardless of when initAuth finishes
     const btn = document.getElementById("signInBtn");
-    if (btn) btn.onclick = () => { msalApp.loginRedirect({ scopes: GRAPH_SCOPES }); };
+    if (btn) btn.onclick = () => { location.href = "/login?next=" + encodeURIComponent(location.pathname); };
   }
   function showMain() {
     document.getElementById("signin").style.display = "none";
@@ -80,7 +70,7 @@ const DEP_COLORS = {
   function onSignedIn() {
     document.getElementById("userName").textContent = account.name || account.username;
     document.getElementById("userInfo").style.display = "flex";
-    document.getElementById("signOutBtn").onclick = () => msalApp.logout({ postLogoutRedirectUri: location.origin + location.pathname });
+    document.getElementById("signOutBtn").onclick = async () => { await XanaSupabase.signOut(); location.href = "/login"; };
     showMain(); load();
   }
 
@@ -96,25 +86,16 @@ const DEP_COLORS = {
     const meta = document.getElementById("meta");
     main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live data—¦</div>';
     try {
-      const token = await getToken();
-      const res = await fetch("/api/summary", { cache: "no-store", headers: { Authorization: "Bearer " + token, "x-summary-key": token } });
-      if (!res.ok) { throw new Error(await apiError(res)); }
-      const d = await res.json();
+      const items = await XanaSupabase.listAssetsDetailed();
+      const d = XanaSupabase.computeSummary(items);
       render(d, main, meta);
-      // user role awareness from API
-      const email = (account.username || "").toLowerCase();
-      const isAdmin = (d.adminEmails || []).includes(email);
+      const isAdminUser = (await XanaSupabase.myRoles()).includes("admin");
       const badge = document.getElementById("roleBadge");
-      if (badge) { badge.textContent = isAdmin ? "ADMIN" : "VIEWER"; badge.style.background = isAdmin ? "#3b82f6" : "#64748b"; }
+      if (badge) { badge.textContent = isAdminUser ? "ADMIN" : "VIEWER"; badge.style.background = isAdminUser ? "#3b82f6" : "#64748b"; }
     } catch (e) {
       console.error(e);
       main.innerHTML = '<div class="errbox">' + esc(e.message || e) + '</div>';
     } finally { if (btn) btn.disabled = false; }
-  }
-  async function apiError(res) {
-    let body = ""; try { body = (await res.json()).error || res.statusText; } catch (e) { body = res.statusText; }
-    if (res.status === 401) return "Session expired —” please refresh the page to sign in again.";
-    return "HTTP " + res.status + " —” " + body;
   }
   function render(d, main, meta) {
     if (meta) meta.textContent = "Last fetched: " + new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short" });

@@ -57,6 +57,35 @@
     });
   }
 
+  // If a user clicks the emailed link anyway (instead of typing the code),
+  // Supabase lands them on the site with #error=... or #access_token=...
+  // Strip it so the hash never confuses the router, and surface a hint.
+  function sanitizeAuthHash() {
+    try {
+      if (!location.hash || location.hash.indexOf("#") !== 0) return;
+      const params = new URLSearchParams(location.hash.slice(1));
+      const err = params.get("error_description") || params.get("error");
+      if (!err && !params.get("access_token")) return;
+      history.replaceState(null, "", location.pathname + location.search);
+      if (err) {
+        const msg = err.indexOf("expired") !== -1 || err.indexOf("invalid") !== -1
+          ? "That email link expired - just request a fresh code and type it into the page."
+          : err;
+        sessionStorage.setItem("xana_auth_notice", msg);
+        console.warn("[auth]", msg);
+      }
+    } catch (e) { /* never block boot */ }
+  }
+  sanitizeAuthHash();
+
+  function popAuthNotice() {
+    try {
+      const n = sessionStorage.getItem("xana_auth_notice");
+      if (n) sessionStorage.removeItem("xana_auth_notice");
+      return n;
+    } catch (e) { return null; }
+  }
+
   let _client = null;
   function client() {
     if (!_client) _client = createClient();
@@ -143,6 +172,76 @@
     return (data || []).map(enrichAsset);
   }
 
+  // ---------- Portfolio summary ----------
+  // Port of api/summary.js computeSummary - runs on enriched items from
+  // listAssetsDetailed() so the dashboard needs no server round-trip.
+  function computeSummary(items) {
+    const it = items || [];
+    const sum = (arr, f) => arr.reduce((s, i) => s + f(i), 0);
+    const purchaseValue = Math.round(sum(it, (i) => i.purchasePrice) * 100) / 100;
+    const bookValue = Math.round(sum(it, (i) => i.bookValue) * 100) / 100;
+    const fullyDepreciated = it.filter((i) => i.depStatus === "Fully depreciated").length;
+
+    const expensedThisYear = it.filter((i) => i.depStatus === "In progress" && i.usefulLife > 0 && i.purchasePrice > 0)
+      .reduce((s, i) => s + i.purchasePrice / i.usefulLife, 0);
+
+    const byStatus = {}, byType = {}, byLocation = {}, byDepartment = {};
+    for (const i of it) {
+      byStatus[i.status || "—"] = (byStatus[i.status || "—"] || 0) + 1;
+      byType[i.type] = (byType[i.type] || 0) + 1;
+      byLocation[i.location || "Unassigned"] = (byLocation[i.location || "Unassigned"] || 0) + 1;
+      byDepartment[i.department && i.department !== "" ? i.department : "—"] =
+        (byDepartment[i.department && i.department !== "" ? i.department : "—"] || 0) + 1;
+    }
+
+    const replacementDue = it.filter((i) =>
+      i.purchasePrice > 0 &&
+      (i.depStatus === "Fully depreciated" ||
+        (i.ageYears !== null && i.usefulLife > 0 && i.ageYears + 1 >= i.usefulLife)));
+    const idleStock = it.filter((i) => i.status === "Available" || (!i.employee && i.status !== "Retired" && i.status !== "Lost"));
+    const lostAssets = it.filter((i) => i.status === "Lost");
+    const annualDep = it.reduce((s, i) => {
+      if (!(i.purchasePrice > 0) || !(i.usefulLife > 0)) return s;
+      if (i.ageYears !== null && i.ageYears >= i.usefulLife) return s;
+      return s + i.purchasePrice / i.usefulLife;
+    }, 0);
+
+    const unverified = it.filter((i) => {
+      if (!i.lastVerified) return true;
+      const d = new Date(i.lastVerified);
+      return isNaN(d.getTime()) || Date.now() - d.getTime() > 90 * 86400000;
+    }).length;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      totals: {
+        total: it.length,
+        purchaseValue,
+        bookValue,
+        fullyDepreciated,
+        expensedThisYear: Math.round(expensedThisYear * 100) / 100,
+        missingPurchase: it.filter((i) => !i.purchaseDate).length,
+      },
+      finance: {
+        annualDepreciation: Math.round(annualDep * 100) / 100,
+        replacementDue12mo: replacementDue.length,
+        replacementCost12mo: Math.round(sum(replacementDue, (i) => i.purchasePrice) * 100) / 100,
+        idleAssets: idleStock.length,
+        idleBookValue: Math.round(sum(idleStock, (i) => i.bookValue) * 100) / 100,
+        lostAssets: lostAssets.length,
+        lostCost: Math.round(sum(lostAssets, (i) => i.purchasePrice) * 100) / 100,
+      },
+      byStatus, byType, byLocation, byDepartment,
+      dataHealth: {
+        missingSerial: it.filter((i) => !i.serial).length,
+        missingTag: it.filter((i) => !i.tag).length,
+        missingPurchase: it.filter((i) => !i.purchaseDate).length,
+        unverified,
+      },
+      items: it.slice(0, 500),
+    };
+  }
+
   function rowToFields(row) {
     const fields = {};
     if (!row) return fields;
@@ -213,7 +312,10 @@
 
   // ---------- Auth (email OTP) ----------
   async function sendOtp(email) {
-    const { error } = await client().auth.signInWithOtp({ email: String(email || "").trim() });
+    const { error } = await client().auth.signInWithOtp({
+      email: String(email || "").trim(),
+      options: { shouldCreateUser: false },
+    });
     if (error) throw new Error(error.message);
     return { sent: true };
   }
@@ -231,6 +333,42 @@
   async function getSession() {
     const { data } = await client().auth.getSession();
     return data && data.session ? data.session : null;
+  }
+
+  // ---------- Roles ----------
+  async function myRoles() {
+    try {
+      const { data, error } = await client().from("user_roles").select("role");
+      if (error) return [];
+      return (data || []).map((r) => r.role);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function landingFor() {
+    const roles = await myRoles();
+    if (roles.includes("admin")) return "/dashboard";
+    if (roles.includes("scanner")) return "/scan";
+    if (roles.includes("asset_viewer")) return "/assets";
+    if (roles.includes("dashboard_viewer")) return "/dashboard";
+    return "";
+  }
+
+  // Hide nav links the current user holds no role for.
+  function applyRoleNav(roles) {
+    const r = roles || [];
+    const allow = {
+      "/scan": r.includes("scanner") || r.includes("admin"),
+      "/assets": r.includes("asset_viewer") || r.includes("admin"),
+      "/dashboard": r.includes("dashboard_viewer") || r.includes("admin"),
+      "/admin": r.includes("admin"),
+    };
+    document.querySelectorAll('a[href]').forEach((a) => {
+      const href = (a.getAttribute("href") || "").split(/[?#]/)[0];
+      if (!(href in allow)) return;
+      if (!allow[href]) a.style.display = "none";
+    });
   }
 
   async function currentUserEmail() {
@@ -272,13 +410,18 @@
     enrichAsset,
     listAssets,
     listAssetsDetailed,
+    computeSummary,
     insertAsset,
     updateAsset,
     deleteAsset,
     sendOtp,
     verifyOtp,
     getSession,
+    myRoles,
+    landingFor,
+    applyRoleNav,
     currentUserEmail,
+    popAuthNotice,
     signOut,
     isAdmin,
     uploadAssetImage,
