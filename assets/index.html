@@ -67,6 +67,12 @@
   .tbl-scroll{overflow:auto;max-height:520px;border:1px solid var(--border);border-radius:10px;scroll-behavior:smooth}
   .pill{padding:2px 8px;border-radius:999px;color:#fff;font-size:.65rem;font-weight:700;white-space:nowrap}
   #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
+  .editrow{cursor:pointer;border-radius:6px;margin:0 -6px;padding-left:6px;padding-right:6px;transition:background .12s ease}
+  .editrow:hover{background:rgba(22,163,74,.06)}
+  .editrow:hover>span:first-child{color:var(--text)}
+  .editrow:hover>span:last-child::after{content:" ✎";font-size:.7rem;color:var(--accent)}
+  .inlineedit{max-width:220px;padding:6px 8px;font-size:.85rem;border-radius:8px;border:1px solid var(--accent);background:var(--card);color:var(--text)}
+  .hint{font-size:.72rem;color:var(--muted);margin-top:6px}
   .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   @media(max-width:700px){.detail-grid{grid-template-columns:1fr}}
   .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:.85rem}
@@ -231,25 +237,101 @@ function renderTable(){
 function showDetail(it){
   const c=statusColor(it.status);
   const detail=document.getElementById("detail");
-  detail.innerHTML='<div class="card"><h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>'+
+  detail.innerHTML='<div class="card" id="assetCard"><h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>'+
+    '<div class="hint">Tap Status, Location, Employee or Condition to change it. Edits save to the register and mirror to SharePoint.</div>'+
     '<div class="detail-grid">'+
     '<div class="row"><span>Serial No.</span><span>'+esc(it.serial||"—")+'</span></div>'+
     '<div class="row"><span>Asset Type</span><span>'+esc(it.type||"")+'</span></div>'+
     '<div class="row"><span>Model</span><span>'+esc(it.model||"")+'</span></div>'+
     '<div class="row"><span>Department</span><span>'+esc(it.department||"")+'</span></div>'+
-    '<div class="row"><span>Employee</span><span>'+esc(it.employee||"")+'</span></div>'+
-    '<div class="row"><span>Location</span><span>'+esc(it.location||"")+'</span></div>'+
-    '<div class="row"><span>Condition</span><span>'+esc(it.condition||"")+'</span></div>'+
+    '<div class="row editrow"><span>Employee</span><span data-edit="EmployeeName">'+esc(it.employee||"")+'</span></div>'+
+    '<div class="row editrow"><span>Location</span><span data-edit="Location">'+esc(it.location||"")+'</span></div>'+
+    '<div class="row editrow"><span>Status</span><span data-edit="Status">'+esc(it.status||"")+'</span></div>'+
+    '<div class="row editrow"><span>Condition</span><span data-edit="Condition">'+esc(it.condition||"")+'</span></div>'+
     '<div class="row"><span>Purchase Date</span><span>'+esc(it.purchaseDate||"")+'</span></div>'+
     '<div class="row"><span>Purchase Price</span><span>'+money(it.purchasePrice)+'</span></div>'+
     '<div class="row"><span>Book Value</span><span style="color:var(--book)"><b>'+money(it.bookValue)+'</b></span></div>'+
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+esc(it.lastVerified||"")+'</span></div>'+
-    '</div><div style="margin-top:12px;display:flex;gap:8px"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div></div>';
+    '</div><div id="editBar"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
+  // inline editing — tap a value to change it
+  let current=it;
+  const bar=document.getElementById("editBar");
+  bar.addEventListener("click",async e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    if(b.dataset.act==="cancel"){bar.innerHTML="";return;}
+    if(b.dataset.act!=="save") return;
+    b.disabled=true;b.textContent="Saving…";
+    try{
+      await XanaSupabase.updateAsset(current.id,JSON.parse(b.dataset.patch));
+      flash(bar,"ok","Saved ✓ — mirrors to SharePoint within seconds.");
+      load();
+    }catch(err){b.disabled=false;b.textContent="Save changes";flash(bar,"err",err.message);}
+  });
+  detail.querySelectorAll(".editrow").forEach(row=>{
+    row.addEventListener("click",()=>{
+      beginEdit(row.querySelector("[data-edit]"),current,bar,detail);
+    });
+  });
   detail.scrollIntoView({behavior:"smooth"});
 }
+let _choices=null;
+async function getChoices(){
+  if(_choices) return _choices;
+  _choices={status:["In Use","Available","Retired","Left With","Lost"],location:["Syokimau","Katani","Ruiru","Githurai","Lumumba Dr","TRM Dr"]};
+  try{
+    const {data,error}=await XanaSupabase.client().from("app_choices").select("category,value");
+    if(error) throw error;
+    for(const r of data||[]){
+      if(r.category==="status"&&!_choices.status.includes(r.value))_choices.status.push(r.value);
+      if(r.category==="location"&&!_choices.location.includes(r.value))_choices.location.push(r.value);
+    }
+  }catch(e){/* offline or table empty — fallbacks hold */}
+  return _choices;
+}
+function flash(el,kind,text){
+  el.querySelectorAll(".msg").forEach(m=>m.remove());
+  el.insertAdjacentHTML("beforeend",'<div class="msg '+kind+'">'+(kind==="err"?esc(text):text)+'</div>');
+}
+function fieldControl(name,val){
+  const v=val||"";
+  if(name==="Status"||name==="Location"){
+    const opts=(name==="Status"?_choices.status:_choices.location).filter(Boolean);
+    return {select:true,html:'<option value="">— none —</option>'+opts.map(o=>'<option'+(o===v?' selected':'')+'>'+esc(o)+'</option>').join('')};
+  }
+  return {select:false,attrs:'type="text" value="'+esc(v)+'"'};
+}
+async function beginEdit(cell,current,bar,detail){
+  if(bar.querySelector("select,input")) return;   // one editor at a time
+  await getChoices();
+  const name=cell.dataset.edit;
+  const orig=cell.textContent;
+  const ctl=fieldControl(name,orig);
+  cell.innerHTML = ctl.select
+    ? '<select class="inlineedit">'+ctl.html+'</select>'
+    : '<input class="inlineedit" '+ctl.attrs+' />';
+  const input=cell.querySelector(".inlineedit");
+  input.focus();
+  let done=false;
+  function commit(){
+    if(done) return; done=true;
+    const val=input.value.trim();
+    cell.textContent=orig;                       // restore display either way
+    if(val===orig){bar.innerHTML="";return;}
+    const patch={}; patch[name]=val;
+    bar.innerHTML='<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'+
+      '<button class="btn" data-act="save" data-patch=\''+esc(JSON.stringify(patch))+'\'>Save changes</button>'+
+      '<button class="btn secondary" data-act="cancel">Cancel</button></div>';
+  }
+  input.addEventListener("change",commit);
+  input.addEventListener("keydown",e=>{
+    if(e.key==="Enter")commit();
+    if(e.key==="Escape"){done=true;cell.textContent=orig;bar.innerHTML="";}
+  });
+}
+
 // Add form logic
 let pendingImage=null, pendingImageName="";
 const addSheet=document.getElementById("addSheet");
