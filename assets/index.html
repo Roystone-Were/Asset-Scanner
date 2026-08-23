@@ -259,7 +259,7 @@ function showDetail(it){
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+(esc(it.lastVerified||"")||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div></div>';
+    '</div><div id="editBar"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // inline editing — tap a value to change it
   let current=it;
@@ -292,6 +292,15 @@ function showDetail(it){
       histPanel.innerHTML='<div class="msg err">'+esc(err.message||err)+'</div>';
     }
   });
+  // Event log — repairs, issues, transfers, maintenance
+  const evPanel=document.getElementById("evPanel");
+  document.getElementById("evToggle")?.addEventListener("click",async function(){
+    if(evPanel.dataset.mode==="form"){await loadEvents(current,evPanel);evPanel.dataset.mode="list";this.textContent="Log event";return;}
+    if(evPanel.dataset.open==="1"){evPanel.innerHTML="";evPanel.dataset.open="";return;}
+    evPanel.dataset.open="1";evPanel.dataset.mode="list";
+    await loadEvents(current,evPanel);
+    this.textContent="Hide events";
+  });
   detail.scrollIntoView({behavior:"smooth"});
 }
 const FIELD_LABELS={title:"Tag",asset_tag:"Asset tag",asset_type:"Type",model:"Model",serial:"Serial",employee:"Employee",status:"Status",location:"Location",extra:"Details"};
@@ -310,6 +319,62 @@ function renderHistory(rows){
   if(created)out.push('<div class="hrow"><span class="hwho">'+esc(created.changed_by||"—")+'</span><span class="hwhat">Registered</span><span class="hwhen">'+new Date(created.changed_at).toLocaleString()+'</span></div>');
   out.push(...(items.length?items:['<div class="hrow"><span class="hwhat">No field changes recorded yet.</span></div>']));
   return '<div style="margin-top:10px"><div class="hint">Change history (latest first)</div>'+out.join("")+'</div>';
+}
+// ---------- Asset event log (issues / repairs / transfers / maintenance) ----------
+const EV_META={
+  issue:{icon:"⚠️",label:"Issue"},
+  repair:{icon:"🔧",label:"Repair"},
+  maintenance:{icon:"🛠️",label:"Maintenance"},
+  transfer:{icon:"📍",label:"Transfer"},
+  note:{icon:"📝",label:"Note"},
+};
+async function loadEvents(current,histPanel){
+  try{
+    const rows=await XanaSupabase.listAssetEvents(current.id);
+    if(!rows.length){
+      histPanel.innerHTML='<div class="hint" style="margin-top:10px">No events logged yet. Use “Log event” to record repairs, issues or moves.</div>';
+      return;
+    }
+    histPanel.innerHTML='<div class="hint" style="margin-top:10px">Event log (latest first)</div>'+rows.map(r=>{
+      const m=EV_META[r.event_type]||{icon:"•",label:r.event_type};
+      const cost=r.cost!=null&&r.cost!==""?"<b>KES "+Number(r.cost).toLocaleString()+"</b> · ":"";
+      const badge=(r.event_type==="issue"&&!r.resolved)?' <span class="pill" style="background:#dc2626;font-size:.6rem;padding:2px 7px">OPEN</span>':"";
+      return '<div class="hrow"><span class="hwhat">'+m.icon+" <b>"+m.label+'</b>'+badge+" — "+esc(r.description)+"<br/><span class=\"hwhen\">"+cost+esc(r.created_by||"—")+" · "+new Date(r.event_date).toLocaleDateString()+'</span></span></div>';
+    }).join("");
+  }catch(err){
+    histPanel.innerHTML='<div class="msg err">'+esc(err.message||err)+'</div>';
+  }
+}
+function renderEventForm(histPanel,current){
+  histPanel.innerHTML=
+    '<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;max-width:420px">'+
+    '<select id="evType" class="inlineedit" style="max-width:none">'+
+      '<option value="issue">Issue (problem reported)</option>'+
+      '<option value="repair">Repair</option>'+
+      '<option value="maintenance">Maintenance</option>'+
+      '<option value="transfer">Transfer / move</option>'+
+      '<option value="note">Note</option>'+
+    '</select>'+
+    '<textarea id="evDesc" class="inlineedit" style="max-width:none;min-height:56px;resize:vertical" placeholder="What happened?"></textarea>'+
+    '<input id="evCost" type="number" min="0" placeholder="Cost KES (optional)" class="inlineedit" style="max-width:none"/>'+
+    '<label class="chk" id="evOpenWrap" style="display:flex;align-items:center;gap:6px;font-size:.8rem"><input type="checkbox" id="evOpen" checked /> Leave open (shows in IT view until resolved)</label>'+
+    '<div style="display:flex;gap:8px"><button class="btn" id="evSave">Save event</button><button class="btn secondary" id="evCancel">Cancel</button></div>'+
+    '</div>';
+  const typeSel=document.getElementById("evType"),openWrap=document.getElementById("evOpenWrap");
+  function syncOpen(){openWrap.style.display=(typeSel.value==="issue")?"flex":"none";}
+  typeSel.addEventListener("change",syncOpen);syncOpen();
+  document.getElementById("evCancel").addEventListener("click",()=>loadEvents(current,histPanel));
+  document.getElementById("evSave").addEventListener("click",async()=>{
+    const desc=document.getElementById("evDesc").value.trim();
+    if(!desc){flash(histPanel,"err","Describe the event first.");return;}
+    const type=typeSel.value;
+    const cost=document.getElementById("evCost").value.trim();
+    // open flag only applies to issues; everything else is a completed happening
+    try{
+      await XanaSupabase.addAssetEvent(current.id,{type,description:desc,cost});
+      await loadEvents(current,histPanel);
+    }catch(err){flash(histPanel,"err",err.message||err);}
+  });
 }
 let _choices=null;
 async function getChoices(){
