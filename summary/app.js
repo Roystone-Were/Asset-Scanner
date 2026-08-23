@@ -94,13 +94,44 @@ const DEP_COLORS = {
       const items = await XanaSupabase.listAssetsDetailed();
       const d = XanaSupabase.computeSummary(items);
       render(d, main, meta);
-      const isAdminUser = (await XanaSupabase.myRoles()).includes("admin");
+      // IT widget: open issues + recent events (non-fatal if it fails)
+      try {
+        await mountItWidget(main, items);
+      } catch (e) { console.warn("IT widget:", e); }
+      const isAdminUser = (await XanaSupabase.myRoles()).some(r => r === "admin" || r === "super_admin");
       const badge = document.getElementById("roleBadge");
       if (badge) { badge.textContent = isAdminUser ? "ADMIN" : "VIEWER"; badge.style.background = isAdminUser ? "#3b82f6" : "#64748b"; }
     } catch (e) {
       console.error(e);
       main.innerHTML = '<div class="errbox">' + esc(e.message || e) + '</div>';
     } finally { if (btn) btn.disabled = false; }
+  }
+
+  async function mountItWidget(main, items) {
+    const client = XanaSupabase.client();
+    const [openIssues, recent] = await Promise.all([
+      client.from("asset_events").select("id,item_id,event_type,event_date,description,created_by").eq("event_type", "issue").eq("resolved", false).order("event_date", { ascending: false }).limit(20),
+      client.from("asset_events").select("id,item_id,event_type,event_date,description,cost,resolved").in("event_type", ["repair", "maintenance"]).order("event_date", { ascending: false }).limit(8),
+    ]);
+    const tagFor = {}; items.forEach(i => { tagFor[i.id] = i.tag || i.serial || ("#" + i.id); });
+    const issues = openIssues.data || [];
+    const repairs = recent.data || [];
+    const panel = document.createElement("div");
+    panel.className = "panel";
+    panel.style.marginTop = "14px";
+    let html = "<h2>🛠️ Field activity</h2>";
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+      '<div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Open issues (' + issues.length + ')</h3>' +
+      (issues.length
+        ? issues.map(i => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[i.item_id] || "#" + i.item_id) + "</b> — " + esc(i.description) + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(i.event_date).toLocaleDateString() + " · " + esc(i.created_by || "—") + '</span></div>').join("")
+        : '<div style="font-size:.8rem;color:var(--muted)">None open 🎉</div>') +
+      '</div><div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Recent repairs &amp; maintenance</h3>' +
+      (repairs.length
+        ? repairs.map(r => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[r.item_id] || "#" + r.item_id) + "</b> — " + esc(r.description) + (r.cost ? ' <b>KES ' + Number(r.cost).toLocaleString() + "</b>" : "") + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(r.event_date).toLocaleDateString() + '</span></div>').join("")
+        : '<div style="font-size:.8rem;color:var(--muted)">Nothing logged yet</div>') +
+      "</div></div>";
+    panel.innerHTML = html;
+    main.appendChild(panel);
   }
   function render(d, main, meta) {
     if (meta) meta.textContent = "Last fetched: " + new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short" });
