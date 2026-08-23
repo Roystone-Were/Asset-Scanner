@@ -164,7 +164,7 @@
     <div id="main"><div class="msg info">Loading…</div></div>
     <div id="detail"></div>
   </div>
-  <div id="denied" class="hidden"><div class="card"><div class="msg err">🔒 Access required - Scanner limited to IT. Contact IT Admin: <b>roystone@xanalife.com</b></div></div></div>
+  <div id="denied" class="hidden"><div class="card"><div class="msg err">🔒 Access required - Scanner limited to IT. Contact IT Admin: <b>it@xanalife.com</b></div></div></div>
 </div>
 
 <!-- Add Asset Sheet -->
@@ -197,7 +197,7 @@
 
 <script>
 "use strict";
-const ADMIN_EMAIL="roystone@xanalife.com";
+const ADMIN_EMAIL="it@xanalife.com";
 const STORAGE_THEME="xana_theme";
 function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
 applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
@@ -625,22 +625,22 @@ async function startApp(){
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").classList.remove("hidden");
   document.getElementById("search").addEventListener("input",applyFilters);
-  document.getElementById("fStatus").addEventListener("change",applyFilters);
-  document.getElementById("fLocation").addEventListener("change",applyFilters);
   document.getElementById("btnScan").addEventListener("click",()=> location.href="/scan");
-  // department + status/location/type dropdowns all live from admin-managed choices
-  try{
-    const {data}=await XanaSupabase.client().from("app_choices").select("category,value").order("sort_order");
-    const byCat={};
-    for(const r of data||[]){
-      (byCat[r.category]=byCat[r.category]||[]).push(r.value);
-    }
-    const fill=(id,opts)=>{const s=document.getElementById(id);if(!s)return;for(const v of opts||[])s.insertAdjacentHTML("beforeend",'<option>'+esc(v)+'</option>');};
-    fill("addDept",byCat.department);
-    fill("addType",byCat.asset_type);
-    fill("addStatus",byCat.status);
-    fill("addLocation",byCat.location);
-  }catch(e){/* choices unavailable — static fallbacks below still apply */}
+  // kick off data load + choices fetch in parallel; don't block the UI on choices
+  const choicesP=(async()=>{
+    try{
+      const {data}=await XanaSupabase.client().from("app_choices").select("category,value").order("sort_order");
+      const byCat={};
+      for(const r of data||[]){
+        (byCat[r.category]=byCat[r.category]||[]).push(r.value);
+      }
+      const fill=(id,opts)=>{const s=document.getElementById(id);if(!s)return;for(const v of opts||[])s.insertAdjacentHTML("beforeend",'<option>'+esc(v)+'</option>');};
+      fill("addDept",byCat.department);
+      fill("addType",byCat.asset_type);
+      fill("addStatus",byCat.status);
+      fill("addLocation",byCat.location);
+    }catch(e){/* choices unavailable — static fallbacks below still apply */}
+  })();
   // Asset Type fallback if app_choices has none
   try{
     const atSel=document.getElementById("addType");

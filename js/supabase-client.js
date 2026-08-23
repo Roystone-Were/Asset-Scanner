@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://irqrnyixizzorvfmtvag.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cS0GIdneT3Xccuyt0AiHWw_XBuzeBA_";
-  const ADMIN_EMAIL = "roystone@xanalife.com";
+  const ADMIN_EMAIL = "it@xanalife.com";
 
   // Supabase column <-> SharePoint field internal name
   const FIELD_TO_COL = {

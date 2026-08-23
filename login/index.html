@@ -103,7 +103,7 @@ async function send(){
     show(document.getElementById("stepCode"),true);
   }catch(e){
     msg("msg",e.message.includes("Signups not allowed")
-      ? "No account found for that email — access is invite-only. Contact IT Admin (roystone@xanalife.com)."
+      ? "No account found for that email — access is invite-only. Contact IT Admin (it@xanalife.com)."
       : e.message,true);
   }finally{b.disabled=false;b.textContent="Email me a sign-in button";}
 }
@@ -114,7 +114,7 @@ async function verify(){
 }
 
 function noAccess(){
-  msg("msg","✅ Signed in — but your account has no access assigned yet. Contact roystone@xanalife.com.",true);
+  msg("msg","✅ Signed in — but your account has no access assigned yet. Contact it@xanalife.com.",true);
   const b=document.createElement("button");
   b.className="secondary";b.textContent="Sign out";b.style.marginTop="8px";
   b.onclick=async()=>{await XanaSupabase.signOut();location.reload();};
@@ -161,7 +161,7 @@ async function pwdSignin(){
     noAccess();
   }catch(e){
     msg("msg",/Invalid login/i.test(e.message)
-      ? "Wrong email or password. If you've forgotten it, contact IT Admin (roystone@xanalife.com)."
+      ? "Wrong email or password. If you've forgotten it, contact IT Admin (it@xanalife.com)."
       : e.message,true);
   }finally{b.disabled=false;b.textContent="Sign in";}
 }
