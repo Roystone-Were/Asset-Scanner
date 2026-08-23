@@ -76,8 +76,8 @@
   .hrow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--border);font-size:.8rem;flex-wrap:wrap}
   .hwho{color:var(--accent);font-weight:600;min-width:180px}
   .hwhat{flex:1;min-width:200px}
-  .hwhen{color:var(--muted);font-size:.72rem}
-  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hwhen{color:var(--muted);font-size:.72rem;margin-left:auto}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:0}
   @media(max-width:700px){.detail-grid{grid-template-columns:1fr}}
   .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:.85rem}
   .row:last-child{border:0}
@@ -248,17 +248,17 @@ function showDetail(it){
     '<div class="row"><span>Serial No.</span><span>'+esc(it.serial||"—")+'</span></div>'+
     '<div class="row"><span>Asset Type</span><span>'+esc(it.type||"")+'</span></div>'+
     '<div class="row"><span>Model</span><span>'+esc(it.model||"")+'</span></div>'+
-    '<div class="row"><span>Department</span><span>'+esc(it.department||"")+'</span></div>'+
-    '<div class="row editrow"><span>Employee</span><span data-edit="EmployeeName">'+esc(it.employee||"")+'</span></div>'+
-    '<div class="row editrow"><span>Location</span><span data-edit="Location">'+esc(it.location||"")+'</span></div>'+
+    '<div class="row"><span>Department</span><span>'+esc(it.department||"—")+'</span></div>'+
+    '<div class="row editrow"><span>Employee</span><span data-edit="EmployeeName">'+(esc(it.employee||"")||"—")+'</span></div>'+
+    '<div class="row editrow"><span>Location</span><span data-edit="Location">'+(esc(it.location||"")||"—")+'</span></div>'+
     '<div class="row editrow"><span>Status</span><span data-edit="Status">'+esc(it.status||"")+'</span></div>'+
-    '<div class="row editrow"><span>Condition</span><span data-edit="Condition">'+esc(it.condition||"")+'</span></div>'+
-    '<div class="row"><span>Purchase Date</span><span>'+esc(it.purchaseDate||"")+'</span></div>'+
+    '<div class="row editrow"><span>Condition</span><span data-edit="Condition">'+(esc(it.condition||"")||"—")+'</span></div>'+
+    '<div class="row"><span>Purchase Date</span><span>'+esc(it.purchaseDate||"—")+'</span></div>'+
     '<div class="row"><span>Purchase Price</span><span>'+money(it.purchasePrice)+'</span></div>'+
     '<div class="row"><span>Book Value</span><span style="color:var(--book)"><b>'+money(it.bookValue)+'</b></span></div>'+
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
-    '<div class="row"><span>Last Verified</span><span>'+esc(it.lastVerified||"")+'</span></div>'+
+    '<div class="row"><span>Last Verified</span><span>'+(esc(it.lastVerified||"")||"—")+'</span></div>'+
     '</div><div id="editBar"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // inline editing — tap a value to change it
