@@ -156,6 +156,58 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    if (body.action === "create_with_password") {
+      // Manual onboarding (no invite email): admin supplies the initial
+      // password; user is flagged must_change_password and the apps force a
+      // change at first sign-in.
+      const email = String(body.email || "").trim().toLowerCase();
+      const roles = Array.isArray(body.roles) ? body.roles.filter((r) => VALID_ROLES.includes(r)) : [];
+      const password = String(body.password || "");
+      if (!email.includes("@")) throw new Error("Valid email required");
+      if (!roles.length) throw new Error("At least one role required");
+      if (password.length < 8) throw new Error("Password must be at least 8 characters");
+
+      let user = await findUserIdByEmail(email);
+      if (!user) {
+        const cr = await authAdmin("admin/users", {
+          method: "POST",
+          body: JSON.stringify({ email, password, email_confirm: true }),
+        });
+        user = cr;
+      } else {
+        // Existing account: reset its password and re-flag it.
+        await fetch(process.env.SUPABASE_URL + "/auth/v1/admin/users/" + user.id, {
+          method: "PUT",
+          headers: serviceHeaders(),
+          body: JSON.stringify({ password, email_confirm: true }),
+        });
+      }
+
+      await sb("profiles", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates" },
+        body: JSON.stringify({
+          id: user.id, email, full_name: body.fullName || null,
+          invited_by: admin.email, active: true, must_change_password: true,
+        }),
+      });
+      await sb("user_roles?user_id=eq." + user.id, { method: "DELETE" });
+      await sb("user_roles", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates" },
+        body: JSON.stringify(roles.map((r) => ({ user_id: user.id, role: r }))),
+      });
+
+      res.status(200).json({
+        ok: true,
+        userId: user.id,
+        email,
+        roles,
+        note: "Created with initial password — they'll be forced to change it at first sign-in. Share the password out-of-band (in person or phone), not email.",
+      });
+      return;
+    }
+
     if (body.action === "set_roles") {
       const userId = String(body.userId || "");
       const roles = Array.isArray(body.roles) ? [...new Set(body.roles.filter((r) => VALID_ROLES.includes(r)))] : [];

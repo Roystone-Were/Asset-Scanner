@@ -379,6 +379,34 @@
     await client().auth.signOut();
   }
 
+  // ---------- Forced password change (manual-password onboarding) ----------
+  async function mustChangePassword() {
+    const s = await getSession();
+    if (!s || !s.user) return false;
+    try {
+      const { data } = await client()
+        .from("profiles")
+        .select("must_change_password")
+        .eq("id", s.user.id)
+        .single();
+      return !!(data && data.must_change_password);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function completePasswordChange(newPassword) {
+    const { error } = await client().auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    const s = await getSession();
+    if (!s || !s.user) throw new Error("Not signed in");
+    const { error: perr } = await client()
+      .from("profiles")
+      .update({ must_change_password: false })
+      .eq("id", s.user.id);
+    if (perr) throw perr;
+  }
+
   // ---------- Asset images (Supabase Storage) ----------
   async function uploadAssetImage(itemId, dataUrl, fileName) {
     const base64 = String(dataUrl || "").split(",")[1];
@@ -423,6 +451,8 @@
     popAuthNotice,
     signOut,
     isAdmin,
+    mustChangePassword,
+    completePasswordChange,
     uploadAssetImage,
   };
 })();

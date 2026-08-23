@@ -90,7 +90,15 @@
           <label class="chk"><input type="checkbox" value="dashboard_viewer" /> Dashboard viewer</label>
           <label class="chk"><input type="checkbox" value="admin" /> Admin</label>
         </div>
-        <button id="btnInvite">Send invite &amp; create account</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="btnInvite" style="flex:1">Send invite &amp; create account</button>
+          <button id="btnManual" class="small" style="background:transparent;color:var(--text);border:1px solid var(--border);font-weight:500">Create with password instead…</button>
+        </div>
+        <div id="manualBox" style="display:none;margin-top:10px;padding:12px;border:1px dashed var(--border);border-radius:10px">
+          <p style="font-size:.8rem;color:var(--muted);margin-bottom:8px">No email will be sent. Set an initial password and share it with the user in person or by phone — they'll be forced to choose their own at first sign-in.</p>
+          <input type="text" id="manualPass" placeholder="initial password (min 8 characters)" style="width:100%;margin-bottom:8px" autocomplete="off"/>
+          <button class="small" id="btnManualSave">Create account with this password</button>
+        </div>
         <div id="invMsg" class="msg"></div>
       </div>
       <div class="card">
@@ -187,6 +195,32 @@ document.getElementById("btnInvite").addEventListener("click",async()=>{
       ? "✓ "+email+" invited ("+roles.join(", ")+"). Invite email sent — they tap the button inside it and land signed-in."
       : "✓ "+email+" updated ("+roles.join(", ")+"). Account already existed — no email sent; they can sign in at /login.";
     document.getElementById("invEmail").value="";document.getElementById("invName").value="";
+    await loadUsers();
+  }catch(e){msgEl.className="msg err show";msgEl.textContent=e.message;}
+});
+
+// Manual-password onboarding (no email involved)
+document.getElementById("btnManual").addEventListener("click",()=>{
+  const box=document.getElementById("manualBox");
+  box.style.display=box.style.display==="none"?"block":"none";
+});
+document.getElementById("btnManualSave").addEventListener("click",async()=>{
+  const email=(document.getElementById("invEmail").value||"").trim().toLowerCase();
+  const name=(document.getElementById("invName").value||"").trim();
+  const roles=[...document.querySelectorAll("#invRoles input:checked")].map(c=>c.value);
+  const password=document.getElementById("manualPass").value;
+  const msgEl=document.getElementById("invMsg");
+  if(!email.includes("@")){msgEl.className="msg err show";msgEl.textContent="Enter a valid email above.";return;}
+  if(!roles.length){msgEl.className="msg err show";msgEl.textContent="Pick at least one role.";return;}
+  if(password.length<8){msgEl.className="msg err show";msgEl.textContent="Initial password must be at least 8 characters.";return;}
+  msgEl.className="msg info show";msgEl.textContent="Creating account…";
+  try{
+    const d=await api("create_with_password",{email,fullName:name,roles,password});
+    msgEl.className="msg ok show";
+    msgEl.textContent="✓ "+email+" created ("+roles.join(", ")+"). Give them the password in person/phone — they must choose a new one at first sign-in.";
+    document.getElementById("invEmail").value="";document.getElementById("invName").value="";
+    document.getElementById("manualPass").value="";
+    document.getElementById("manualBox").style.display="none";
     await loadUsers();
   }catch(e){msgEl.className="msg err show";msgEl.textContent=e.message;}
 });

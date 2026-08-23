@@ -54,6 +54,15 @@
       <div id="msgCode" class="msg"></div>
     </div>
 
+    <div id="stepPasswordForm" style="display:none">
+      <p class="sub">Your account uses a temporary password set by IT.<br/>Choose your own password to continue.</p>
+      <input type="password" id="newPass1" placeholder="New password (min 8 characters)" autocomplete="new-password" />
+      <input type="password" id="newPass2" placeholder="Repeat new password" autocomplete="new-password" />
+      <button id="btnSavePass">Save password &amp; continue</button>
+      <button class="secondary" id="btnCancelPass">Sign out instead</button>
+      <div id="msgPass" class="msg"></div>
+    </div>
+
     <div class="links">
       <a href="/scan">Scan</a><a href="/assets">Assets</a><a href="/dashboard">Dashboard</a><a href="/admin">Admin</a>
     </div>
@@ -110,6 +119,13 @@ document.getElementById("btnBack").addEventListener("click",()=>{
   if(notice) msg("msg",notice,true);
   const session=await XanaSupabase.getSession().catch(()=>null);
   if(session&&session.user){
+    // Manual-password onboarding: force a change before landing anywhere.
+    if(await XanaSupabase.mustChangePassword()){
+      show(document.getElementById("stepEmail"),false);
+      show(document.getElementById("stepCode"),false);
+      show(document.getElementById("stepPasswordForm"),true);
+      return;
+    }
     const l=await XanaSupabase.landingFor();
     if(l){location.href=l;return;}
     noAccess();
@@ -122,6 +138,26 @@ document.getElementById("btnBack").addEventListener("click",()=>{
     show(document.getElementById("stepCode"),true);
   }
 })();
+
+document.getElementById("btnSavePass").addEventListener("click",async()=>{
+  const p1=document.getElementById("newPass1").value, p2=document.getElementById("newPass2").value;
+  if(p1.length<8){msg("msgPass","Password must be at least 8 characters.",true);return;}
+  if(p1!==p2){msg("msgPass","The two passwords don't match.",true);return;}
+  const b=document.getElementById("btnSavePass");b.disabled=true;b.textContent="Saving…";
+  try{
+    await XanaSupabase.completePasswordChange(p1);
+    const l=await XanaSupabase.landingFor();
+    if(l){location.href=l;return;}
+    noAccess();
+  }catch(e){
+    msg("msgPass",e.message,true);
+    b.disabled=false;b.textContent="Save password & continue";
+  }
+});
+document.getElementById("btnCancelPass").addEventListener("click",async()=>{
+  await XanaSupabase.signOut();location.reload();
+});
+
 </script>
 </body>
 </html>
