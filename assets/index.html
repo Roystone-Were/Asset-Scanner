@@ -198,6 +198,20 @@ async function initAuth(){
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("lost"))return "#d13438";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
 function money(n){return "KES "+Math.round(n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");}
+// ---------- column filters ----------
+const colFilters={type:new Set(),location:new Set(),status:new Set()};
+const FILTERABLE={Type:"type",Location:"location",Status:"status"};
+function distinctValues(key){
+  const s=new Set();
+  for(const it of allItems){
+    const v=(it[key]||"").toString().trim();
+    s.add(v||"(blank)");
+  }
+  return [...s].sort((a,b)=>a.localeCompare(b));
+}
+function colFilterCount(){
+  return Object.values(colFilters).reduce((n,set)=>n+set.size,0);
+}
 async function load(){
   allItems=await XanaSupabase.listAssetsDetailed();
   const pid=new URLSearchParams(location.search).get("id");
