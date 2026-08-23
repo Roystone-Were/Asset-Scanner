@@ -65,6 +65,16 @@
   th{color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;cursor:pointer}
   th:hover{color:var(--text)}
   .tbl-scroll{overflow:auto;max-height:520px;border:1px solid var(--border);border-radius:10px;scroll-behavior:smooth}
+  thead th{position:relative;white-space:nowrap}
+  th .fwrap{display:inline-flex;align-items:center;margin-left:4px}
+  button.funnel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.62rem;padding:2px;line-height:1;opacity:.7}
+  button.funnel:hover{color:var(--text);opacity:1}
+  button.funnel.active{color:var(--accent);opacity:1}
+  .fpop{position:absolute;z-index:60;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:170px;max-height:260px;overflow:auto;text-align:left}
+  .fpop .ftitle{font-weight:600;font-size:.72rem;margin-bottom:6px;text-transform:capitalize;color:var(--muted)}
+  .fpop label{display:flex;gap:7px;align-items:center;font-size:.8rem;padding:4px 2px;cursor:pointer}
+  .fpop label:hover{color:var(--accent)}
+  .fpop .fbtns{display:flex;gap:6px;margin-top:8px}
   .pill{padding:2px 8px;border-radius:999px;color:#fff;font-size:.65rem;font-weight:700;white-space:nowrap}
   #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
   .editrow{cursor:pointer;border-radius:6px;margin:0 -6px;padding-left:6px;padding-right:6px;transition:background .12s ease}
@@ -212,6 +222,42 @@ function distinctValues(key){
 function colFilterCount(){
   return Object.values(colFilters).reduce((n,set)=>n+set.size,0);
 }
+function metaLine(){
+  const active=Object.entries(colFilters).filter(([,s])=>s.size);
+  if(!active.length)return"";
+  return ' · <b>filtered</b> ('+active.map(([k,s])=>k+"("+s.size+")").join(", ")+') — <a href="#" id="clearColFilters" style="color:var(--accent)">clear</a>';
+}
+document.addEventListener("click",e=>{
+  if(e.target.id==="clearColFilters"){
+    e.preventDefault();
+    for(const k of Object.keys(colFilters))colFilters[k]=new Set();
+    applyFilters();
+    return;
+  }
+  if(e.target.closest(".funnel")||e.target.closest("#funnelPop"))return;
+  closeFunnelPop();
+});
+function closeFunnelPop(){document.getElementById("funnelPop")?.remove();}
+function openFunnelPop(fkey,anchorEl){
+  closeFunnelPop();
+  const vals=distinctValues(fkey);
+  const pop=document.createElement("div");
+  pop.className="fpop";pop.id="funnelPop";
+  pop.innerHTML='<div class="ftitle">Filter by '+esc(fkey)+'</div>'+
+    vals.map(v=>'<label><input type="checkbox" value="'+esc(v)+'" '+(colFilters[fkey].has(v)?"checked":"")+"/> "+esc(v)+"</label>").join("")+
+    '<div class="fbtns"><button type="button" class="btn" id="fpApply">Apply</button><button type="button" class="btn secondary" id="fpClear">Clear</button></div>';
+  document.body.appendChild(pop);
+  const r=anchorEl.getBoundingClientRect();
+  pop.style.top=(r.bottom+window.scrollY+6)+"px";
+  pop.style.left=Math.max(8,Math.min(r.left+window.scrollX-40,window.scrollX+document.documentElement.clientWidth-pop.offsetWidth-8))+"px";
+  pop.querySelector("#fpApply").addEventListener("click",()=>{
+    colFilters[fkey]=new Set([...pop.querySelectorAll("input:checked")].map(i=>i.value));
+    closeFunnelPop();applyFilters();
+  });
+  pop.querySelector("#fpClear").addEventListener("click",()=>{
+    colFilters[fkey]=new Set();closeFunnelPop();applyFilters();
+  });
+}
 async function load(){
   allItems=await XanaSupabase.listAssetsDetailed();
   const pid=new URLSearchParams(location.search).get("id");
@@ -236,18 +282,33 @@ function applyFilters(){
 }
 function renderTable(){
   const main=document.getElementById("main");
-  if(!filtered.length){main.innerHTML='<div class="card"><div class="msg info">No matching assets.</div></div>';return;}
+  if(!filtered.length){main.innerHTML='<div class="card"><div class="msg info">No matching assets.</div></div>'+metaLine();return;}
   const start=currentPage*PAGE_SIZE, end=Math.min(start+PAGE_SIZE, filtered.length);
   const slice=filtered.slice(start,end);
-  const head=['Tag','Type','Model','Serial','Employee','Location','Status','Purchase','Price','Book','Dep','Condition'].map(k=>'<th data-sort="'+k.toLowerCase().replace(/ /g,"")+'">'+k+'</th>').join("");
+  const COLS=[["Tag","tag"],["Type","type"],["Model","model"],["Serial","serial"],["Employee","employee"],["Location","location"],["Status","status"],["Purchase","purchase"],["Price","price"],["Book","book"],["Dep","dep"],["Condition","condition"]];
+  const head=COLS.map(([label,key])=>{
+    const fkey=FILTERABLE[label];
+    const funnel=fkey?'<span class="fwrap"><button type="button" class="funnel'+(colFilters[fkey].size?" active":"")+'" data-funnel="'+fkey+'" title="Filter '+label.toLowerCase()+'">'+(colFilters[fkey].size?"⏷ "+colFilters[fkey].size:"⏷")+'</button></span>':"";
+    const arrow=(sortKey===key)?(sortDir===1?" ▲":" ▼"):"";
+    return '<th data-sort="'+key+'"><span class="sortlabel" data-sort="'+key+'">'+label+arrow+"</span>"+funnel+"</th>";
+  }).join("");
   const rows=slice.map(it=>`
     <tr data-id="${esc(it.tag||it.serial)}" style="cursor:pointer">
       <td><b>${esc(it.tag)}</b></td><td>${esc(it.type)}</td><td>${esc(it.model)}</td><td>${esc(it.serial)}</td><td>${esc(it.employee)}</td><td>${esc(it.location)}</td>
       <td><span class="pill" style="background:${statusColor(it.status)}">${esc(it.status)}</span></td>
       <td>${esc(it.purchaseDate)}</td><td>${money(it.purchasePrice)}</td><td><b>${money(it.bookValue)}</b></td><td>${esc(it.depStatus)}</td><td>${esc(it.condition||"")}</td>
     </tr>`).join("");
-  main.innerHTML='<div class="card"><div style="margin-bottom:6px;font-size:.8rem;color:var(--muted)">Showing '+(start+1)+'–'+end+' of '+filtered.length+' (tap row for details)</div><div class="tbl-scroll"><table><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center"><button class="btn secondary" id="prev" '+(currentPage===0?'disabled':'')+'>Prev</button><button class="btn secondary" id="next" '+(end>=filtered.length?'disabled':'')+'>Next</button><span style="margin-left:auto;font-size:.8rem;color:var(--muted)">Sort by click header</span></div></div>';
-  main.querySelectorAll("th[data-sort]").forEach(th=> th.addEventListener("click",()=>{const k=th.getAttribute("data-sort");if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=1;}applyFilters();}));
+  main.innerHTML='<div class="card"><div style="margin-bottom:6px;font-size:.8rem;color:var(--muted)">Showing '+(start+1)+'–'+end+' of '+filtered.length+' (tap row for details)'+metaLine()+'</div><div class="tbl-scroll"><table><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center"><button class="btn secondary" id="prev" '+(currentPage===0?'disabled':'')+'>Prev</button><button class="btn secondary" id="next" '+(end>=filtered.length?'disabled':'')+'>Next</button><span style="margin-left:auto;font-size:.8rem;color:var(--muted)">Label sorts · funnel filters</span></div></div>';
+  main.querySelectorAll("th[data-sort]").forEach(th=> th.addEventListener("click",(e)=>{
+    if(e.target.closest(".funnel"))return;
+    const k=th.getAttribute("data-sort");
+    if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=1;}
+    applyFilters();
+  }));
+  main.querySelectorAll("button[data-funnel]").forEach(b=>b.addEventListener("click",(ev)=>{
+    ev.stopPropagation();
+    openFunnelPop(b.dataset.funnel,b);
+  }));
   main.querySelectorAll("tbody tr").forEach(tr=> tr.addEventListener("click",()=>{const id=tr.getAttribute("data-id");const it=allItems.find(x=>(x.tag||x.serial)===id||x.tag===id||x.serial===id);if(it)showDetail(it);}));
   document.getElementById("prev")?.addEventListener("click",()=>{if(currentPage>0){currentPage--;renderTable();}});
   document.getElementById("next")?.addEventListener("click",()=>{if(end<filtered.length){currentPage++;renderTable();}});
