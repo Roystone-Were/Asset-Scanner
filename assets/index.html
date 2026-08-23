@@ -407,9 +407,15 @@ function closeEditor(save){
   // auto-save straight to the register; surface the outcome inline
   const bar=document.getElementById("editBar");
   if(bar){bar.innerHTML='<div class="msg info">Saving…</div>';}
-  XanaSupabase.updateAsset(id,{[name]:val})
+  const patch={};patch[name]=val;
+  XanaSupabase.updateAsset(id,patch)
     .then(()=>{
       if(bar){bar.innerHTML='<div class="msg ok">Saved ✓</div>';setTimeout(()=>{const m=bar.querySelector(".msg");if(m)m.remove();},2500);}
+      // employee/location moves are transfers — log them to the event trail
+      if(name==="Employee"||name==="Location"){
+        const label=name==="Employee"?"Assigned to":"Location";
+        XanaSupabase.logTransfer(id,label,orig,val);
+      }
       load();          // refresh table + history source quietly
     })
     .catch(err=>{
