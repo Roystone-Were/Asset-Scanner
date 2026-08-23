@@ -73,6 +73,10 @@
   .editrow:hover>span:last-child::after{content:" ✎";font-size:.7rem;color:var(--accent)}
   .inlineedit{max-width:220px;padding:6px 8px;font-size:.85rem;border-radius:8px;border:1px solid var(--accent);background:var(--card);color:var(--text)}
   .hint{font-size:.72rem;color:var(--muted);margin-top:6px}
+  .hrow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--border);font-size:.8rem;flex-wrap:wrap}
+  .hwho{color:var(--accent);font-weight:600;min-width:180px}
+  .hwhat{flex:1;min-width:200px}
+  .hwhen{color:var(--muted);font-size:.72rem}
   .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   @media(max-width:700px){.detail-grid{grid-template-columns:1fr}}
   .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:.85rem}
@@ -255,7 +259,7 @@ function showDetail(it){
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+esc(it.lastVerified||"")+'</span></div>'+
-    '</div><div id="editBar"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div></div>';
+    '</div><div id="editBar"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // inline editing — tap a value to change it
   let current=it;
@@ -276,7 +280,46 @@ function showDetail(it){
       beginEdit(row.querySelector("[data-edit]"),current);
     });
   });
+  // History panel — who changed what, when (from asset_history audit trail)
+  const histPanel=document.getElementById("histPanel");
+  document.getElementById("histToggle")?.addEventListener("click",async function(){
+    if(histPanel.dataset.open==="1"){histPanel.innerHTML="";histPanel.dataset.open="";return;}
+    this.disabled=true;this.textContent="Loading…";
+    try{
+      const {data,error}=await XanaSupabase.client()
+        .from("asset_history")
+        .select("op,changed_by,changed_at,fields")
+        .eq("item_id",current.id)
+        .order("id",{ascending:false})
+        .limit(50);
+      if(error)throw error;
+      histPanel.innerHTML=renderHistory(data||[]);
+      histPanel.dataset.open="1";
+      this.textContent="Hide history";
+      this.disabled=false;
+    }catch(err){
+      this.disabled=false;this.textContent="History";
+      histPanel.innerHTML='<div class="msg err">'+esc(err.message||err)+'</div>';
+    }
+  });
   detail.scrollIntoView({behavior:"smooth"});
+}
+const FIELD_LABELS={title:"Tag",asset_tag:"Asset tag",asset_type:"Type",model:"Model",serial:"Serial",employee:"Employee",status:"Status",location:"Location",extra:"Details"};
+function fmtVal(v){if(v===null||v===undefined)return"—";let s=String(v).replace(/^"|"$/g,"");return s===""?"—":esc(s);}
+function renderHistory(rows){
+  if(!rows.length)return '<div class="hint" style="margin-top:10px">No recorded changes yet — edits made from now on will appear here.</div>';
+  const items=rows.filter(r=>r.op==="update"&&r.fields&&Object.keys(r.fields).length).map(r=>{
+    const bits=Object.entries(r.fields).map(([k,v])=>{
+      const label=FIELD_LABELS[k]||k;
+      return "<b>"+label+"</b>: "+fmtVal(v.old)+" → "+fmtVal(v.new);
+    });
+    return '<div class="hrow"><span class="hwho">'+esc(r.changed_by||"—")+'</span><span class="hwhat">'+bits.join(" · ")+'</span><span class="hwhen">'+new Date(r.changed_at).toLocaleString()+'</span></div>';
+  });
+  const created=rows.find(r=>r.op==="insert");
+  const out=[];
+  if(created)out.push('<div class="hrow"><span class="hwho">'+esc(created.changed_by||"—")+'</span><span class="hwhat">Registered</span><span class="hwhen">'+new Date(created.changed_at).toLocaleString()+'</span></div>');
+  out.push(...(items.length?items:['<div class="hrow"><span class="hwhat">No field changes recorded yet.</span></div>']));
+  return '<div style="margin-top:10px"><div class="hint">Change history (latest first)</div>'+out.join("")+'</div>';
 }
 let _choices=null;
 async function getChoices(){
