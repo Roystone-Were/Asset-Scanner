@@ -166,7 +166,7 @@
   <div class="sheet-backdrop" id="addBackdrop"></div>
   <div class="sheet-panel">
     <h2>+ Add Asset <button type="button" class="theme-toggle" id="addClose">✕</button></h2>
-    <label>Asset Tag <span style="font-size:.65rem;color:var(--muted)">(auto — <a href="#" id="tagManual">assign manually</a>)</span></label><input type="text" id="addTag" readonly placeholder="auto-generated on save" />
+    <label>Asset Tag *</label><input type="text" id="addTag" placeholder="e.g. MICL0048" />
     <label>Serial Number *</label><input type="text" id="addSerial" placeholder="Serial" />
     <label>Model</label><input type="text" id="addModel" placeholder="Lenovo L13" />
     <label>Asset Type</label><select id="addType"></select>
@@ -554,7 +554,6 @@ document.getElementById("addImage")?.addEventListener("change",e=>{
 });
 document.getElementById("addSave")?.addEventListener("click", async()=>{
   const tagInput=document.getElementById("addTag");
-  const manualTag=!tagInput.hasAttribute("readonly");
   const tag=(tagInput.value||"").trim();
   const serial=(document.getElementById("addSerial").value||"").trim();
   const model=(document.getElementById("addModel").value||"").trim();
@@ -568,11 +567,10 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   const pPrice=(document.getElementById("addPrice").value||"").trim();
   const est=document.getElementById("addPriceEstimate").checked;
   const msg=document.getElementById("addMsg");
-  // required at creation: serial, department, price (or estimate flag)
-  // tag is auto-generated unless manually assigned; manual tags must be non-empty
-  if(manualTag&&!tag){msg.innerHTML='<div class="msg err">Manual tag was unlocked — enter a tag or reload the form.</div>';return;}
-  if(!manualTag&&tag){msg.innerHTML='<div class="msg err">Unexpected state: readonly tag has a value. Reload the page.</div>';return;}
+  // required at creation: TAG, serial, department, price (or estimate flag).
+  // Tags are user-entered — no auto-generation.
   const problems=[];
+  if(!tag) problems.push("Asset Tag is required.");
   if(!serial) problems.push("Serial Number is required.");
   if(!dept) problems.push("Department is required.");
   if(pPrice===""&&!est) problems.push("Purchase Price is required — or tick \u201Cestimate pending\u201D.");
@@ -581,7 +579,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
     return;
   }
   msg.innerHTML='<div class="msg info">Saving…</div>';
-  const fields={Status:status, Location:location};
+  const fields={Title:tag, Status:status, Location:location};
   if(serial) fields.SerialNumber=serial;
   if(model) fields.Model=model;
   if(type) fields.Asset=type;
@@ -593,20 +591,13 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(est) fields.EstimatePending=true;
   try{
     const created=await XanaSupabase.insertAsset(fields);
-    // auto-tag: XL-<item_id> (unique by construction); manual tags are kept as typed
-    let finalTag=tag;
-    if(!manualTag){
-      finalTag="XL-"+created.id;
-      try{ await XanaSupabase.updateAsset(created.id,{Title:finalTag}); }
-      catch(e){ console.warn("auto-tag rename failed:",e); finalTag=serial||created.id; }
-    }
     // optional image -> Supabase Storage (non-fatal on failure)
     if(pendingImage){
       try{
         await XanaSupabase.uploadAssetImage(created.id,pendingImage,pendingImageName||"asset.jpg");
       }catch(e){console.warn("image upload failed:",e);}
     }
-    msg.innerHTML='<div class="msg ok">Added as '+esc(finalTag)+' ✓</div>';
+    msg.innerHTML='<div class="msg ok">Added as '+esc(tag)+' ✓</div>';
     pendingImage=null; document.getElementById("imgPreview").style.display="none"; document.getElementById("imgName").textContent="";
     // reset form
     ["addSerial","addModel","addType","addEmployee","addDept","addCondition","addPrice"].forEach(id=> document.getElementById(id).value="");
@@ -659,12 +650,6 @@ async function startApp(){
       for(const t of types)atSel.insertAdjacentHTML("beforeend",'<option>'+esc(t)+'</option>');
     }
   }catch(e){}
-  // manual tag override: unlock the readonly input
-  document.getElementById("tagManual")?.addEventListener("click",e=>{
-    e.preventDefault();
-    document.getElementById("addTag").removeAttribute("readonly");
-    document.getElementById("addTag").focus();
-  });
   try{await load();}catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
 }
 async function boot(){
