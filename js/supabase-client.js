@@ -269,19 +269,11 @@
   }
 
   async function nextItemId() {
-    // Server-side max: numeric item_ids only, ignore any legacy text ids.
-    const { data, error } = await client()
-      .from("assets")
-      .select("item_id")
-      .order("item_id", { ascending: false })
-      .limit(50);
+    // item_id is TEXT: client-side ORDER BY sorts alphabetically ('99' > '121').
+    // Ask the database for numeric max + 1 instead.
+    const { data, error } = await client().rpc("next_asset_item_id");
     if (error) throw new Error("Supabase " + error.message);
-    let max = 0;
-    for (const r of data || []) {
-      const n = parseInt(r.item_id, 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
-    return String(max + 1);
+    return String(data);
   }
 
   async function insertAsset(fields) {
