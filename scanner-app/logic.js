@@ -184,13 +184,17 @@
     "Monitor",
     "Desktop",
     "Printer",
+    "Scanner",
     "Mouse",
     "Keyboard",
-    "Tablet",
     "Phone",
-    "Server",
-    "Tower",
-    "Other",
+    "POS",
+    "Cash Drawer",
+    "Scale",
+    "Speaker/Mic",
+    "Router",
+    "Switch",
+    "UNVR",
   ];
 
   // Find serial numbers that appear on more than one asset row. `rows` are

@@ -117,16 +117,21 @@
   // ---------- Depreciation view model ----------
   // Ported from api/summary.js so the assets app computes book values
   // client-side straight from Supabase rows.
+  // Useful-life defaults by type. Types absent here inherit "Other" (3 yrs).
   const USEFUL_LIFE_BY_TYPE = {
-    Laptop: 3, Desktop: 4, Tower: 4, Monitor: 5, Server: 5,
-    Printer: 4, Tablet: 3, Phone: 3, Other: 3,
+    Laptop: 3, Desktop: 4, Tower: 4, CPU: 4, Monitor: 5, Server: 5,
+    Printer: 4, Scanner: 4, Tablet: 3, Phone: 3,
+    POS: 5, "Cash Drawer": 8, Scale: 8,
+    "Speaker/Mic": 5, Router: 5, Switch: 5, UNVR: 5,
+    Other: 3, TV: 5,
   };
 
   function enrichAsset(row) {
     const extra = row.extra || {};
     const str = (v) => (v === null || v === undefined ? "" : String(v).trim());
     const typeRaw = str(row.asset_type);
-    const type = USEFUL_LIFE_BY_TYPE[typeRaw] ? typeRaw : "Other";
+    // keep any known type verbatim (incl. admin-added types); unknown → Other
+    const type = typeRaw && USEFUL_LIFE_BY_TYPE[typeRaw] ? typeRaw : "Other";
     let price = extra.purchase_price === null || extra.purchase_price === undefined || extra.purchase_price === ""
       ? NaN
       : parseFloat(String(extra.purchase_price).replace(/[^0-9.-]/g, ""));
