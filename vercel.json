@@ -14,6 +14,7 @@
     { "source": "/scan", "destination": "/scanner-app/index.html" }
   ],
   "functions": {
-    "api/summary.js": { "memory": 512, "maxDuration": 15 }
+    "api/sharepoint-sync.js": { "memory": 512, "maxDuration": 15 },
+    "api/admin-users.js": { "memory": 512, "maxDuration": 15 }
   }
 }
