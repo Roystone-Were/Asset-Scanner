@@ -1254,7 +1254,8 @@
           '<div class="row"><span>Verified By</span><span id="lastVerifiedByVal">' +
           escapeHtml(g(fieldV(item, "Last Verified By"))) +
           "</span></div>" +
-          '<div class="histbar"><button type="button" class="histbtn" data-history="1">History</button></div>' +
+          '<div class="histbar"><button type="button" class="histbtn" data-history="1">History</button><button type="button" class="histbtn" data-report="1" style="color:#dc2626">⚠ Report problem</button></div>' +
+          '<div id="reportPanel" class="hidden"></div>' +
           '<div id="historyPanel" class="hidden"></div>' +
           "</div>";
       }
@@ -1854,6 +1855,60 @@
       // ---------- Item history ----------
       // SharePoint kept per-edit list versions via Graph; the Supabase mirror
       // does not carry version history, so the expander now explains that.
+      // ---------- Report problem (asset_events issue) ----------
+      function currentItemId() {
+        return lastItem && lastItem.id ? String(lastItem.id) : null;
+      }
+      function toggleReportPanel() {
+        const panel = document.getElementById("reportPanel");
+        if (!panel) return;
+        if (!panel.classList.contains("hidden")) {
+          panel.classList.add("hidden");
+          panel.innerHTML = "";
+          return;
+        }
+        panel.innerHTML =
+          '<div style="display:flex;flex-direction:column;gap:8px;padding:10px 0">' +
+          '<select class="fieldpick" id="rpType" style="width:100%">' +
+          '<option value="issue">Issue (problem)</option>' +
+          '<option value="repair">Repair</option>' +
+          '<option value="maintenance">Maintenance</option>' +
+          '<option value="note">Note</option>' +
+          "</select>" +
+          '<textarea id="rpDesc" class="inlineedit" placeholder="What happened?" style="width:100%;min-height:52px;resize:vertical"></textarea>' +
+          '<div class="editactions">' +
+          '<button type="button" class="editbtn" data-evsave="1" id="rpSave">Send</button>' +
+          '<button type="button" class="editbtn" data-evcancel="1" data-cancel="1" style="background:#f1f5f9;color:var(--text)">Cancel</button>' +
+          "</div></div>";
+        panel.classList.remove("hidden");
+      }
+      async function submitReport() {
+        const desc = document.getElementById("rpDesc");
+        if (!desc || !desc.value.trim()) { desc && (desc.style.borderColor = "#dc2626"); return; }
+        const saveBtn = document.getElementById("rpSave");
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Sending…"; }
+        try {
+          await XanaSupabase.addAssetEvent(currentItemId(), {
+            type: document.getElementById("rpType").value,
+            description: desc.value.trim(),
+            cost: "",
+          });
+          const panel = document.getElementById("reportPanel");
+          if (panel) {
+            panel.classList.remove("hidden");
+            panel.innerHTML = '<div class="msg ok">✓ Reported — IT can see this in the event log.</div>';
+          }
+        } catch (e) {
+          const panel = document.getElementById("reportPanel");
+          if (panel) {
+            panel.classList.remove("hidden");
+            panel.innerHTML = '<div class="msg err">' + escapeHtml(e.message || e) + "</div>";
+          }
+        } finally {
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Send"; }
+        }
+      }
+
       async function toggleHistory() {
         const panel = document.getElementById("historyPanel");
         if (!panel) return;
@@ -2350,6 +2405,18 @@
         if (!b) return;
         if (b.dataset.history) {
           toggleHistory();
+          return;
+        }
+        if (b.dataset.report) {
+          toggleReportPanel();
+          return;
+        }
+        if (b.dataset.evsave) {
+          submitReport(b.dataset.evsave);
+          return;
+        }
+        if (b.dataset.evcancel) {
+          document.getElementById("reportPanel").classList.add("hidden");
           return;
         }
         if (b.dataset.action === "addasset") {
