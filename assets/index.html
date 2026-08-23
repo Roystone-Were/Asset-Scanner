@@ -152,14 +152,14 @@
   <div class="sheet-backdrop" id="addBackdrop"></div>
   <div class="sheet-panel">
     <h2>+ Add Asset <button type="button" class="theme-toggle" id="addClose">✕</button></h2>
-    <label>Asset Tag *</label><input type="text" id="addTag" placeholder="e.g. MICL0048" />
-    <label>Serial Number</label><input type="text" id="addSerial" placeholder="Serial" />
+    <label>Asset Tag <span style="font-size:.65rem;color:var(--muted)">(auto — <a href="#" id="tagManual">assign manually</a>)</span></label><input type="text" id="addTag" readonly placeholder="auto-generated on save" />
+    <label>Serial Number *</label><input type="text" id="addSerial" placeholder="Serial" />
     <label>Model</label><input type="text" id="addModel" placeholder="Lenovo L13" />
     <label>Asset Type</label><select id="addType"></select>
     <label>Status</label><select id="addStatus"><option>In Use</option><option>Available</option><option>Retired</option><option>Left With</option><option>Lost</option></select>
     <label>Location</label><select id="addLocation"><option>Syokimau</option><option>Katani</option><option>Ruiru</option><option>Githurai</option><option>Lumumba Dr</option><option>TRM Dr</option></select>
     <label>Employee</label><input type="text" id="addEmployee" placeholder="Employee name" />
-    <label>Department</label><input type="text" id="addDept" placeholder="Department" />
+    <label>Department *</label><select id="addDept"><option value="">— select —</option></select>
     <label>Condition</label><input type="text" id="addCondition" placeholder="New" />
     <label>Purchase Date</label><input type="date" id="addPDate" />
     <label>Purchase Price (KES)</label><input type="number" id="addPrice" placeholder="120000" />
@@ -431,6 +431,17 @@ async function startApp(){
   document.getElementById("fStatus").addEventListener("change",applyFilters);
   document.getElementById("fLocation").addEventListener("change",applyFilters);
   document.getElementById("btnScan").addEventListener("click",()=> location.href="/scan");
+  // department dropdown lives from admin-managed choices
+  try{
+    const {data}=await XanaSupabase.client().from("app_choices").select("value").eq("category","department").order("sort_order");
+    for(const r of data||[]) document.getElementById("addDept").insertAdjacentHTML("beforeend",'<option>'+esc(r.value)+'</option>');
+  }catch(e){/* choices unavailable — select stays with placeholder option */}
+  // manual tag override: unlock the readonly input
+  document.getElementById("tagManual")?.addEventListener("click",e=>{
+    e.preventDefault();
+    document.getElementById("addTag").removeAttribute("readonly");
+    document.getElementById("addTag").focus();
+  });
   try{await load();}catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
 }
 async function boot(){
