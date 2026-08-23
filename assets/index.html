@@ -67,16 +67,6 @@
   .tbl-scroll{overflow:auto;max-height:520px;border:1px solid var(--border);border-radius:10px;scroll-behavior:smooth}
   .pill{padding:2px 8px;border-radius:999px;color:#fff;font-size:.65rem;font-weight:700;white-space:nowrap}
   #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
-  /* --- premium filter bar --- */
-  .filterbar{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
-  .fgroup{display:flex;align-items:flex-start;gap:10px}
-  .flabel{flex:0 0 64px;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding-top:5px}
-  .chips{display:flex;flex-wrap:wrap;gap:6px}
-  .chip-f{appearance:none;border:1px solid var(--border);background:var(--card);color:var(--muted);border-radius:999px;padding:4px 12px;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .15s var(--ease-out)}
-  .chip-f:hover{border-color:var(--accent);color:var(--text)}
-  .chip-f.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-  .fmeta{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:.72rem;color:var(--muted)}
-  .clearlink{background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;text-decoration:underline;padding:0}
   .editrow{cursor:pointer;border-radius:6px;margin:0 -6px;padding-left:6px;padding-right:6px;transition:background .12s ease}
   .editrow:hover{background:rgba(22,163,74,.06)}
   .editrow:hover>span:first-child{color:var(--text)}
@@ -155,12 +145,6 @@
       <button class="btn book" id="btnScan">Scan</button>
       <button class="btn" id="btnAdd">+ Add Asset</button>
     </div>
-    <div class="filterbar" id="filterBar">
-      <div class="fgroup"><span class="flabel">Status</span><div class="chips" id="chips-status"></div></div>
-      <div class="fgroup"><span class="flabel">Type</span><div class="chips" id="chips-type"></div></div>
-      <div class="fgroup"><span class="flabel">Location</span><div class="chips" id="chips-location"></div></div>
-      <div class="fmeta"><span id="activeFilters"></span><button type="button" class="clearlink" id="clearFilters" hidden>Clear all</button></div>
-    </div>
     <div id="main"><div class="msg info">Loading…</div></div>
     <div id="detail"></div>
   </div>
@@ -218,73 +202,24 @@ async function load(){
   allItems=await XanaSupabase.listAssetsDetailed();
   const pid=new URLSearchParams(location.search).get("id");
   if(pid){const it=allItems.find(x=>String(x.tag).toLowerCase()===pid.toLowerCase()||String(x.serial).toLowerCase()===pid.toLowerCase()); if(it) showDetail(it);}
-  buildChips();
   applyFilters();
 }
 function applyFilters(){
   const q=(document.getElementById("search").value||"").trim().toLowerCase();
-  const fs=chipSel.status, ft=chipSel.type, fl=chipSel.location;
   filtered=allItems.filter(it=>{
     const hay=(it.tag+" "+it.serial+" "+it.model+" "+it.employee+" "+it.type).toLowerCase();
     if(q && hay.indexOf(q)===-1) return false;
-    if(fs.length && !fs.includes(it.status||"")) return false;
-    if(ft.length && !ft.includes(it.type||"")) return false;
-    if(fl.length && !fl.includes(it.location||"")) return false;
+    if(colFilters.type.size && !colFilters.type.has((it.type||"").toString().trim()||"(blank)")) return false;
+    if(colFilters.location.size && !colFilters.location.has((it.location||"").toString().trim()||"(blank)")) return false;
+    if(colFilters.status.size && !colFilters.status.has((it.status||"").toString().trim()||"(blank)")) return false;
     return true;
   });
   filtered.sort((a,b)=>{
     const av=(a[sortKey]||"").toString().toLowerCase(), bv=(b[sortKey]||"").toString().toLowerCase();
     if(av<bv) return -sortDir; if(av>bv) return sortDir; return 0;
   });
-  currentPage=0; renderTable(); syncFilterMeta();
+  currentPage=0; renderTable();
 }
-// ---------- premium filter chips ----------
-const chipSel={status:[],type:[],location:[]};
-function buildChips(){
-  const uniq=(key)=>{
-    const set=new Set();
-    for(const it of allItems){const v=(it[key]||"").toString().trim();if(v)set.add(v);}
-    return [...set].sort((a,b)=>a.localeCompare(b));
-  };
-  const groups=[["status","chips-status"],["type","chips-type"],["location","chips-location"]];
-  for(const [key,id] of groups){
-    const host=document.getElementById(id);
-    host.innerHTML="";
-    for(const val of uniq(key)){
-      const b=document.createElement("button");
-      b.type="button";
-      b.className="chip-f";
-      b.textContent=val;
-      b.dataset.val=val;
-      b.addEventListener("click",()=>{
-        const arr=chipSel[key];
-        const i=arr.indexOf(val);
-        if(i>=0)arr.splice(i,1);else arr.push(val);
-        b.classList.toggle("on",i<0);
-        applyFilters();
-      });
-      host.appendChild(b);
-    }
-  }
-}
-function syncFilterMeta(){
-  const n=Object.values(chipSel).reduce((s,a)=>s+a.length,0);
-  const span=document.getElementById("activeFilters");
-  const clear=document.getElementById("clearFilters");
-  if(!span||!clear)return;
-  if(n>0){
-    span.textContent=n+(n===1?" filter":" filters")+" active";
-    clear.hidden=false;
-  }else{
-    span.textContent="";
-    clear.hidden=true;
-  }
-}
-document.getElementById("clearFilters")?.addEventListener("click",()=>{
-  chipSel.status=[];chipSel.type=[];chipSel.location=[];
-  document.querySelectorAll(".chip-f.on").forEach(c=>c.classList.remove("on"));
-  applyFilters();
-});
 function renderTable(){
   const main=document.getElementById("main");
   if(!filtered.length){main.innerHTML='<div class="card"><div class="msg info">No matching assets.</div></div>';return;}
