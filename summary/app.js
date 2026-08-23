@@ -114,7 +114,8 @@ const DEP_COLORS = {
         ${kpi("Book Value", money(t.bookValue), t.estimatePendingCount > 0 ? "incl. " + t.estimatePendingCount + " estimate-pending · confirmed " + money(t.confirmedBookValue) : "after depreciation", "acc")}
         ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
         ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
-      </div>` +
+      </div>
+      <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
       `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
       healthStrip(h) +
@@ -334,7 +335,7 @@ const DEP_COLORS = {
       "</div>");
   }
   function tableHtml(items) {
-    const head = "<tr><th>Tag</th><th>Type</th><th>Model</th><th>Serial</th><th>Employee</th><th>Location</th><th>Status</th><th>Purchased</th><th>Price</th><th>Book Value</th><th>Dep</th></tr>";
+    const head = "<tr><th>Tag</th><th>Type</th><th>Model</th><th>Serial</th><th>Employee</th><th>Location</th><th>Status</th><th>Purchased</th><th>Price</th><th>Book Value (KES)</th><th>Depreciation Status</th></tr>";
     return (
       '<table><thead>' + head + "</thead><tbody>" +
       items

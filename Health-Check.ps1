@@ -188,7 +188,12 @@ if ($stale.Count -gt 0) {
       (ConvertTo-MdCell $s.verifiedby)
   }
   $table = "$hdr`n$sep`n$($lines -join "`n")"
-  Add-Issue "Assets not verified in the last $StaleDays days" "$($stale.Count) assets:`n`n$table"
+  # by-location rollup so the monthly issue shows which branch owes the walk
+  $byLoc = $stale | Group-Object { if ($_.location.Trim()) { $_.location.Trim() } else { '(no location)' } } |
+    Sort-Object Count -Descending
+  $locLines = foreach ($g in $byLoc) { '| {0} | {1} |' -f $g.Name, $g.Count }
+  $locTable = '| Location | Unverified |'+"`n|---|---|`n$($locLines -join "`n")"
+  Add-Issue "Assets not verified in the last $StaleDays days" "By location:`n`n$locTable`n`n$($stale.Count) assets:`n`n$table"
 } else {
   [void]$sb.AppendLine("All assets verified within the last $StaleDays days. :white_check_mark:")
   [void]$sb.AppendLine("")
