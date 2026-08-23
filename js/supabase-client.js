@@ -446,6 +446,54 @@
     return String(email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
 
+  // ---------- Asset events (issues / repairs / transfers / maintenance) ----------
+  async function listAssetEvents(itemId) {
+    const { data, error } = await client()
+      .from("asset_events")
+      .select("id,event_type,event_date,description,cost,resolved,created_by,created_at")
+      .eq("item_id", String(itemId))
+      .order("event_date", { ascending: false })
+      .limit(100);
+    if (error) throw new Error("Supabase " + error.message);
+    return data || [];
+  }
+
+  async function addAssetEvent(itemId, { type, description, cost }) {
+    const email = await currentUserEmail();
+    const { data, error } = await client()
+      .from("asset_events")
+      .insert({
+        item_id: String(itemId),
+        event_type: type,
+        description: String(description || "").trim(),
+        cost: cost === "" || cost === null || cost === undefined ? null : Number(cost),
+        created_by: email || null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error("Supabase " + error.message);
+    return { id: data.id };
+  }
+
+  async function setEventResolved(eventId, resolved) {
+    const { error } = await client()
+      .from("asset_events")
+      .update({ resolved: !!resolved })
+      .eq("id", eventId);
+    if (error) throw new Error("Supabase " + error.message);
+    return { ok: true };
+  }
+
+  // Auto-transfer log: called whenever employee/location changes on an asset.
+  async function logTransfer(itemId, what, fromVal, toVal) {
+    try {
+      await addAssetEvent(itemId, {
+        type: "transfer",
+        description: what + ": " + (fromVal || "(none)") + " → " + (toVal || "(none)"),
+      });
+    } catch (e) { /* transfer logging must never block the edit itself */ }
+  }
+
   window.XanaSupabase = {
     ADMIN_EMAIL,
     FIELD_TO_COL,
@@ -475,5 +523,9 @@
     mustChangePassword,
     completePasswordChange,
     uploadAssetImage,
+    listAssetEvents,
+    addAssetEvent,
+    setEventResolved,
+    logTransfer,
   };
 })();
