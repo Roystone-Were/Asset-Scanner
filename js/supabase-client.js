@@ -300,21 +300,15 @@
     const row = fieldsToRow(patch);
     // extra is a jsonb blob: merge server-side so a partial patch (e.g. only
     // Condition) doesn't wipe purchase_date and the other extras.
-    const extraKeys = Object.keys(row.extra || {});
-    if (extraKeys.length && !("item_id" in row)) {
-      const merged = { ...row };
-      delete merged.extra;
-      const payload = {};
-      for (const k of extraKeys) payload["extra." + k] = row.extra[k];
-      const { error } = await client().from("assets").update(payload).eq("item_id", String(id));
-      if (error) throw new Error("Supabase " + error.message);
-      // top-level columns (if any in this patch)
-      if (Object.keys(merged).length) {
-        const { error: e2 } = await client().from("assets").update(merged).eq("item_id", String(id));
-        if (e2) throw new Error("Supabase " + e2.message);
-      }
-      return { ok: true };
+    if (row.extra && Object.keys(row.extra).length) {
+      const { error: rpcErr } = await client().rpc("asset_extra_merge", {
+        p_item_id: String(id),
+        p_patch: row.extra,
+      });
+      if (rpcErr) throw new Error("Supabase " + rpcErr.message);
+      delete row.extra;
     }
+    if (!Object.keys(row).length) return { ok: true };
     const { error } = await client().from("assets").update(row).eq("item_id", String(id));
     if (error) throw new Error("Supabase " + error.message);
     return { ok: true };
