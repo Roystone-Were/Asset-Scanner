@@ -156,8 +156,8 @@
     <label>Serial Number *</label><input type="text" id="addSerial" placeholder="Serial" />
     <label>Model</label><input type="text" id="addModel" placeholder="Lenovo L13" />
     <label>Asset Type</label><select id="addType"></select>
-    <label>Status</label><select id="addStatus"><option>In Use</option><option>Available</option><option>Retired</option><option>Left With</option><option>Lost</option></select>
-    <label>Location</label><select id="addLocation"><option>Syokimau</option><option>Katani</option><option>Ruiru</option><option>Githurai</option><option>Lumumba Dr</option><option>TRM Dr</option></select>
+    <label>Status</label><select id="addStatus"><option value="">—</option></select>
+    <label>Location</label><select id="addLocation"><option value="">—</option></select>
     <label>Employee</label><input type="text" id="addEmployee" placeholder="Employee name" />
     <label>Department *</label><select id="addDept"><option value="">— select —</option></select>
     <label>Condition</label><input type="text" id="addCondition" placeholder="New" />
@@ -436,10 +436,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
 const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
 menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
 overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
-// populate Asset Type dropdown
-const assetTypes = (typeof Xana !== 'undefined' && Xana.ASSET_TYPE_CHOICES) ? Xana.ASSET_TYPE_CHOICES : ["Laptop","CPU","Monitor","Desktop","Printer","Mouse","Keyboard","Tablet","Phone","Server","Tower","Other"];
-const atSel=document.getElementById("addType");
-if(atSel) atSel.innerHTML=assetTypes.map(c=>'<option value="'+c+'">'+c+'</option>').join("");
+// Asset Type dropdown is populated from app_choices in startApp() below
 async function startApp(){
   const state=document.getElementById("authState");
   state.textContent="✅ Signed in as "+account.username;
@@ -456,11 +453,27 @@ async function startApp(){
   document.getElementById("fStatus").addEventListener("change",applyFilters);
   document.getElementById("fLocation").addEventListener("change",applyFilters);
   document.getElementById("btnScan").addEventListener("click",()=> location.href="/scan");
-  // department dropdown lives from admin-managed choices
+  // department + status/location/type dropdowns all live from admin-managed choices
   try{
-    const {data}=await XanaSupabase.client().from("app_choices").select("value").eq("category","department").order("sort_order");
-    for(const r of data||[]) document.getElementById("addDept").insertAdjacentHTML("beforeend",'<option>'+esc(r.value)+'</option>');
-  }catch(e){/* choices unavailable — select stays with placeholder option */}
+    const {data}=await XanaSupabase.client().from("app_choices").select("category,value").order("sort_order");
+    const byCat={};
+    for(const r of data||[]){
+      (byCat[r.category]=byCat[r.category]||[]).push(r.value);
+    }
+    const fill=(id,opts)=>{const s=document.getElementById(id);if(!s)return;for(const v of opts||[])s.insertAdjacentHTML("beforeend",'<option>'+esc(v)+'</option>');};
+    fill("addDept",byCat.department);
+    fill("addType",byCat.asset_type);
+    fill("addStatus",byCat.status);
+    fill("addLocation",byCat.location);
+  }catch(e){/* choices unavailable — static fallbacks below still apply */}
+  // Asset Type fallback if app_choices has none
+  try{
+    const atSel=document.getElementById("addType");
+    if(atSel&&!atSel.options.length){
+      const types=(typeof Xana!=='undefined'&&Xana.ASSET_TYPE_CHOICES)?Xana.ASSET_TYPE_CHOICES:["Laptop","CPU","Monitor","Desktop","Printer","Mouse","Keyboard","Tablet","Phone","Server","Tower","Other"];
+      for(const t of types)atSel.insertAdjacentHTML("beforeend",'<option>'+esc(t)+'</option>');
+    }
+  }catch(e){}
   // manual tag override: unlock the readonly input
   document.getElementById("tagManual")?.addEventListener("click",e=>{
     e.preventDefault();
