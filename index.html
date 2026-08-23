@@ -1,69 +1,72 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Xana Asset System</title>
+  <link rel="icon" href="/scanner-app/icon-192.png" />
   <style>
-    :root {
-      --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --accent:#16a34a; --accent2:#3b82f6; --text:#0f172a; --muted:#64748b;
-      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-      --duration-fast: 120ms; --duration-base: 200ms; --duration-slow: 320ms;
-    }
-    [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --border:#2b2b2b; --accent:#16a34a; --accent2:#3b82f6; --text:#f3f4f6; --muted:#9ca3af; }
-    *{box-sizing:border-box;margin:0;padding:0;scrollbar-width:none;-ms-overflow-style:none}
+    :root { --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --accent:#16a34a; --accent2:#38bdf8; --text:#0f172a; --muted:#64748b; --ease-out:cubic-bezier(0.22,1,0.36,1); }
+    [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --border:#2b2b2b; --text:#f3f4f6; --muted:#9ca3af; }
+    *{box-sizing:border-box;margin:0;padding:0}
     *::-webkit-scrollbar{display:none}
-    body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-    .wrap{max-width:560px;width:100%;text-align:center}
-    .logo{height:64px;margin:0 auto 16px;display:block}
-    h1{font-size:1.6rem;margin-bottom:6px}
-    p.sub{color:var(--muted);font-size:.9rem;margin-bottom:28px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    @media(max-width:520px){.grid{grid-template-columns:1fr}}
-    a.card{display:block;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;text-decoration:none;color:var(--text);transition:transform var(--duration-base) var(--ease-out),border-color var(--duration-fast) var(--ease-out),box-shadow var(--duration-base) var(--ease-out)}
-    a.card:hover{transform:translateY(-3px);border-color:var(--accent);box-shadow:0 12px 28px -12px rgba(22,163,74,.18)}
-    a.card:active{transform:translateY(-1px) scale(.99)}
-    a.card.dashboard:hover{border-color:var(--accent2);box-shadow:0 12px 28px -12px rgba(59,130,246,.18)}
-    .icon{font-size:2rem;margin-bottom:10px}
-    .card h2{font-size:1.05rem;margin-bottom:6px}
+    body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px}
+    .wrap{width:100%;max-width:900px;text-align:center}
+    .logo{height:56px;margin-bottom:12px}
+    h1{font-size:1.5rem;margin-bottom:4px}
+    .sub{color:var(--muted);font-size:.85rem;margin-bottom:26px}
+    #who{min-height:32px;margin-bottom:8px;font-size:.8rem;color:var(--muted)}
+    .who{display:flex;gap:10px;justify-content:center;align-items:center}
+    .who button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:999px;padding:3px 10px;font-size:.72rem;cursor:pointer}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;text-align:left}
+    .card{display:block;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;text-decoration:none;color:var(--text);transition:border-color var(--duration-base) var(--ease-out)}
+    .card:hover{border-color:var(--accent)}
+    .icon{font-size:1.6rem;margin-bottom:8px}
+    .card h2{font-size:1rem;margin-bottom:4px}
     .card p{color:var(--muted);font-size:.82rem;line-height:1.4}
     .pill{display:inline-block;margin-top:10px;padding:4px 10px;border-radius:999px;font-size:.7rem;font-weight:700;color:#fff}
     .pill.scan{background:var(--accent)}
     .pill.dash{background:var(--accent2)}
-    .who{margin:-14px 0 22px;color:var(--muted);font-size:.8rem;display:flex;gap:10px;justify-content:center;align-items:center}
-    .who button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:999px;padding:3px 10px;font-size:.72rem;cursor:pointer}
     footer{margin-top:24px;color:var(--muted);font-size:.7rem}
-    .wrap > * { animation: rise var(--duration-base) var(--ease-out); }
-    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .grid{animation-delay:60ms}
-    footer{animation-delay:100ms}
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+    /* boot overlay — covers everything until auth resolves */
+    #boot{position:fixed;inset:0;z-index:99;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .25s ease}
+    #boot.done{opacity:0;pointer-events:none}
+    #boot img{height:52px;opacity:.9}
+    #boot .msg{color:var(--muted);font-size:.85rem}
+    #boot .spin{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media (prefers-reduced-motion: reduce){#boot .spin{animation:none}}
   </style>
 </head>
 <body>
+<div id="boot">
+  <img src="/scanner-app/xana-logo.png" alt="" />
+  <div class="spin"></div>
+  <div class="msg">Checking your session…</div>
+</div>
+
 <div class="wrap">
-  <img src="scanner-app/xana-logo.png" alt="Xana" class="logo" />
+  <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" />
   <h1>Xana Asset System</h1>
   <div id="who"></div>
   <p class="sub">One system — scan on the floor, report for execs.</p>
   <div class="grid" id="tiles">
-    <a class="card" href="/scan" data-need="scanner">
+    <a class="card" href="/scan" data-need="scanner" hidden>
       <div class="icon">📷</div><h2>Scanner</h2>
       <p>Scan a barcode, see the asset, update status &amp; location. Walk mode for stock-takes.</p>
       <span class="pill scan">Open Scanner →</span>
     </a>
-    <a class="card" href="/assets" data-need="asset_viewer">
+    <a class="card" href="/assets" data-need="asset_viewer" hidden>
       <div class="icon">📋</div><h2>Assets</h2>
       <p>Full detailed register with all fields — search, filter, tap for details, Scan/Add.</p>
       <span class="pill scan">Open Assets →</span>
     </a>
-    <a class="card dashboard" href="/dashboard" data-need="dashboard_viewer">
+    <a class="card dashboard" href="/dashboard" data-need="dashboard_viewer" hidden>
       <div class="icon">📊</div><h2>Dashboard</h2>
       <p>Portfolio value, depreciation, health score and register. For managers.</p>
       <span class="pill dash">Open Dashboard →</span>
     </a>
-    <a class="card dashboard" href="/admin" data-need="admin">
+    <a class="card dashboard" href="/admin" data-need="admin" hidden>
       <div class="icon">👤</div><h2>Admin</h2>
       <p>Manage users &amp; roles, dropdown lists, and sync health. Admins only.</p>
       <span class="pill dash">Open Admin →</span>
@@ -78,15 +81,21 @@
 "use strict";
 (async function boot() {
   const who = document.getElementById("who");
+  const bootEl = document.getElementById("boot");
+  const done = function () {
+    bootEl.classList.add("done");
+    setTimeout(function () { bootEl.remove(); }, 300);
+  };
+
   const session = await XanaSupabase.getSession().catch(function () { return null; });
 
   if (!session || !session.user) {
-    // Signed out: hide every section tile, offer one way in.
-    document.querySelectorAll("#tiles .card").forEach(function (c) { c.style.display = "none"; });
+    // Signed out: single way in.
     document.getElementById("tiles").innerHTML =
       '<a class="card" href="/login" style="grid-column:1/-1"><div class="icon">🔐</div><h2>Sign in</h2>' +
       '<p>Use your work email. You will land straight where you are assigned.</p>' +
       '<span class="pill scan">Sign in →</span></a>';
+    done();
     return;
   }
 
@@ -94,7 +103,6 @@
   const roles = await XanaSupabase.myRoles();
   XanaSupabase.applyRoleNav(roles);
 
-  // Show identity + sign-out
   who.innerHTML = '<div class="who">Signed in as <b>' + esc(email) + '</b>' +
     '<button id="so">Sign out</button></div>';
   document.getElementById("so").addEventListener("click", async function () {
@@ -102,14 +110,15 @@
     location.reload();
   });
 
-  // Reveal only assigned tiles (admins see everything)
-  const isAdmin = roles.includes("admin");
+  // Reveal only assigned tiles (admins + super admins see everything)
+  const isAdmin = roles.includes("admin") || roles.includes("super_admin");
   document.querySelectorAll("#tiles .card[data-need]").forEach(function (c) {
     const need = c.getAttribute("data-need");
-    c.style.display = (isAdmin || roles.includes(need)) ? "" : "none";
+    c.hidden = !(isAdmin || roles.includes(need));
   });
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+  done();
 })();
 </script>
 </body>
