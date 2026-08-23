@@ -29,6 +29,8 @@
     .links a{font-size:.78rem;color:var(--muted);text-decoration:none;padding:5px 9px;border:1px solid var(--border);border-radius:999px}
     .links a:hover{color:var(--text);border-color:var(--accent)}
     #codeInput{text-align:center;letter-spacing:8px;font-size:1.3rem}
+    .tabbtn{flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:9px;font-size:.85rem;font-weight:500;cursor:pointer}
+    .tabbtn.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
   </style>
 </head>
 <body>
@@ -38,8 +40,22 @@
     <p class="sub">Sign in with your work email. Invite-only.</p>
 
     <div id="stepEmail">
-      <input type="email" id="email" placeholder="you@xanalife.com" autocomplete="email" />
-      <button id="btnSend">Email me a sign-in button</button>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button type="button" id="tabOtp" class="tabbtn active">Email me a link</button>
+        <button type="button" id="tabPwd" class="tabbtn">Password</button>
+      </div>
+
+      <div id="otpForm">
+        <input type="email" id="email" placeholder="you@xanalife.com" autocomplete="email" />
+        <button id="btnSend">Email me a sign-in button</button>
+      </div>
+
+      <div id="pwdForm" style="display:none">
+        <input type="email" id="pwdEmail" placeholder="you@xanalife.com" autocomplete="email" />
+        <input type="password" id="pwdPass" placeholder="Password" autocomplete="current-password" />
+        <button id="btnPwdSignin">Sign in</button>
+      </div>
+
       <div id="msg" class="msg"></div>
     </div>
 
@@ -113,6 +129,45 @@ document.getElementById("btnBack").addEventListener("click",()=>{
   show(document.getElementById("stepCode"),false);
   show(document.getElementById("stepEmail"),true);
 });
+
+// ---- Tab switching: OTP link vs password sign-in ----
+function setTab(which){
+  const otp=which==="otp";
+  document.getElementById("tabOtp").classList.toggle("active",otp);
+  document.getElementById("tabPwd").classList.toggle("active",!otp);
+  show(document.getElementById("otpForm"),otp);
+  show(document.getElementById("pwdForm"),!otp);
+  msg("msg","");
+}
+document.getElementById("tabOtp").addEventListener("click",()=>setTab("otp"));
+document.getElementById("tabPwd").addEventListener("click",()=>setTab("pwd"));
+
+async function pwdSignin(){
+  const email=(document.getElementById("pwdEmail").value||"").trim();
+  const pass=document.getElementById("pwdPass").value||"";
+  if(!email||email.indexOf("@")<1){msg("msg","Enter a valid email address.",true);return;}
+  if(!pass){msg("msg","Enter your password.",true);return;}
+  const b=document.getElementById("btnPwdSignin");b.disabled=true;b.textContent="Signing in…";
+  try{
+    await XanaSupabase.signInWithPassword(email,pass);
+    // Same gate as boot(): force change before landing.
+    if(await XanaSupabase.mustChangePassword()){
+      show(document.getElementById("stepEmail"),false);
+      show(document.getElementById("stepPasswordForm"),true);
+      return;
+    }
+    const l=await XanaSupabase.landingFor();
+    if(l){location.href=l;return;}
+    noAccess();
+  }catch(e){
+    msg("msg",/Invalid login/i.test(e.message)
+      ? "Wrong email or password. If you've forgotten it, contact IT Admin (roystone@xanalife.com)."
+      : e.message,true);
+  }finally{b.disabled=false;b.textContent="Sign in";}
+}
+document.getElementById("btnPwdSignin").addEventListener("click",pwdSignin);
+document.getElementById("pwdPass").addEventListener("keydown",e=>{if(e.key==="Enter")pwdSignin();});
+
 
 (async function boot(){
   const notice=XanaSupabase.popAuthNotice();

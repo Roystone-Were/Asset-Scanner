@@ -329,6 +329,15 @@
     return { user: data.user };
   }
 
+  async function signInWithPassword(email, password) {
+    const { data, error } = await client().auth.signInWithPassword({
+      email: String(email || "").trim(),
+      password: String(password || ""),
+    });
+    if (error) throw new Error(error.message);
+    return { user: data.user };
+  }
+
   async function getSession() {
     const { data } = await client().auth.getSession();
     return data && data.session ? data.session : null;
@@ -443,6 +452,7 @@
     deleteAsset,
     sendOtp,
     verifyOtp,
+    signInWithPassword,
     getSession,
     myRoles,
     landingFor,
