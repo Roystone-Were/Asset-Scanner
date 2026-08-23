@@ -111,7 +111,7 @@ const DEP_COLORS = {
       `<div class="kpis">
         ${kpi("Total Assets", t.total, null, null, "neutral")}
         ${kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing", t.missingPurchase > t.total * 0.3 ? "warn" : "neutral")}
-        ${kpi("Book Value", money(t.bookValue), "after depreciation", "acc")}
+        ${kpi("Book Value", money(t.bookValue), t.estimatePendingCount > 0 ? "incl. " + t.estimatePendingCount + " estimate-pending · confirmed " + money(t.confirmedBookValue) : "after depreciation", "acc")}
         ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
         ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
       </div>` +

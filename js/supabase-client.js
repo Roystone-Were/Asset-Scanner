@@ -161,6 +161,7 @@
       bookValue: Math.round(bookValue * 100) / 100,
       depStatus,
       lastVerified: str(extra.last_verified),
+      estimatePending: extra.estimate_pending === true || extra.estimate_pending === "true",
     };
   }
 
@@ -181,6 +182,7 @@
     const purchaseValue = Math.round(sum(it, (i) => i.purchasePrice) * 100) / 100;
     const bookValue = Math.round(sum(it, (i) => i.bookValue) * 100) / 100;
     const fullyDepreciated = it.filter((i) => i.depStatus === "Fully depreciated").length;
+    const pending = it.filter((i) => i.estimatePending);
 
     const expensedThisYear = it.filter((i) => i.depStatus === "In progress" && i.usefulLife > 0 && i.purchasePrice > 0)
       .reduce((s, i) => s + i.purchasePrice / i.usefulLife, 0);
@@ -218,6 +220,8 @@
         total: it.length,
         purchaseValue,
         bookValue,
+        confirmedBookValue: Math.round(sum(it.filter((i) => !i.estimatePending), (i) => i.bookValue) * 100) / 100,
+        estimatePendingCount: pending.length,
         fullyDepreciated,
         expensedThisYear: Math.round(expensedThisYear * 100) / 100,
         missingPurchase: it.filter((i) => !i.purchaseDate).length,
