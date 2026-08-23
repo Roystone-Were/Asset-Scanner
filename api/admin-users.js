@@ -47,7 +47,7 @@ async function callerIsAdmin(req) {
     const prof = await sb("profiles?select=id,active&id=eq." + me.id);
     if (!prof || !prof.length || !prof[0].active) return null;
     const roles = await sb("user_roles?select=role&user_id=eq." + me.id);
-    if (!(roles || []).some((r) => r.role === "admin")) return null;
+    if (!((roles || []).some((r) => r.role === "admin") || (roles || []).some((r) => r.role === "super_admin"))) return null;
     return me;
   } catch (e) {
     console.error("[admin-users] caller verify failed:", e.message);
