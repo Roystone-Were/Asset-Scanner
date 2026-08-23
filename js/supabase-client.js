@@ -269,6 +269,7 @@
   }
 
   async function nextItemId() {
+    // Server-side max: numeric item_ids only, ignore any legacy text ids.
     const { data, error } = await client()
       .from("assets")
       .select("item_id")
@@ -285,13 +286,15 @@
 
   async function insertAsset(fields) {
     let lastErr = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       const row = fieldsToRow(fields);
       row.item_id = await nextItemId();
       const { data, error } = await client().from("assets").insert(row).select("item_id").single();
       if (!error) return { id: String(data.item_id) };
       lastErr = error;
       if (error.code !== "23505") break;
+      // unique violation: someone else took that id — small backoff, recompute
+      await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
     }
     throw new Error("Supabase " + (lastErr ? lastErr.message : "insert failed"));
   }
