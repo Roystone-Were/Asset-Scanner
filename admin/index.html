@@ -175,7 +175,7 @@ async function loadUsers(){
         return "<tr><td><b>"+esc(u.email)+"</b><br/><span class='pill'>"+esc(u.full_name||"—")+"</span></td>"+
           "<td>"+boxes+"</td>"+
           "<td><label class='chk'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+"/> Active</label></td>"+
-          "<td><button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
+          "<td><button class='small' data-resetpw='"+u.id+"'>Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
       }).join("")+"</tbody></table>";
   }catch(e){el.innerHTML='<div class="msg err show">'+esc(e.message)+"</div>";}
 }
@@ -239,11 +239,23 @@ document.getElementById("usersList").addEventListener("change",async(e)=>{
 });
 
 document.getElementById("usersList").addEventListener("click",async(e)=>{
-  const b=e.target.closest("[data-del]");
-  if(!b)return;
-  if(!confirm("Delete "+b.dataset.email+" permanently? Their sign-in access ends immediately."))return;
-  try{await api("delete_user",{userId:b.dataset.del});await loadUsers();}
-  catch(err){alert(err.message);}
+  const del=e.target.closest("[data-del]");
+  if(del){
+    if(!confirm("Delete "+del.dataset.email+" permanently? Their sign-in access ends immediately."))return;
+    try{await api("delete_user",{userId:del.dataset.del});await loadUsers();}
+    catch(err){alert(err.message);}
+    return;
+  }
+  const rp=e.target.closest("[data-resetpw]");
+  if(rp){
+    const pw=prompt("New temporary password for this user (min 8 characters). Share it with them in person or by phone — they must change it at next sign-in.");
+    if(pw===null)return;
+    if(pw.trim().length<8){alert("Password must be at least 8 characters.");return;}
+    try{
+      await api("reset_password",{userId:rp.dataset.resetpw,password:pw.trim()});
+      alert("✓ Password reset. Give it to the user out-of-band — they'll be forced to choose their own at next sign-in.");
+    }catch(err){alert(err.message);}
+  }
 });
 
 // ---------- lists ----------

@@ -208,6 +208,29 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    if (body.action === "reset_password") {
+      // Admin sets a new temporary password for a user; flags them for a
+      // forced change at next sign-in (same flow as manual onboarding).
+      const userId = String(body.userId || "");
+      const password = String(body.password || "");
+      if (!userId) throw new Error("userId required");
+      if (password.length < 8) throw new Error("Password must be at least 8 characters");
+      await authAdmin("admin/users/" + userId, {
+        method: "PUT",
+        headers: serviceHeaders(),
+        body: JSON.stringify({ password, email_confirm: true }),
+      });
+      await sb("profiles?id=eq." + userId, {
+        method: "PATCH",
+        body: JSON.stringify({ must_change_password: true }),
+      });
+      res.status(200).json({
+        ok: true,
+        note: "Password reset — share it out-of-band; the user must change it at next sign-in.",
+      });
+      return;
+    }
+
     if (body.action === "set_roles") {
       const userId = String(body.userId || "");
       const roles = Array.isArray(body.roles) ? [...new Set(body.roles.filter((r) => VALID_ROLES.includes(r)))] : [];
