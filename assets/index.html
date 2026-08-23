@@ -333,8 +333,13 @@ function showDetail(it){
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+(esc(it.lastVerified||"")||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
+    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><button class="btn secondary" id="cloneBtn">Clone</button><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
+  // Clone — open the add form prefilled with this asset's shared attributes
+  // (Tag + Serial left blank; they are unique per item).
+  document.getElementById("cloneBtn")?.addEventListener("click",()=>{
+    cloneIntoForm(it);
+  });
   // inline editing — tap a value to change it
   let current=it;
   const bar=document.getElementById("editBar");
@@ -532,6 +537,42 @@ async function beginEdit(cell,current){
       document.getElementById("editBar").innerHTML="";
     }
   });
+}
+
+// ---------- Clone: prefill the add form from an existing asset ----------
+function cloneIntoForm(it){
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||"";};
+  // select fields need value matching; text inputs take raw values
+  function setSelect(id,v){
+    const s=document.getElementById(id);
+    if(!s)return;
+    let matched=false;
+    for(const o of s.options){if(o.value===v||o.text===v){s.value=o.value;matched=true;break;}}
+    if(!matched)s.value="";   // unknown value → force explicit choice
+  }
+  openAdd();
+  setSelect("addType",it.type);
+  setSelect("addStatus",it.status);
+  setSelect("addLocation",it.location);
+  set("addModel",it.model);
+  set("addEmployee",it.employee);
+  set("addDept",it.department);
+  set("addCondition",it.condition);
+  set("addPDate",it.purchaseDate);
+  set("addPrice",it.purchasePrice?String(it.purchasePrice):"");
+  document.getElementById("addPriceEstimate").checked=!!it.estimatePending;
+  // unique-per-item fields start empty; tag field is editable and focused
+  const tagInput=document.getElementById("addTag");
+  tagInput.removeAttribute("readonly");
+  tagInput.value="";
+  set("addSerial","");
+  closeDetail();
+  setTimeout(()=>{tagInput&&tagInput.focus();},350);
+  flash(document.getElementById("addMsg"),"ok","Cloned from "+(it.tag||it.serial)+" — enter the new Tag & Serial.");
+}
+function closeDetail(){
+  const d=document.getElementById("detail");
+  if(d)d.innerHTML="";
 }
 
 // Add form logic
