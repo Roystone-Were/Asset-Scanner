@@ -39,16 +39,22 @@ const DEP_COLORS = {
 
   async function initAuth() {
     const session = await XanaSupabase.getSession().catch(() => null);
-    if (!session || !session.user) return false;
+    const boot = document.getElementById("boot");
+    if (!session || !session.user) {
+      showSignIn();                                   // signed out → show sign-in card
+      if (boot) { boot.classList.add("done"); setTimeout(() => boot.remove(), 300); }
+      return false;
+    }
     account = { username: String(session.user.email || "").toLowerCase(), name: session.user.email };
     const roles = await XanaSupabase.myRoles();
-    if (!(roles.includes("dashboard_viewer") || roles.includes("admin"))) {
+    if (!(roles.includes("dashboard_viewer") || roles.includes("admin") || roles.includes("super_admin"))) {
       const l = await XanaSupabase.landingFor();
       location.href = l || "/login";
       return false;
     }
     XanaSupabase.applyRoleNav(roles);
     onSignedIn();
+    if (boot) { boot.classList.add("done"); setTimeout(() => boot.remove(), 300); }
     return true;
   }
 
