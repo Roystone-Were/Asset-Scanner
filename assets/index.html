@@ -83,6 +83,8 @@
   .editrow:hover>span:last-child::after{content:" ✎";font-size:.7rem;color:var(--accent)}
   .inlineedit{max-width:220px;padding:6px 8px;font-size:.85rem;border-radius:8px;border:1px solid var(--accent);background:var(--card);color:var(--text)}
   .hint{font-size:.72rem;color:var(--muted);margin-top:6px}
+  .detail-actions{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+  .detail-actions .btn,.detail-actions a.btn{flex:1 1 auto;min-width:110px;text-align:center;padding:10px 12px}
   .hrow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--border);font-size:.8rem;flex-wrap:wrap}
   .hwho{color:var(--accent);font-weight:600;min-width:180px}
   .hwhat{flex:1;min-width:200px}
@@ -321,7 +323,7 @@ function showDetail(it){
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+(esc(it.lastVerified||"")||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
+    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // inline editing — tap a value to change it
   let current=it;
