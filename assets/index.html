@@ -178,6 +178,7 @@
     <label>Purchase Date</label><input type="date" id="addPDate" />
     <label>Purchase Price (KES)</label><input type="number" id="addPrice" placeholder="120000" />
     <label class="chk"><input type="checkbox" id="addPriceEstimate" /> Price is an estimate (pending invoice)</label>
+    <label>Warranty (months from purchase)</label><input type="number" id="addWarrantyMonths" min="0" placeholder="e.g. 12, 24, 36 — blank = none" />
     <label>Image</label>
     <label class="img-drop" for="addImage">Click to upload image
       <input type="file" id="addImage" accept="image/*" style="display:none" />
@@ -208,6 +209,22 @@ async function initAuth(){
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("lost"))return "#d13438";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
 function money(n){return "KES "+Math.round(n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");}
+function warrantyInfo(it){
+  if(!it.warrantyMonths||!it.purchaseDate)return null;
+  const d=new Date(it.purchaseDate+"T00:00:00");
+  if(isNaN(d.getTime()))return null;
+  const expiry=new Date(d);
+  expiry.setMonth(expiry.getMonth()+Math.round(it.warrantyMonths));
+  const days=Math.ceil((expiry-new Date())/86400000);
+  return {expiry,days};
+}
+function warrantyText(it){
+  const w=warrantyInfo(it);
+  if(!w)return "None";
+  if(w.days>90)return w.expiry.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  if(w.days>0)return '<span style="color:#ff8c00">'+w.expiry.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})+" — expires in "+w.days+" days</span>";
+  return '<span style="color:#d13438">'+w.expiry.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})+" — EXPIRED</span>";
+}
 // ---------- column filters ----------
 const colFilters={type:new Set(),location:new Set(),status:new Set()};
 const FILTERABLE={Type:"type",Location:"location",Status:"status"};
@@ -332,6 +349,7 @@ function showDetail(it){
     '<div class="row"><span>Book Value</span><span style="color:var(--book)"><b>'+money(it.bookValue)+'</b></span></div>'+
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
+    '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+(esc(it.lastVerified||"")||"—")+'</span></div>'+
     '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><button class="btn secondary" id="cloneBtn">Clone</button><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
@@ -630,6 +648,8 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(pDate) fields.PurchaseDate=pDate;
   if(pPrice) fields.PurchasePrice=pPrice;
   if(est) fields.EstimatePending=true;
+  const wMonths=(document.getElementById("addWarrantyMonths").value||"").trim();
+  if(wMonths!=="") fields.WarrantyMonths=wMonths;
   try{
     const created=await XanaSupabase.insertAsset(fields);
     // optional image -> Supabase Storage (non-fatal on failure)

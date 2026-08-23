@@ -98,6 +98,8 @@ const DEP_COLORS = {
       try {
         await mountItWidget(main, items);
       } catch (e) { console.warn("IT widget:", e); }
+      // Warranty expiries (non-fatal)
+      try { mountWarrantyWidget(items); } catch (e) { console.warn("warranty widget:", e); }
       const isAdminUser = (await XanaSupabase.myRoles()).some(r => r === "admin" || r === "super_admin");
       const badge = document.getElementById("roleBadge");
       if (badge) { badge.textContent = isAdminUser ? "ADMIN" : "VIEWER"; badge.style.background = isAdminUser ? "#3b82f6" : "#64748b"; }
@@ -105,6 +107,35 @@ const DEP_COLORS = {
       console.error(e);
       main.innerHTML = '<div class="errbox">' + esc(e.message || e) + '</div>';
     } finally { if (btn) btn.disabled = false; }
+  }
+
+  // Warranty expiry widget: assets expiring within 90 days, or recently expired
+  function warrantyExpiry(i) {
+    if (!i.warrantyMonths || !i.purchaseDate) return null;
+    const d = new Date(i.purchaseDate + "T00:00:00");
+    if (isNaN(d.getTime())) return null;
+    const expiry = new Date(d);
+    expiry.setMonth(expiry.getMonth() + Math.round(i.warrantyMonths));
+    return { expiry, days: Math.ceil((expiry - new Date()) / 86400000) };
+  }
+  function mountWarrantyWidget(items) {
+    const body = document.getElementById("warrantyBody");
+    if (!body) return;
+    const rows = items
+      .map(i => ({ i, w: warrantyExpiry(i) }))
+      .filter(x => x.w && x.w.days <= 90)
+      .sort((a, b) => a.w.days - b.w.days);
+    if (!rows.length) {
+      body.innerHTML = "No warranties expiring in the next 90 days.";
+      return;
+    }
+    body.innerHTML = rows.map(({ i, w }) => {
+      const color = w.days < 0 ? "#dc2626" : w.days <= 30 ? "#ff8c00" : "var(--text)";
+      const state = w.days < 0 ? "EXPIRED" : w.days + " days left";
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)">' +
+        '<span><b>' + esc(i.tag || "#" + i.id) + "</b> — " + esc(i.type || "") + "</span>" +
+        '<span style="color:' + color + '">' + w.expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) + " · " + state + "</span></div>";
+    }).join("");
   }
 
   async function mountItWidget(main, items) {
@@ -156,14 +187,17 @@ const DEP_COLORS = {
       financePanel(d.finance) +
       `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
       healthStrip(h) +
-      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportCsv" style="margin-left:auto;background:var(--green);">📥 Export CSV</button></div></div>`;
+      `<div class="panel" id="warrantyPanel"><h2>🛡️ Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
+      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportDep" style="margin-left:auto;background:#0d9488;">📊 Depreciation export</button><button class="editbtn" id="exportCsv" style="background:var(--green);margin-left:0;">📥 Export CSV</button></div></div>`;
 
     // Now populate the table after the DOM elements exist
     renderTable();
 
-    // Wire the export button
+    // Wire the export buttons
     const exportBtn = document.getElementById("exportCsv");
     if (exportBtn) exportBtn.onclick = exportToCsv;
+    const depBtn = document.getElementById("exportDep");
+    if (depBtn) depBtn.onclick = exportDepreciationCsv;
 
     // Build the print-only exec one-pager and enable its button
     mountExecPage(d);
@@ -413,6 +447,71 @@ const DEP_COLORS = {
     const link = document.createElement("a");
     link.href = url;
     link.download = "asset-register-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------- Monthly depreciation export (accounting periods) ----------
+  // Straight-line monthly charge: price ÷ useful life ÷ 12, pro-rated from
+  // the purchase month. Fully-depreciated and zero-price assets contribute 0.
+  function monthlyCharge(i) {
+    if (!(i.purchasePrice > 0) || !(i.usefulLife > 0)) return 0;
+    if (!i.purchaseDate) return i.purchasePrice / i.usefulLife / 12;   // best effort: no proration
+    const d = new Date(i.purchaseDate + "T00:00:00");
+    if (isNaN(d.getTime())) return i.purchasePrice / i.usefulLife / 12;
+    const now = new Date();
+    const monthsOld = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    if (monthsOld >= i.usefulLife * 12) return 0;
+    return i.purchasePrice / i.usefulLife / 12;
+  }
+  function exportDepreciationCsv() {
+    if (!lastItems.length) return;
+    const period = new Date();
+    const periodStr = period.getFullYear() + "-" + String(period.getMonth() + 1).padStart(2, "0");
+    const headers = [
+      "Asset Tag", "Type", "Model", "Serial", "Employee", "Location", "Status",
+      "Purchase Date", "Purchase Cost", "Useful Life (Years)", "Useful Life (Months)",
+      "Monthly Depreciation", "YTD Depreciation", "Accumulated Depreciation",
+      "Closing Book Value", "Depreciation Status"
+    ];
+    let totMonth = 0, totYtd = 0, totAccum = 0, totBook = 0;
+    const rows = lastItems.map(i => {
+      const monthly = Math.round(monthlyCharge(i) * 100) / 100;
+      const d = i.purchaseDate ? new Date(i.purchaseDate + "T00:00:00") : null;
+      let ytd = 0, accum = 0;
+      if (d && !isNaN(d.getTime()) && i.purchasePrice > 0 && i.usefulLife > 0) {
+        const now = new Date();
+        const monthsOld = Math.max(0, (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth()));
+        const totalMonths = i.usefulLife * 12;
+        accum = Math.min(i.purchasePrice, Math.round((monthsOld * monthly) * 100) / 100);
+        const monthsThisFY = monthsOld % 12 === 0 && monthsOld > 0 ? 12 : monthsOld % 12;   // calendar-year YTD
+        ytd = Math.min(accum, Math.round((monthsThisFY * monthly) * 100) / 100);
+      }
+      totMonth += monthly; totYtd += ytd; totAccum += accum; totBook += i.bookValue;
+      return [
+        i.tag, i.type, i.model, i.serial, i.employee, i.location, i.status,
+        i.purchaseDate || "", i.purchasePrice || "", i.usefulLife || "", (i.usefulLife || 0) * 12,
+        monthly.toFixed(2), ytd.toFixed(2), accum.toFixed(2),
+        (Math.round(i.bookValue * 100) / 100).toFixed(2), i.depStatus
+      ].map(v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(",");
+    });
+    const totalsRow = [
+      "TOTAL", "", "", "", "", "", "", "", "", "", "",
+      totMonth.toFixed(2), totYtd.toFixed(2), totAccum.toFixed(2), (Math.round(totBook * 100) / 100).toFixed(2), ""
+    ].map(v => '"' + v + '"').join(",");
+    const csv = [
+      '"Depreciation Schedule - Period ' + periodStr + ' (generated ' + new Date().toISOString().slice(0, 10) + ')"',
+      headers.join(","),
+      ...rows,
+      totalsRow
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "depreciation-" + periodStr + ".csv";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

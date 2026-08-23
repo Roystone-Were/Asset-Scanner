@@ -43,6 +43,7 @@
     PurchasePrice: "purchase_price",
     DateIssued: "date_issued",
     EstimatePending: "estimate_pending",
+    WarrantyMonths: "warranty_months",
   };
 
   function createClient() {
@@ -167,6 +168,12 @@
       depStatus,
       lastVerified: str(extra.last_verified),
       estimatePending: extra.estimate_pending === true || extra.estimate_pending === "true",
+      warrantyMonths: (() => {
+        const w = extra.warranty_months;
+        if (w === null || w === undefined || w === "") return null;
+        const n = parseFloat(w);
+        return isNaN(n) || n <= 0 ? null : n;
+      })(),
     };
   }
 
