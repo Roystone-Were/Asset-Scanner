@@ -272,7 +272,7 @@ function showDetail(it){
   });
   detail.querySelectorAll(".editrow").forEach(row=>{
     row.addEventListener("click",()=>{
-      beginEdit(row.querySelector("[data-edit]"),current,bar,detail);
+      beginEdit(row.querySelector("[data-edit]"),current);
     });
   });
   detail.scrollIntoView({behavior:"smooth"});
@@ -295,40 +295,56 @@ function flash(el,kind,text){
   el.querySelectorAll(".msg").forEach(m=>m.remove());
   el.insertAdjacentHTML("beforeend",'<div class="msg '+kind+'">'+(kind==="err"?esc(text):text)+'</div>');
 }
-function fieldControl(name,val){
-  const v=val||"";
-  if(name==="Status"||name==="Location"){
-    const opts=(name==="Status"?_choices.status:_choices.location).filter(Boolean);
-    return {select:true,html:'<option value="">— none —</option>'+opts.map(o=>'<option'+(o===v?' selected':'')+'>'+esc(o)+'</option>').join('')};
-  }
-  return {select:false,attrs:'type="text" value="'+esc(v)+'"'};
+// One live editor across the whole card, tracked here.
+let _openEditor=null;   // {cell, input, name, orig}
+function closeEditor(commitIfChanged){
+  if(!_openEditor) return;
+  const {cell,input,name,orig}=_openEditor;
+  const val=input.value.trim();
+  _openEditor=null;
+  cell.textContent=orig;                 // always restore display text
+  if(!commitIfChanged||val===orig){return;}
+  const bar=document.getElementById("editBar");
+  if(!bar) return;
+  const patch={}; patch[name]=val;
+  bar.innerHTML='<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'+
+    '<button class="btn" data-act="save" data-patch=\''+esc(JSON.stringify(patch))+'\'>Save changes</button>'+
+    '<button class="btn secondary" data-act="cancel">Cancel</button></div>';
 }
-async function beginEdit(cell,current,bar,detail){
-  if(bar.querySelector("select,input")) return;   // one editor at a time
+async function beginEdit(cell,current){
+  if(_openEditor&&_openEditor.cell===cell)return;   // already editing this row
+  closeEditor(true);                                // commit-or-discard the previous one
   await getChoices();
   const name=cell.dataset.edit;
-  const orig=cell.textContent;
-  const ctl=fieldControl(name,orig);
-  cell.innerHTML = ctl.select
-    ? '<select class="inlineedit">'+ctl.html+'</select>'
-    : '<input class="inlineedit" '+ctl.attrs+' />';
-  const input=cell.querySelector(".inlineedit");
-  input.focus();
-  let done=false;
-  function commit(){
-    if(done) return; done=true;
-    const val=input.value.trim();
-    cell.textContent=orig;                       // restore display either way
-    if(val===orig){bar.innerHTML="";return;}
-    const patch={}; patch[name]=val;
-    bar.innerHTML='<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'+
-      '<button class="btn" data-act="save" data-patch=\''+esc(JSON.stringify(patch))+'\'>Save changes</button>'+
-      '<button class="btn secondary" data-act="cancel">Cancel</button></div>';
+  const orig=cell.textContent.trim();
+  let control;
+  if(name==="Status"||name==="Location"){
+    const opts=(name==="Status"?_choices.status:_choices.location).filter(Boolean);
+    // preselect the stored value case-insensitively; keep it even when absent from the list
+    const hit=opts.find(o=>o.toLowerCase()===orig.toLowerCase());
+    const options=['<option value="">— none —</option>']
+      .concat((hit?[hit]:[]).concat(opts.filter(o=>o!==hit)).map(o=>'<option'+(o===hit?' selected':'')+'>'+esc(o)+'</option>'))
+      .join('');
+    control={el:'<select class="inlineedit">'+options+'</select>',origVal:hit||orig};
+  }else{
+    control={el:'<input class="inlineedit" type="text" value="'+esc(orig)+'" />',origVal:orig};
   }
-  input.addEventListener("change",commit);
+  cell.innerHTML=control.el;
+  const input=cell.querySelector(".inlineedit");
+  _openEditor={cell,input,name,orig};
+  input.focus();
+  function done(commit){
+    if(!_openEditor||_openEditor.input!==input)return;
+    closeEditor(commit);
+  }
+  input.addEventListener("change",()=>done(true));            // dropdown pick / text Enter
+  input.addEventListener("blur",()=>setTimeout(()=>done(true),100));
   input.addEventListener("keydown",e=>{
-    if(e.key==="Enter")commit();
-    if(e.key==="Escape"){done=true;cell.textContent=orig;bar.innerHTML="";}
+    if(e.key==="Enter"){e.preventDefault();done(true);}
+    if(e.key==="Escape"){                                     // discard: restore, no save-bar
+      const keep=orig; _openEditor=null; cell.textContent=keep;
+      document.getElementById("editBar").innerHTML="";
+    }
   });
 }
 
