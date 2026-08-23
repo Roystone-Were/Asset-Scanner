@@ -42,6 +42,7 @@
     PurchaseDate: "purchase_date",
     PurchasePrice: "purchase_price",
     DateIssued: "date_issued",
+    EstimatePending: "estimate_pending",
   };
 
   function createClient() {

@@ -163,6 +163,7 @@
     <label>Condition</label><input type="text" id="addCondition" placeholder="New" />
     <label>Purchase Date</label><input type="date" id="addPDate" />
     <label>Purchase Price (KES)</label><input type="number" id="addPrice" placeholder="120000" />
+    <label class="chk"><input type="checkbox" id="addPriceEstimate" /> Price is an estimate (pending invoice)</label>
     <label>Image</label>
     <label class="img-drop" for="addImage">Click to upload image
       <input type="file" id="addImage" accept="image/*" style="display:none" />
@@ -367,7 +368,9 @@ document.getElementById("addImage")?.addEventListener("change",e=>{
   r.readAsDataURL(f);
 });
 document.getElementById("addSave")?.addEventListener("click", async()=>{
-  const tag=(document.getElementById("addTag").value||"").trim();
+  const tagInput=document.getElementById("addTag");
+  const manualTag=!tagInput.hasAttribute("readonly");
+  const tag=(tagInput.value||"").trim();
   const serial=(document.getElementById("addSerial").value||"").trim();
   const model=(document.getElementById("addModel").value||"").trim();
   const type=(document.getElementById("addType").value||"").trim();
@@ -378,10 +381,22 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   const cond=(document.getElementById("addCondition").value||"").trim();
   const pDate=document.getElementById("addPDate").value;
   const pPrice=(document.getElementById("addPrice").value||"").trim();
+  const est=document.getElementById("addPriceEstimate").checked;
   const msg=document.getElementById("addMsg");
-  if(!tag){msg.innerHTML='<div class="msg err">Asset Tag is required.</div>';return;}
+  // required at creation: serial, department, price (or estimate flag)
+  // tag is auto-generated unless manually assigned; manual tags must be non-empty
+  if(manualTag&&!tag){msg.innerHTML='<div class="msg err">Manual tag was unlocked — enter a tag or reload the form.</div>';return;}
+  if(!manualTag&&tag){msg.innerHTML='<div class="msg err">Unexpected state: readonly tag has a value. Reload the page.</div>';return;}
+  const problems=[];
+  if(!serial) problems.push("Serial Number is required.");
+  if(!dept) problems.push("Department is required.");
+  if(pPrice===""&&!est) problems.push("Purchase Price is required — or tick \u201Cestimate pending\u201D.");
+  if(problems.length){
+    msg.innerHTML='<div class="msg err">'+problems.map(p=>"• "+esc(p)).join("<br>")+'</div>';
+    return;
+  }
   msg.innerHTML='<div class="msg info">Saving…</div>';
-  const fields={Title:tag, Status:status, Location:location};
+  const fields={Status:status, Location:location};
   if(serial) fields.SerialNumber=serial;
   if(model) fields.Model=model;
   if(type) fields.Asset=type;
@@ -390,19 +405,29 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(cond) fields.Condition=cond;
   if(pDate) fields.PurchaseDate=pDate;
   if(pPrice) fields.PurchasePrice=pPrice;
+  if(est) fields.EstimatePending=true;
   try{
     const created=await XanaSupabase.insertAsset(fields);
+    // auto-tag: XL-<item_id> (unique by construction); manual tags are kept as typed
+    let finalTag=tag;
+    if(!manualTag){
+      finalTag="XL-"+created.id;
+      try{ await XanaSupabase.updateAsset(created.id,{Title:finalTag}); }
+      catch(e){ console.warn("auto-tag rename failed:",e); finalTag=serial||created.id; }
+    }
     // optional image -> Supabase Storage (non-fatal on failure)
     if(pendingImage){
       try{
         await XanaSupabase.uploadAssetImage(created.id,pendingImage,pendingImageName||"asset.jpg");
       }catch(e){console.warn("image upload failed:",e);}
     }
-    msg.innerHTML='<div class="msg ok">Added as '+(tag||serial)+' ✓</div>';
+    msg.innerHTML='<div class="msg ok">Added as '+esc(finalTag)+' ✓</div>';
     pendingImage=null; document.getElementById("imgPreview").style.display="none"; document.getElementById("imgName").textContent="";
     // reset form
-    ["addTag","addSerial","addModel","addType","addEmployee","addDept","addCondition","addPrice"].forEach(id=> document.getElementById(id).value="");
+    ["addSerial","addModel","addType","addEmployee","addDept","addCondition","addPrice"].forEach(id=> document.getElementById(id).value="");
     document.getElementById("addPDate").value="";
+    document.getElementById("addPriceEstimate").checked=false;
+    tagInput.value="";
     setTimeout(closeAdd,900);
     await load();
   }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
