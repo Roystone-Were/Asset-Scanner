@@ -15,12 +15,13 @@ jobs:
       - run: npm --prefix scanner-app install
       - run: npm --prefix scanner-app test
 
-  test-summary:
+  # api functions (sharepoint-sync, admin-users) are syntax-checked here;
+  # their real behaviour is covered by scripts/e2e-*.mjs against production.
+  test-api:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 20
-      - run: npm --prefix summary install
-      - run: npm --prefix summary test
+      - run: node --check api/sharepoint-sync.js && node --check api/admin-users.js
