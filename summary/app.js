@@ -356,7 +356,9 @@ const DEP_COLORS = {
       const y4 = cy + r * Math.sin(startRad);
       const path = `M ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${r} ${r} 0 ${largeArc} 0 ${x4} ${y4} Z`;
       const pct = total > 0 ? ((p.end - p.start) / 360 * 100).toFixed(1) : 0;
-      svgPaths += `<path d="${path}" fill="${statusColor(p.k)}" data-status="${esc(p.k)}" data-count="${Math.round((p.end - p.start) / 360 * total)}" data-pct="${pct}"><title>${esc(p.k)}: ${pct}% (${Math.round((p.end - p.start) / 360 * total)} assets)</title></path>`;
+      // stroke-dasharray draw-in: segments sweep from 12 o'clock on load
+      const arcLen = (Math.PI * (R + r) * sweep) / 180;
+      svgPaths += `<path class="donut-seg" d="${path}" fill="${statusColor(p.k)}" data-status="${esc(p.k)}" data-count="${Math.round((p.end - p.start) / 360 * total)}" data-pct="${pct}" style="--seg-len:${arcLen.toFixed(1)};--seg-delay:${(parts.indexOf(p) * 90)}ms"><title>${esc(p.k)}: ${pct}% (${Math.round((p.end - p.start) / 360 * total)} assets)</title></path>`;
       angle += sweep;
     }
 
