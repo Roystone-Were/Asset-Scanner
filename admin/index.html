@@ -8,8 +8,19 @@
   <script src="/js/supabase-client.js"></script>
   <link rel="stylesheet" href="/css/base.css" />
   <style>
-    :root { --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --border:#e2e8f0; --accent:#16a34a; --blue:#2563eb; --text:#0f172a; --muted:#64748b; --red:#d13438; }
-    [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --card2:#242424; --border:#2b2b2b; --text:#f3f4f6; --muted:#9ca3af; }
+    :root { --bg:#f7f8fa; --card:#ffffff; --card2:#f1f4f8; --border:#e6eaf0; --accent:#16a34a; --blue:#2563eb; --text:#0b1220; --muted:#5c6b80; --red:#dc2626; --radius:16px;
+      --hairline:rgba(11,18,32,.06);
+      --shadow-ambient:0 1px 2px rgba(11,18,32,.04), 0 8px 24px -12px rgba(11,18,32,.10);
+      --shadow-lifted:0 2px 4px rgba(11,18,32,.05), 0 20px 44px -18px rgba(11,18,32,.16);
+      --inner-highlight:inset 0 1px 0 rgba(255,255,255,.85);
+      --ease-out:cubic-bezier(0.32,0.72,0,1);
+    }
+    [data-theme="dark"] { --bg:#0a0c10; --card:#14171c; --card2:#1a1e25; --border:#232830; --text:#f3f4f6; --muted:#9aa5b5;
+      --hairline:rgba(255,255,255,.07);
+      --shadow-ambient:0 1px 2px rgba(0,0,0,.25), 0 8px 24px -12px rgba(0,0,0,.35);
+      --shadow-lifted:0 2px 4px rgba(0,0,0,.3), 0 20px 44px -18px rgba(0,0,0,.5);
+      --inner-highlight:inset 0 1px 0 rgba(255,255,255,.06);
+    }
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
     .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
@@ -21,20 +32,26 @@
     .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
     .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
     .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
-    .main{padding:22px;max-width:1080px;margin:0 auto}
-    h1{font-size:1.3rem;margin-bottom:4px}
+    .main{padding:26px 22px 40px;max-width:1080px;margin:0 auto}
+    h1{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
     p.sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:14px}
+    .card{background:var(--card);border:1px solid var(--hairline);border-radius:var(--radius);padding:20px;margin-top:14px;box-shadow:var(--shadow-ambient), var(--inner-highlight)}
+    .card h3{font-size:.95rem;font-weight:600;letter-spacing:-.01em;margin-bottom:12px}
     input[type=text],input[type=email],select{padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.9rem}
     input:focus,select:focus{outline:none;border-color:var(--accent)}
     button{border:0;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff}
-    button.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
-    button.danger{background:rgba(209,52,56,.12);color:#dc2626}
-    button.small{padding:5px 9px;font-size:.75rem;border-radius:999px}
+    button:hover{filter:brightness(1.08)}
+    button.secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
+    button.secondary:hover{border-color:var(--muted);filter:none}
+    button.danger{background:rgba(220,38,38,.10);color:#dc2626}
+    button.danger:hover{background:rgba(220,38,38,.18);filter:none}
+    button.small{padding:5px 11px;font-size:.75rem;border-radius:999px}
     button:disabled{opacity:.55}
+    button:active{transform:scale(.98)}
     .tabs{display:flex;gap:8px;margin-top:16px}
-    .tab{flex:1;text-align:center;padding:11px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-weight:600;font-size:.88rem;cursor:pointer}
-    .tab.active{background:var(--card2);color:var(--text);border-color:var(--accent)}
+    .tab{flex:1;text-align:center;padding:11px;border-radius:11px;border:1px solid var(--hairline);background:var(--card);color:var(--muted);font-weight:600;font-size:.88rem;cursor:pointer;box-shadow:var(--shadow-ambient), var(--inner-highlight);transition:border-color var(--duration-fast,140ms) var(--ease-out)}
+    .tab:hover{color:var(--text)}
+    .tab.active{color:var(--text);border-color:var(--accent)}
     label.chk{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;color:var(--muted);margin-right:10px;cursor:pointer}
     .msg{margin-top:10px;padding:10px;border-radius:10px;text-align:center;font-size:.85rem;display:none}
     .msg.show{display:block}
@@ -42,14 +59,16 @@
     .ok{background:rgba(34,197,94,.12);color:#16a34a}
     .info{background:rgba(37,99,235,.10);color:var(--blue)}
     table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:10px}
-    th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
-    th{color:var(--muted);font-size:.7rem;text-transform:uppercase}
+    th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--hairline);vertical-align:middle}
+    th{color:var(--muted);font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
     .pill{padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--border);font-size:.7rem}
     #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
     .grid2{display:flex;gap:10px;flex-wrap:wrap}
     .grid2 > *{flex:1;min-width:180px}
-    .choice-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:10px;margin-top:6px}
-    @media(max-width:760px){table thead{display:none}table tr{display:block;margin-bottom:10px;border:1px solid var(--border);border-radius:10px;padding:8px}table td{display:block;border:0;padding:4px 8px}}
+    .choice-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;border:1px solid var(--hairline);border-radius:10px;margin-top:6px;background:var(--card)}
+    .lists-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .lists-grid .card{margin-top:0}
+    @media(max-width:760px){.lists-grid{grid-template-columns:1fr}table thead{display:none}table tr{display:block;margin-bottom:10px;border:1px solid var(--hairline);border-radius:10px;padding:8px}table td{display:block;border:0;padding:4px 8px}}
   </style>
 </head>
 <body>
@@ -64,6 +83,12 @@
 </nav>
 
 <div class="main">
+  <div id="boot" style="position:fixed;inset:0;z-index:99;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .25s ease">
+    <img src="/scanner-app/xana-logo.png" alt="" style="height:52px;opacity:.9" />
+    <div style="width:22px;height:22px;border:3px solid var(--border);border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite"></div>
+    <div style="color:var(--muted);font-size:.85rem">Checking your session…</div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  </div>
   <h1>Admin</h1>
   <p class="sub">Manage who can access what, and the dropdown lists used across the apps.</p>
   <div id="authState">Checking session…</div>
@@ -110,17 +135,19 @@
 
     <!-- ================= LISTS ================= -->
     <section id="pane-lists" style="display:none">
-      <div class="card"><h3>Asset types</h3><div id="list-asset_type"></div>
-        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-asset_type" placeholder="new asset type" style="flex:1"/><button class="small" data-addcat="asset_type">Add</button></div>
-      </div>
-      <div class="card"><h3>Statuses</h3><div id="list-status"></div>
-        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-status" placeholder="new status" style="flex:1"/><button class="small" data-addcat="status">Add</button></div>
-      </div>
-      <div class="card"><h3>Locations</h3><div id="list-location"></div>
-        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-location" placeholder="new location" style="flex:1"/><button class="small" data-addcat="location">Add</button></div>
-      </div>
-      <div class="card"><h3>Regions</h3><div id="list-region"></div>
-        <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-region" placeholder="new region" style="flex:1"/><button class="small" data-addcat="region">Add</button></div>
+      <div class="lists-grid">
+        <div class="card"><h3>Asset types</h3><div id="list-asset_type"></div>
+          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-asset_type" placeholder="new asset type" style="flex:1"/><button class="small" data-addcat="asset_type">Add</button></div>
+        </div>
+        <div class="card"><h3>Statuses</h3><div id="list-status"></div>
+          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-status" placeholder="new status" style="flex:1"/><button class="small secondary" data-addcat="status">Add</button></div>
+        </div>
+        <div class="card"><h3>Locations</h3><div id="list-location"></div>
+          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-location" placeholder="new location" style="flex:1"/><button class="small secondary" data-addcat="location">Add</button></div>
+        </div>
+        <div class="card"><h3>Regions</h3><div id="list-region"></div>
+          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-region" placeholder="new region" style="flex:1"/><button class="small secondary" data-addcat="region">Add</button></div>
+        </div>
       </div>
       <div id="listMsg" class="msg"></div>
     </section>
@@ -331,6 +358,8 @@ async function loadSync(){
   state.textContent="✅ Signed in as "+account.username;
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").style.display="block";
+  const boot=document.getElementById("boot");
+  if(boot){boot.style.opacity="0";setTimeout(()=>boot.remove(),260);}
   await Promise.all([loadUsers(),loadChoices()]);
 })();
 </script>
