@@ -262,7 +262,9 @@ module.exports = async function handler(req, res) {
       const userId = String(body.userId || "");
       if (!userId) throw new Error("userId required");
       await sb("profiles?id=eq." + userId, { method: "DELETE" });
-      await authAdmin("admin/users?id=" + userId, { method: "DELETE" });
+      // Supabase auth admin requires the user id as a PATH segment, not a
+      // query param — `?id=` returns 405 Method Not Allowed.
+      await authAdmin("admin/users/" + userId, { method: "DELETE" });
       res.status(200).json({ ok: true });
       return;
     }
