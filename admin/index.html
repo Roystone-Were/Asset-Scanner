@@ -48,6 +48,7 @@
     button.small{padding:4px 10px;font-size:.7rem;border-radius:999px;font-weight:500}
     button:disabled{opacity:.55}
     button:active{transform:scale(.98)}
+    @keyframes dsp{to{transform:rotate(360deg)}}
     .tabs{display:flex;gap:8px;margin-top:16px}
     .tab{flex:1;text-align:center;padding:11px;border-radius:11px;border:1px solid var(--hairline);background:var(--card);color:var(--muted);font-weight:600;font-size:.88rem;cursor:pointer;box-shadow:var(--shadow-ambient), var(--inner-highlight);transition:border-color var(--duration-fast,140ms) var(--ease-out)}
     .tab:hover{color:var(--text)}
@@ -263,28 +264,102 @@ document.getElementById("usersList").addEventListener("change",async(e)=>{
     }else if(t.hasAttribute("data-active")){
       await api("set_active",{userId:t.dataset.user,active:t.checked});
     }
-  }catch(err){alert("Save failed: "+err.message);loadUsers();}
+  }catch(err){toast("Save failed: "+err.message,true);loadUsers();}
 });
+
+// ---------- in-page dialog (replaces browser confirm/alert/prompt) ----------
+function showDialog({title,body,confirmText="Confirm",danger=false,onConfirm}){
+  closeModal();
+  const ov=document.createElement("div");
+  ov.id="modalOv";
+  ov.style.cssText="position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease";
+  ov.innerHTML='<div role="dialog" style="background:var(--card);border:1px solid var(--hairline);border-radius:16px;box-shadow:var(--shadow-lifted);padding:22px;width:340px;max-width:90vw;text-align:center;transform:scale(.96);transition:transform .18s var(--ease-out)">'
+    +'<div style="font-weight:700;font-size:.95rem;margin-bottom:8px">'+esc(title)+'</div>'
+    +'<div style="font-size:.83rem;color:var(--muted);line-height:1.45;margin-bottom:16px">'+body+'</div>'
+    +'<div id="dlgBtns" style="display:flex;gap:8px">'
+    +'<button class="secondary" id="dlgCancel" style="flex:1">Cancel</button>'
+    +'<button id="dlgOk" class="'+(danger?"danger":"")+'" style="flex:1'+(danger?";background:rgba(220,38,38,.9)":"")+'">'+esc(confirmText)+'</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  requestAnimationFrame(()=>{ov.style.opacity="1";ov.firstElementChild.style.transform="scale(1)";});
+  const close=()=>{ov.style.opacity="0";setTimeout(()=>ov.remove(),180);};
+  ov.querySelector("#dlgCancel").onclick=close;
+  ov.onclick=e=>{if(e.target===ov)close();};
+  ov.querySelector("#dlgOk").onclick=async()=>{
+    // swap buttons for a spinner while work runs
+    const btns=ov.querySelector("#dlgBtns");
+    btns.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:8px 0;color:var(--muted);font-size:.83rem"><span style="width:17px;height:17px;border:2.5px solid var(--border);border-top-color:'+(danger?"#dc2626":"var(--accent)")+';border-radius:50%;display:inline-block;animation:dsp .7s linear infinite"></span>Working…</div>';
+    try{
+      const done=await onConfirm();
+      close();
+      if(done&&done.message)toast(done.message,false);
+    }catch(err){close();toast(err.message,true);}
+  };
+}
+let _toastT=null;
+function toast(text,isErr){
+  const t=document.createElement("div");
+  t.style.cssText="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"var(--text)")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:var(--shadow-lifted);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out)";
+  t.textContent=text;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity="1";t.style.transform="translateX(-50%) translateY(-4px)";});
+  clearTimeout(_toastT);
+  _toastT=setTimeout(()=>{t.style.opacity="0";setTimeout(()=>t.remove(),250);},3200);
+}
+function closeModal(){document.getElementById("modalOv")?.remove();}
 
 document.getElementById("usersList").addEventListener("click",async(e)=>{
   const del=e.target.closest("[data-del]");
   if(del){
-    if(!confirm("Delete "+del.dataset.email+" permanently? Their sign-in access ends immediately."))return;
-    try{await api("delete_user",{userId:del.dataset.del});await loadUsers();}
-    catch(err){alert(err.message);}
+    showDialog({
+      title:"Remove user",
+      body:"Delete <b>"+esc(del.dataset.email)+"</b> permanently? Their sign-in access ends immediately.",
+      confirmText:"Delete user",
+      danger:true,
+      onConfirm:async()=>{
+        await api("delete_user",{userId:del.dataset.del});
+        await loadUsers();
+        return {message:"User deleted"};
+      }
+    });
     return;
   }
   const rp=e.target.closest("[data-resetpw]");
   if(rp){
-    const pw=prompt("New temporary password for this user (min 8 characters). Share it with them in person or by phone — they must change it at next sign-in.");
-    if(pw===null)return;
-    if(pw.trim().length<8){alert("Password must be at least 8 characters.");return;}
-    try{
-      await api("reset_password",{userId:rp.dataset.resetpw,password:pw.trim()});
-      alert("✓ Password reset. Give it to the user out-of-band — they'll be forced to choose their own at next sign-in.");
-    }catch(err){alert(err.message);}
+    showResetDialog(rp.dataset.resetpw);
   }
 });
+function showResetDialog(userId){
+  closeModal();
+  const ov=document.createElement("div");
+  ov.id="modalOv";
+  ov.style.cssText="position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease";
+  ov.innerHTML='<div role="dialog" style="background:var(--card);border:1px solid var(--hairline);border-radius:16px;box-shadow:var(--shadow-lifted);padding:22px;width:360px;max-width:90vw;transform:scale(.96);transition:transform .18s var(--ease-out)">'
+    +'<div style="font-weight:700;font-size:.95rem;margin-bottom:6px">Reset password</div>'
+    +'<div style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Set a temporary password. Share it in person or by phone — the user must choose their own at next sign-in.</div>'
+    +'<input type="text" id="rpw" placeholder="temporary password (min 8 chars)" autocomplete="off" style="width:100%;margin-bottom:14px"/>'
+    +'<div id="dlgBtns" style="display:flex;gap:8px">'
+    +'<button class="secondary" id="dlgCancel" style="flex:1">Cancel</button>'
+    +'<button id="dlgOk" style="flex:1">Reset</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  requestAnimationFrame(()=>{ov.style.opacity="1";ov.firstElementChild.style.transform="scale(1)";});
+  const close=()=>{ov.style.opacity="0";setTimeout(()=>ov.remove(),180);};
+  ov.querySelector("#dlgCancel").onclick=close;
+  ov.onclick=e=>{if(e.target===ov)close();};
+  setTimeout(()=>ov.querySelector("#rpw").focus(),120);
+  ov.querySelector("#dlgOk").onclick=async()=>{
+    const pw=ov.querySelector("#rpw").value.trim();
+    if(pw.length<8){toast("Password must be at least 8 characters.",true);return;}
+    const btns=ov.querySelector("#dlgBtns");
+    btns.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:8px 0;color:var(--muted);font-size:.83rem"><span style="width:17px;height:17px;border:2.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:dsp .7s linear infinite"></span>Resetting…</div>';
+    try{
+      await api("reset_password",{userId,password:pw});
+      close();
+      toast("Password reset — share it out-of-band",false);
+    }catch(err){toast(err.message,true);}
+  };
+}
 
 // ---------- lists ----------
 const CAT_LABELS={asset_type:"asset type",status:"status",location:"location",region:"region"};
