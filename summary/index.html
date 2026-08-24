@@ -89,17 +89,19 @@
   .panel h2 { font-size:.95rem; font-weight:600; letter-spacing:-.01em; margin-bottom:16px; color:var(--text); }
   .flex { display:flex; gap:24px; align-items:center; }
   .donut-wrap { position:relative; width:170px; height:170px; flex:0 0 auto; }
-  /* Donut draw-in: each segment sweeps clockwise from 12 o'clock, staggered */
+  /* Donut fill-up: segments scale out from the donut's center, staggered.
+     (stroke-dash masking on filled wedge paths only traces the outline —
+     radial scale gives the true "filling up" read.) */
   .donut-seg {
-    stroke: var(--panel);
-    stroke-width: 1.5;
-    stroke-dasharray: var(--seg-len);
-    stroke-dashoffset: var(--seg-len);
-    animation: donut-draw .9s cubic-bezier(0.32,0.72,0,1) forwards;
-    animation-delay: calc(200ms + var(--seg-delay));
+    transform-origin: 90px 90px;
+    animation: donut-fill .9s cubic-bezier(0.32,0.72,0,1) backwards;
+    animation-delay: calc(150ms + var(--seg-delay));
   }
-  @keyframes donut-draw { to { stroke-dashoffset: 0; } }
-  @media (prefers-reduced-motion: reduce) { .donut-seg { animation:none; stroke-dasharray:none; stroke-dashoffset:0; stroke-width:0; } }
+  @keyframes donut-fill {
+    from { opacity: 0; transform: rotate(-14deg) scale(.6); }
+    to   { opacity: 1; transform: rotate(0) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) { .donut-seg { animation:none; } }
   .donut-center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; }
   .donut-center .n { font-size:1.5rem; font-weight:700; }
   .donut-center .t { font-size:.7rem; color:var(--muted); }
