@@ -326,12 +326,6 @@
     return { ok: true };
   }
 
-  async function deleteAsset(id) {
-    const { error } = await client().from("assets").delete().eq("item_id", String(id));
-    if (error) throw new Error("Supabase " + error.message);
-    return { ok: true };
-  }
-
   // ---------- Auth (email OTP) ----------
   async function sendOtp(email) {
     const { error } = await client().auth.signInWithOtp({
@@ -340,16 +334,6 @@
     });
     if (error) throw new Error(error.message);
     return { sent: true };
-  }
-
-  async function verifyOtp(email, token) {
-    const { data, error } = await client().auth.verifyOtp({
-      email: String(email || "").trim(),
-      token: String(token || "").trim(),
-      type: "email",
-    });
-    if (error) throw new Error(error.message);
-    return { user: data.user };
   }
 
   async function signInWithPassword(email, password) {
@@ -454,10 +438,6 @@
     return pub && pub.data ? pub.data.publicUrl : null;
   }
 
-  function isAdmin(email) {
-    return String(email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
-  }
-
   // ---------- Asset events (issues / repairs / transfers / maintenance) ----------
   async function listAssetEvents(itemId) {
     const { data, error } = await client()
@@ -520,9 +500,7 @@
     computeSummary,
     insertAsset,
     updateAsset,
-    deleteAsset,
     sendOtp,
-    verifyOtp,
     signInWithPassword,
     getSession,
     myRoles,
@@ -531,7 +509,6 @@
     currentUserEmail,
     popAuthNotice,
     signOut,
-    isAdmin,
     mustChangePassword,
     completePasswordChange,
     uploadAssetImage,

@@ -1869,11 +1869,8 @@
       }
 
       // ---------- Item history ----------
-      // SharePoint kept per-edit list versions via Graph; the Supabase mirror
-      // does not carry version history, so the expander now explains that.
-      // (Report-problem flow removed — only IT scans, so issues are logged
-      // directly via the event log on /assets.)
-
+      // Real per-field change history from the asset_history audit trail
+      // (same data the /assets History panel reads).
       async function toggleHistory() {
         const panel = document.getElementById("historyPanel");
         if (!panel) return;
@@ -1881,9 +1878,38 @@
           panel.classList.add("hidden");
           return;
         }
+        if (!lastItem || !lastItem.id) {
+          panel.classList.remove("hidden");
+          panel.innerHTML = '<div class="msg info">Scan an asset first.</div>';
+          return;
+        }
         panel.classList.remove("hidden");
-        panel.innerHTML =
-          '<div class="msg info">Per-edit history moved with the data migration. Last verified info is still shown on the asset card.</div>';
+        panel.innerHTML = '<div class="msg info">Loading…</div>';
+        try {
+          const { data, error } = await XanaSupabase.client()
+            .from("asset_history")
+            .select("op,changed_by,changed_at,fields")
+            .eq("item_id", String(lastItem.id))
+            .order("id", { ascending: false })
+            .limit(30);
+          if (error) throw error;
+          const updates = (data || []).filter(r => r.op === "update" && r.fields && Object.keys(r.fields).length);
+          if (!updates.length) {
+            panel.innerHTML = '<div class="msg info">No field changes recorded yet.</div>';
+            return;
+          }
+          const NAMES = { title:"Tag", asset_tag:"Asset tag", asset_type:"Type", model:"Model", serial:"Serial", employee:"Employee", status:"Status", location:"Location", extra:"Details" };
+          const fmt = v => { if (v === null || v === undefined) return "—"; let s = String(v).replace(/^"|"$/g, ""); return s === "" ? "—" : escapeHtml(s); };
+          panel.innerHTML = updates.map(r =>
+            '<div style="padding:6px 0;border-bottom:1px dashed var(--border);font-size:.8rem">' +
+            Object.entries(r.fields).map(([k, v]) =>
+              "<b>" + (NAMES[k] || k) + "</b>: " + fmt(v.old) + " → " + fmt(v.new)
+            ).join("<br/>") +
+            '<br/><span style="color:var(--muted);font-size:.7rem">' + escapeHtml(r.changed_by || "—") + " · " + new Date(r.changed_at).toLocaleString() + "</span></div>"
+          ).join("");
+        } catch (e) {
+          panel.innerHTML = '<div class="msg err">' + escapeHtml(e.message || e) + "</div>";
+        }
       }
 
       // ---------- People (offboarding) view ----------
