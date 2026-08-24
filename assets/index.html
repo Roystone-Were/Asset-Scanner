@@ -7,6 +7,7 @@
 <script src="/scanner-app/lib/supabase.min.js"></script>
 <script src="/js/supabase-client.js"></script>
 <script src="/scanner-app/logic.js"></script>
+<link rel="stylesheet" href="/css/base.css" />
 <style>
   :root {
     --bg:#f7f8fa; --card:#ffffff; --card2:#f1f4f8; --border:#e6eaf0; --accent:#16a34a; --accent2:#3b82f6; --text:#0b1220; --muted:#5c6b80; --red:#dc2626; --green:#16a34a; --orange:#d97706; --book:#0d9488; --radius:16px;
@@ -31,7 +32,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0; scrollbar-width:none; -ms-overflow-style:none}
   *::-webkit-scrollbar{display:none}
-  body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
   /* --- Hurry-style top navbar (green shade + blur, not transparent) --- */
   .navbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--card) 88%, var(--accent) 12%);backdrop-filter:blur(10px) saturate(1.1);-webkit-backdrop-filter:blur(10px) saturate(1.1);border-bottom:1px solid var(--border)}
   .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}

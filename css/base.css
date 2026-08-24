@@ -1,0 +1,13 @@
+/* Xana base — shared font + surface tokens for all app pages */
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Tabular figures wherever numbers align in columns */
+table, .kpi .value, .fin-grid .item .v, .health .item .v {
+  font-feature-settings: "tnum" 1;
+}
