@@ -5,13 +5,13 @@
   const CURRENCY = "KES";
 
   const STATUS_COLORS = {
-    "In Use": "#22c55e", Available: "#f59e0b", "Under Repair": "#ef4444",
-    Lost: "#dc2626", Retired: "#64748b", "Left With": "#a855f7",
+    "In Use": "#16a34a", Available: "#d97706", "Under Repair": "#dc2626",
+    Lost: "#991b1b", Retired: "#64748b", "Left With": "#7c3aed",
   };
 const PAGE_SIZE = 50;
 let currentPage = 0, lastItems = [];
 const DEP_COLORS = {
-    "Fully depreciated": "#ef4444", "In progress": "#f59e0b", "No data": "#64748b",
+    "Fully depreciated": "#dc2626", "In progress": "#d97706", "No data": "#64748b",
   };
 
   // ---------- Theme (light default, shared key with scanner) ----------
@@ -185,10 +185,10 @@ const DEP_COLORS = {
       </div>
       <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
-      `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#3b82f6"), "By Type")}${panel(bars(d.byLocation, "#38bdf8"), "By Location")}${panel(bars(d.byDepartment, "#a855f7"), "By Department")}</div>` +
+      `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
       healthStrip(h) +
       `<div class="panel" id="warrantyPanel"><h2>🛡️ Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
-      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportDep" style="margin-left:auto;background:#0d9488;">📊 Depreciation export</button><button class="editbtn" id="exportCsv" style="background:var(--green);margin-left:0;">📥 Export CSV</button></div></div>`;
+      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportDep" style="margin-left:auto;">📊 Depreciation export</button><button class="editbtn" id="exportCsv">📥 Export CSV</button></div></div>`;
 
     // Now populate the table after the DOM elements exist
     renderTable();
