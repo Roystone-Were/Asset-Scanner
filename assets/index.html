@@ -122,7 +122,6 @@
   .sheet label{font-size:.75rem;color:var(--muted);margin:8px 0 4px;display:block}
   .sheet input,.sheet select{width:100%;margin-bottom:6px}
   .img-drop{border:1px dashed var(--border);border-radius:10px;padding:12px;text-align:center;background:var(--card2);cursor:pointer}
-  .img-drop img{max-width:100%;max-height:180px;border-radius:8px;margin-top:8px;display:none}
   .form-actions{display:flex;gap:8px;margin-top:14px}
   .form-actions button{flex:1}
 
@@ -197,12 +196,6 @@
     <label>Purchase Price (KES)</label><input type="number" id="addPrice" placeholder="120000" />
     <label class="chk"><input type="checkbox" id="addPriceEstimate" /> Price is an estimate (pending invoice)</label>
     <label>Warranty (months from purchase)</label><input type="number" id="addWarrantyMonths" min="0" placeholder="e.g. 12, 24, 36 — blank = none" />
-    <label>Image</label>
-    <label class="img-drop" for="addImage">Click to upload image
-      <input type="file" id="addImage" accept="image/*" style="display:none" />
-      <img id="imgPreview" alt="preview" />
-      <div id="imgName" style="font-size:.7rem;color:var(--muted);margin-top:4px"></div>
-    </label>
     <div class="form-actions"><button class="btn secondary" id="addCancel">Cancel</button><button class="btn" id="addSave">Save Asset</button></div>
     <div id="addMsg"></div>
   </div>
@@ -608,30 +601,34 @@ async function beginEdit(cell,current){
   await getChoices();
   const name=cell.dataset.edit;
   const orig=cell.textContent.trim();
+  // "—" is a display placeholder for "no value yet" — edit as empty, never
+  // pre-fill the editor with the dash itself.
+  const hasValue=orig&&orig!=="—";
+  const editVal=hasValue?orig:"";
   let control;
   if(name==="Status"||name==="Location"){
     const opts=(name==="Status"?_choices.status:_choices.location).filter(Boolean);
     // preselect the stored value case-insensitively; keep it even when absent from the list
-    const hit=opts.find(o=>o.toLowerCase()===orig.toLowerCase());
+    const hit=hasValue?opts.find(o=>o.toLowerCase()===orig.toLowerCase()):null;
     const options=['<option value="">— none —</option>']
       .concat((hit?[hit]:[]).concat(opts.filter(o=>o!==hit)).map(o=>'<option'+(o===hit?' selected':'')+'>'+esc(o)+'</option>'))
       .join('');
     control={el:'<select class="inlineedit">'+options+'</select>'};
   }else if(name==="Asset"){
     const opts=(_choices.type||[]).filter(Boolean);
-    const hit=opts.find(o=>o.toLowerCase()===orig.toLowerCase());
+    const hit=hasValue?opts.find(o=>o.toLowerCase()===orig.toLowerCase()):null;
     const options=['<option value="">— none —</option>']
       .concat((hit?[hit]:[]).concat(opts.filter(o=>o!==hit)).map(o=>'<option'+(o===hit?' selected':'')+'>'+esc(o)+'</option>'))
       .join('');
     control={el:'<select class="inlineedit">'+options+'</select>'};
   }else if(name==="PurchaseDate"){
-    control={el:'<input class="inlineedit" type="date" value="'+esc(orig==='"—"'?"":orig)+'" />'};
+    control={el:'<input class="inlineedit" type="date" value="'+esc(editVal)+'" />'};
   }else if(name==="PurchasePrice"){
     // strip KES formatting for editing; empty means clear
     const num=(current&&current.purchasePrice)?String(current.purchasePrice):"";
     control={el:'<input class="inlineedit" type="number" min="0" step="0.01" placeholder="amount" value="'+esc(num)+'" />'};
   }else{
-    control={el:'<input class="inlineedit" type="text" value="'+esc(orig)+'" />'};
+    control={el:'<input class="inlineedit" type="text" placeholder="add ' + esc(name.charAt(0).toLowerCase()+name.slice(1)) + '" value="'+esc(editVal)+'" />'};
   }
   cell.innerHTML=control.el;
   const input=cell.querySelector(".inlineedit");
@@ -691,7 +688,6 @@ function closeDetail(){
 }
 
 // Add form logic
-let pendingImage=null, pendingImageName="";
 const addSheet=document.getElementById("addSheet");
 function openAdd(){addSheet.classList.add("open");}
 function closeAdd(){addSheet.classList.remove("open");setTimeout(()=>{if(!addSheet.classList.contains("open")){document.getElementById("addMsg").innerHTML="";}},320);}
@@ -699,15 +695,6 @@ document.getElementById("btnAdd")?.addEventListener("click",openAdd);
 document.getElementById("addClose")?.addEventListener("click",closeAdd);
 document.getElementById("addBackdrop")?.addEventListener("click",closeAdd);
 document.getElementById("addCancel")?.addEventListener("click",closeAdd);
-document.getElementById("addImage")?.addEventListener("change",e=>{
-  const f=e.target.files[0];
-  if(!f) return;
-  pendingImageName=f.name;
-  document.getElementById("imgName").textContent=f.name+" ("+Math.round(f.size/1024)+" KB)";
-  const r=new FileReader();
-  r.onload=()=>{const img=document.getElementById("imgPreview");img.src=r.result;img.style.display="block";pendingImage=r.result;};
-  r.readAsDataURL(f);
-});
 document.getElementById("addSave")?.addEventListener("click", async()=>{
   const tagInput=document.getElementById("addTag");
   const tag=(tagInput.value||"").trim();
@@ -750,14 +737,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(wMonths!=="") fields.WarrantyMonths=wMonths;
   try{
     const created=await XanaSupabase.insertAsset(fields);
-    // optional image -> Supabase Storage (non-fatal on failure)
-    if(pendingImage){
-      try{
-        await XanaSupabase.uploadAssetImage(created.id,pendingImage,pendingImageName||"asset.jpg");
-      }catch(e){console.warn("image upload failed:",e);}
-    }
     msg.innerHTML='<div class="msg ok">Added as '+esc(tag)+' ✓</div>';
-    pendingImage=null; document.getElementById("imgPreview").style.display="none"; document.getElementById("imgName").textContent="";
     // reset form
     ["addSerial","addModel","addType","addEmployee","addDept","addCondition","addPrice"].forEach(id=> document.getElementById(id).value="");
     document.getElementById("addPDate").value="";
