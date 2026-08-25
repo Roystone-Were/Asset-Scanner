@@ -345,6 +345,25 @@
     return null;
   }
 
+  // People/offboarding over enriched register rows ({ id, employee, ... }):
+  // group by trimmed, case-insensitive employee name (blank names skipped).
+  // Returns [{ name, count, ids }] sorted by count desc, then name.
+  function groupPeopleEnriched(items) {
+    const map = new Map();
+    for (const it of items || []) {
+      const raw = String((it && it.employee) || "").trim();
+      if (!raw) continue;
+      const k = raw.toLowerCase();
+      if (!map.has(k)) map.set(k, { name: raw, count: 0, ids: [] });
+      const g = map.get(k);
+      g.count++;
+      g.ids.push(String(it.id));
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+    );
+  }
+
   // Columns the history view diffs between two item versions, as
   // [internal/display-ish name, label]. fieldV() tolerates the display-name
   // variants Graph may return for each.
@@ -430,6 +449,7 @@
     parseIdQuery,
     parseIdListQuery,
     findAssetByCode,
+    groupPeopleEnriched,
     STATUS_CHOICES,
     LOCATION_CHOICES,
     REGION_CHOICES,

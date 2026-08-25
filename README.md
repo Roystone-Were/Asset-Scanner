@@ -1,8 +1,8 @@
 # Xana Asset System
 
-One unified system — **Scan** on the floor + **Dashboard** for execs — live from the **Xana Asset Inventory** SharePoint list.
+One unified system — the **register** (scan, edit, offboard) + **Dashboard** for execs — live from Supabase, mirrored to the **Xana Asset Inventory** SharePoint list.
 
-- **Live app (unified):** `https://<your-project>.vercel.app` → `/` landing, `/scan` scanner, `/dashboard` dashboard
+- **Live app (unified):** `https://<your-project>.vercel.app` → `/` landing, `/assets` register (scanning built in), `/dashboard` dashboard, `/admin` admin. `/scan` permanently redirects to `/assets`.
   - Legacy: `https://xana-asset-lookup.vercel.app` (scanner) and `https://asset-scanner-iota.vercel.app` (dashboard) — now combined
 - **Source of truth:** Supabase Postgres (project `irqrnyixizzorvfmtvag`, eu-west-1). The SharePoint Online list `Xana Asset Inventory` on `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData` is a **read-only mirror**, kept in sync by the `api/sharepoint-sync.js` worker.
 - **Auth:** Supabase email OTP / password — invite-only (admin-managed in `/admin`), with roles `super_admin` · `admin` · `scanner` · `asset_viewer` · `dashboard_viewer`. RLS enforces roles server-side; UI gates are cosmetic.
@@ -11,9 +11,9 @@ One unified system — **Scan** on the floor + **Dashboard** for execs — live 
 
 | Path | Purpose |
 |---|---|
-| `/` (landing) | `index.html` — chooser: Scanner vs Dashboard. `vercel.json` routes `/scan` → `scanner-app/` and `/dashboard` + `/api/*` → `summary/` as one Vercel project. |
-| `scanner-app/` | The scanner web app (single-file `index.html` + vendored `lib/`). MSAL sign-in, camera + USB-scanner input, Graph lookup, walk mode, offline cache/queue, item history. `scanner-app/.vercelignore` keeps data snapshots and tests out of the public deployment. |
-| `summary/` | Exec dashboard (`index.html` + `app.js` + `api/summary.js` serverless). KPIs, depreciation, health, register with CSV export. Shares Entra auth with scanner. |
+| `/` (landing) | `index.html` — chooser: Assets vs Dashboard vs Admin. `vercel.json` routes `/assets`, `/dashboard`, `/admin`, `/login`; `/scan` 301s to `/assets`. |
+| `scanner-app/` | No longer a page — holds the vendored browser libraries (`lib/supabase.min.js`, `lib/html5-qrcode.min.js`), the shared pure logic (`logic.js`) and its test suite, icons and the logo. The old standalone scanner page was retired; its features (camera scan, walk mode, wedge input, people/offboarding) live in `/assets`. |
+| `summary/` | Exec dashboard (`index.html` + `app.js`). KPIs, depreciation, health, register with CSV export. |
 | `Export-AssetLabels.ps1` | Silent cert-auth export of the list → `scanner-app/assets.csv` / `assets.json`. |
 | `Xana-Asset-Format.ps1` | Applies Status-column color + row formatting to the list. |
 | `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED (Aug 2026): the `Barcode` column was removed — the barcode on an asset label encodes the tag or serial, so tag/serial matching covers scans. Scripts kept for history. |
@@ -135,8 +135,7 @@ default — needs the `SMTP_*` secrets).
 # Serve unified app (landing + scan + dashboard)
 py -m http.server 8100
 # Open http://localhost:8100/          (landing)
-#      http://localhost:8100/scan      (scanner)
-#      http://localhost:8100/dashboard (dashboard - needs vercel dev for /api)
+#      http://localhost:8100/assets    (register + scanning + people)
 
 # Dashboard API locally needs Vercel dev (for /api/summary):
 # vercel dev  (from repo root, needs SUMMARY_* + CLIENT_SECRET env)
@@ -144,8 +143,7 @@ py -m http.server 8100
 
 
 
-Unified project: root `vercel.json` routes `/scan` → `scanner-app/`, `/dashboard` + `/api` → `summary/`. Deploy from repo root:
-
+Unified project: root `vercel.json` routes `/assets`, `/dashboard` + `/api` → `summary/`; `/scan` redirects to `/assets`. Deploy from repo root:
 ```bash
 npx vercel deploy --prod --yes
 # or: npx vercel --prod  (first time, set project root to repo root)

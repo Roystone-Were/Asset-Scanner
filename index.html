@@ -20,7 +20,7 @@
     }
     *{box-sizing:border-box;margin:0;padding:0}
     body{
-      font-family:"Inter","Segoe UI",system-ui,sans-serif;
+      font-family:"Geist","Segoe UI",system-ui,sans-serif;
       background:
         radial-gradient(1100px 500px at 85% -10%, rgba(52,211,153,.07), transparent 60%),
         radial-gradient(900px 420px at 0% 110%, rgba(125,211,252,.05), transparent 55%),
@@ -130,8 +130,8 @@
 
   <section class="hero">
     <div>
-      <h1>Scan on the floor.<br/>Report for <em>execs.</em></h1>
-      <p>One register for every branch. Scan a barcode to update an asset, and the numbers report themselves.</p>
+      <h1>Every asset.<br/>One <em>register.</em></h1>
+      <p>Scan a barcode — camera or USB — to pull up an asset, update it on the spot, and the numbers report themselves.</p>
     </div>
 
     <!-- sign-in card lives here for signed-out users -->
@@ -183,14 +183,9 @@
 
   <div class="tiles-label" id="tilesLabel">Your workspace</div>
   <div class="grid" id="tiles">
-    <a class="card" href="/scan" data-need="scanner" hidden>
-      <h2>Scanner</h2>
-      <p>Scan a barcode, see the asset, update status and location. Walk mode for stock-takes.</p>
-      <span class="go">Open Scanner</span>
-    </a>
     <a class="card" href="/assets" data-need="asset_viewer" hidden>
       <h2>Assets</h2>
-      <p>The full register. Search, filter by column, edit inline, clone for batch entry.</p>
+      <p>The full register. Scan barcodes, edit inline, manage people and offboarding.</p>
       <span class="go">Open Assets</span>
     </a>
     <a class="card" href="/dashboard" data-need="dashboard_viewer" hidden>

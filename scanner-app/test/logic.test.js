@@ -283,6 +283,21 @@ test("findAssetByCode matches tag, serial and #id on enriched rows", () => {
   assert.strictEqual(X.findAssetByCode(items, ""), null);
 });
 
+test("groupPeopleEnriched groups enriched rows and skips blanks", () => {
+  const items = [
+    { id: "1", employee: "Ada Kim" },
+    { id: "2", employee: "  ada kim " },
+    { id: "3", employee: "Ben Ochieng" },
+    { id: "4", employee: "" },
+    { id: "5", employee: null },
+  ];
+  const groups = X.groupPeopleEnriched(items);
+  assert.deepStrictEqual(groups.map(g => [g.name, g.count, g.ids]), [
+    ["Ada Kim", 2, ["1", "2"]],
+    ["Ben Ochieng", 1, ["3"]],
+  ]);
+});
+
 test("diffFields reports tracked column changes with labels", () => {
   const prev = { Title: "MICL0045", Status: "In Use", Location: "Syokimau" };
   const next = { Title: "MICL0045", Status: "Lost", Location: "Syokimau" };

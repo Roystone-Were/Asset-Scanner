@@ -1,6 +1,9 @@
 {
   "version": 2,
-  "cleanUrls": true,
+  "redirects": [
+    { "source": "/scan", "destination": "/assets", "permanent": true },
+    { "source": "/scan/:path*", "destination": "/assets", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/login/:path*", "destination": "/login/:path*" },
     { "source": "/login", "destination": "/login/index.html" },
@@ -9,9 +12,7 @@
     { "source": "/assets/:path*", "destination": "/assets/:path*" },
     { "source": "/assets", "destination": "/assets/index.html" },
     { "source": "/dashboard/:path*", "destination": "/summary/:path*" },
-    { "source": "/dashboard", "destination": "/summary/index.html" },
-    { "source": "/scan/:path*", "destination": "/scanner-app/:path*" },
-    { "source": "/scan", "destination": "/scanner-app/index.html" }
+    { "source": "/dashboard", "destination": "/summary/index.html" }
   ],
   "functions": {
     "api/sharepoint-sync.js": { "memory": 512, "maxDuration": 15 },

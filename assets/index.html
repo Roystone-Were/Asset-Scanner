@@ -34,7 +34,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   
-  body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  body{font-family:"Geist","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
   /* --- Hurry-style top navbar (green shade + blur, not transparent) --- */
   /* navbar styles live in /css/nav.css */
   .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
@@ -136,7 +136,40 @@
   .sheet-panel { transition: transform var(--duration-slow) var(--ease-spring); }
   #main, #detail { animation: rise var(--duration-base) var(--ease-out); }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  /* --- premium pass: grain, focus rings, bezel toolbar, segmented view, skeletons --- */
+  body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.04;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
+  :focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 65%,transparent);outline-offset:2px}
+  .toolbar{background:color-mix(in srgb,var(--card) 55%,transparent);border:1px solid var(--hairline);border-radius:20px;padding:8px;box-shadow:var(--shadow-ambient),var(--inner-highlight)}
+  .toolbar input#search{background:var(--card);border-radius:13px}
+  .seg{display:inline-flex;background:var(--card2);border:1px solid var(--hairline);border-radius:999px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;border-radius:999px;padding:8px 16px;font:inherit;font-size:.82rem;font-weight:600;color:var(--muted);cursor:pointer;transition:color .3s var(--ease-out),background-color .3s var(--ease-out),box-shadow .3s var(--ease-out)}
+  .seg button.active{background:var(--card);color:var(--text);box-shadow:var(--shadow-ambient)}
+  .btn.secondary.active{border-color:var(--accent);color:var(--accent)}
+  .skel{border-radius:10px;background:linear-gradient(100deg,var(--card2) 40%,color-mix(in srgb,var(--card2) 35%,var(--card)) 50%,var(--card2) 60%);background-size:200% 100%;animation:shimmer 1.4s var(--ease-out) infinite}
+  @keyframes shimmer{to{background-position:-200% 0}}
+  .empty{text-align:center;padding:52px 20px}
+  .empty-ico{font-size:34px;opacity:.45;margin-bottom:8px}
+  .empty h3{font-size:1rem;font-weight:600;margin-bottom:4px}
+  .empty p{color:var(--muted);font-size:.84rem;max-width:42ch;margin:0 auto 14px}
+  .walkstats{display:flex;gap:14px;font-size:.8rem;color:var(--muted);align-items:center}
+  .walkstats b{font-variant-numeric:tabular-nums;color:var(--text)}
+  #scanReader{transition:box-shadow .25s var(--ease-out)}
+  #scanReader.flash-good{box-shadow:inset 0 0 0 3px var(--green)}
+  #scanReader.flash-bad{box-shadow:inset 0 0 0 3px var(--red)}
+  .phead{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:4px 0}
+  .pname{font-weight:600;font-size:.92rem}
+  .pcount{font-size:.72rem;color:var(--muted);margin-left:8px;font-variant-numeric:tabular-nums}
+  .passets{margin-top:6px;display:none;flex-direction:column}
+  .pcard.open .passets{display:flex}
+  .prow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border);font-size:.84rem;cursor:pointer}
+  .prow:hover .popen{color:var(--accent)}
+  .prow .pserial{color:var(--muted);font-size:.76rem}
+  .prow .popen{margin-left:auto;font-size:.76rem;color:var(--muted)}
+  .chev{transition:transform .3s var(--ease-out);color:var(--muted);font-size:.7rem}
+  .pcard.open .chev{transform:rotate(90deg)}
 </style>
+
 </head>
 <body>
 <div class="overlay" id="overlay"></div>
@@ -147,7 +180,6 @@
       <a href="/">Home</a>
       <a href="/dashboard">Dashboard</a>
       <a class="active" href="/assets">Assets</a>
-      <a href="/scan">Scan</a>
       <a href="/admin">Admin</a>
     </div>
     <div class="navbar_right">
@@ -162,14 +194,19 @@
   <div id="authState">Signing in…</div>
   <div id="gate" class="hidden">
     <div class="toolbar">
+      <div class="seg" id="viewSeg" role="tablist" aria-label="View">
+        <button type="button" id="segRegister" class="active">Register</button>
+        <button type="button" id="segPeople">People</button>
+      </div>
       <input type="text" id="search" placeholder="Search tag, serial, model, employee…" autocomplete="off" />
-      <button class="btn book" id="btnScan">Scan</button>
+      <button class="btn book" id="btnScan">📷 Scan</button>
       <button class="btn" id="btnAdd">+ Add Asset</button>
     </div>
-    <div id="main"><div class="msg info">Loading…</div></div>
+    <div id="main"><div class="card"><div class="skel" style="height:16px;width:32%;margin-bottom:16px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px"></div></div></div>
+    <div id="people" class="hidden"></div>
     <div id="detail"></div>
   </div>
-  <div id="denied" class="hidden"><div class="card"><div class="msg err">🔒 Access required - Scanner limited to IT. Contact IT Admin: <b>it@xanalife.com</b></div></div></div>
+  <div id="denied" class="hidden"><div class="card"><div class="msg err">🔒 Access required — Assets is limited to signed-in staff with a viewer role. Contact IT Admin: <b>it@xanalife.com</b></div></div></div>
 </div>
 
 <!-- Add Asset Sheet -->
@@ -207,6 +244,12 @@
   <div class="sheet-panel">
     <h2>📷 Scan <button type="button" class="theme-toggle" id="scanClose">✕</button></h2>
     <div id="scanReader" style="border-radius:12px;overflow:hidden;background:#000;min-height:120px"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <button type="button" class="btn secondary" id="walkToggle">🚶 Walk mode</button>
+      <div class="walkstats" id="walkStats" style="display:none">
+        <span>✅ <b id="walkHits">0</b></span><span>⚠️ <b id="walkMiss">0</b></span><span id="walkLast"></span>
+      </div>
+    </div>
     <div id="scanStatus" class="hint" style="margin-top:8px"></div>
     <div class="hint" style="margin-top:4px">Matches Asset Tag or Serial. A USB wedge scanner works anywhere on this page — no button needed.</div>
   </div>
@@ -240,18 +283,18 @@ function fmtWhen(iso){
 function rolesIncludeAdmin(){
   return currentRoles.includes("admin")||currentRoles.includes("super_admin");
 }
-// Delete-asset confirm dialog (admin only)
-function showDeleteDialog(it){
+// Generic in-page confirm dialog (same shell for delete + bulk actions)
+function showConfirm(title,bodyHtml,okLabel,okColor,onOk){
   closeModal();
   const ov=document.createElement("div");
   ov.id="delModal";
   ov.style.cssText="position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease";
   ov.innerHTML='<div role="dialog" style="background:var(--card);border:1px solid var(--hairline);border-radius:16px;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);padding:22px;width:340px;max-width:90vw;text-align:center;transform:scale(.96);transition:transform .18s var(--ease-out)">'
-    +'<div style="font-weight:700;font-size:.95rem;margin-bottom:8px">Delete asset</div>'
-    +'<div style="font-size:.83rem;color:var(--muted);line-height:1.45;margin-bottom:16px">Move <b style="color:var(--text)">'+esc(it.tag||"#"+it.id)+'</b> (serial '+esc(it.serial||"—")+') to the recycle bin? You can restore it later from Admin.</div>'
+    +'<div style="font-weight:700;font-size:.95rem;margin-bottom:8px">'+title+'</div>'
+    +'<div style="font-size:.83rem;color:var(--muted);line-height:1.45;margin-bottom:16px">'+bodyHtml+'</div>'
     +'<div id="dlgBtns" style="display:flex;gap:8px">'
     +'<button class="btn secondary" id="dlgCancel" style="flex:1">Cancel</button>'
-    +'<button class="btn" id="dlgOk" style="flex:1;background:#dc2626">Delete</button>'
+    +'<button class="btn" id="dlgOk" style="flex:1;background:'+okColor+'">'+okLabel+'</button>'
     +'</div></div>';
   document.body.appendChild(ov);
   requestAnimationFrame(()=>{ov.style.opacity="1";ov.firstElementChild.style.transform="scale(1)";});
@@ -260,15 +303,23 @@ function showDeleteDialog(it){
   ov.onclick=e=>{if(e.target===ov)close();};
   ov.querySelector("#dlgOk").onclick=async()=>{
     const btns=ov.querySelector("#dlgBtns");
-    btns.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:8px 0;color:var(--muted);font-size:.83rem"><span style="width:17px;height:17px;border:2.5px solid var(--border);border-top-color:#dc2626;border-radius:50%;display:inline-block;animation:dsp .7s linear infinite"></span>Deleting…</div>';
-    try{
+    btns.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:8px 0;color:var(--muted);font-size:.83rem"><span style="width:17px;height:17px;border:2.5px solid var(--border);border-top-color:'+okColor+';border-radius:50%;display:inline-block;animation:dsp .7s linear infinite"></span>Working…</div>';
+    try{await onOk();close();}
+    catch(err){close();toast(err.message||String(err),true);}
+  };
+}
+function showDeleteDialog(it){
+  showConfirm(
+    "Delete asset",
+    'Move <b style="color:var(--text)">'+esc(it.tag||"#"+it.id)+'</b> (serial '+esc(it.serial||"—")+') to the recycle bin? You can restore it later from Admin.',
+    "Delete","#dc2626",
+    async()=>{
       await XanaSupabase.deleteAsset(it.id);
-      close();
       document.getElementById("detail").innerHTML="";
       await load();
       toast((it.tag||"Asset")+" deleted",false);
-    }catch(err){close();toast("Delete failed: "+err.message,true);}
-  };
+    }
+  );
 }
 function closeModal(){document.getElementById("delModal")?.remove();}
 function warrantyInfo(it){
@@ -349,7 +400,6 @@ function applyFilters(){
     const hay=(it.tag+" "+it.serial+" "+it.model+" "+it.employee+" "+it.type).toLowerCase();
     if(q && hay.indexOf(q)===-1) return false;
     if(colFilters.type.size && !colFilters.type.has((it.type||"").toString().trim()||"(blank)")) return false;
-    if(colFilters.location.size && !colFilters.location.has((it.location||"").toString().trim()||"(blank)")) return false;
     if(colFilters.status.size && !colFilters.status.has((it.status||"").toString().trim()||"(blank)")) return false;
     return true;
   });
@@ -361,7 +411,15 @@ function applyFilters(){
 }
 function renderTable(){
   const main=document.getElementById("main");
-  if(!filtered.length){main.innerHTML='<div class="card"><div class="msg info">No matching assets.</div></div>'+metaLine();return;}
+  if(!filtered.length){
+    main.innerHTML='<div class="card empty"><div class="empty-ico">📦</div><h3>No matching assets</h3><p>'+(allItems.length?"Try a different search, or clear the column filters.":"The register is empty — add your first asset, or scan one on the floor.")+'</p><button class="btn" id="emptyClear">Clear search</button></div>';
+    document.getElementById("emptyClear")?.addEventListener("click",()=>{
+      document.getElementById("search").value="";
+      for(const k of Object.keys(colFilters))colFilters[k]=new Set();
+      applyFilters();
+    });
+    return;
+  }
   const start=currentPage*PAGE_SIZE, end=Math.min(start+PAGE_SIZE, filtered.length);
   const slice=filtered.slice(start,end);
   const COLS=[["Tag","tag"],["Type","type"],["Model","model"],["Serial","serial"],["Employee","employee"],["Location","location"],["Status","status"],["Purchase","purchase"],["Price","price"],["Book","book"],["Dep","dep"],["Condition","condition"]];
@@ -413,13 +471,13 @@ function showDetail(it){
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><button class="btn secondary" id="cloneBtn">Clone</button><span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
   document.getElementById("cloneBtn")?.addEventListener("click",()=>{
     cloneIntoForm(it);
   });
+  document.getElementById("rescanBtn")?.addEventListener("click",startScan);
   // Delete — admin/super_admin only, confirm dialog, moves to recycle bin
   document.getElementById("delBtn")?.addEventListener("click",()=>showDeleteDialog(it));
   // inline editing — tap a value to change it
@@ -776,12 +834,102 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
 });
 
-// ---------- In-place scanning (camera sheet + USB wedge) ----------
-// The Scan button opens the register's own camera sheet and a decoded code
-// jumps straight to that row's detail card - no trip to /scan. A wedge
-// scanner (keyboard mode) works globally: fast bursts ending in Enter are
-// classified by Xana.classifyKeyBurst, except while typing in a field.
-let _qrScanner=null,_scanning=false;
+// ---------- View switching (Register ⇄ People) ----------
+let view="register";
+const canWrite=()=>currentRoles.some(r=>r==="scanner"||r==="admin"||r==="super_admin");
+function setView(v){
+  view=v;
+  document.getElementById("segRegister").classList.toggle("active",v==="register");
+  document.getElementById("segPeople").classList.toggle("active",v==="people");
+  document.getElementById("main").classList.toggle("hidden",v!=="register");
+  document.getElementById("people").classList.toggle("hidden",v!=="people");
+  document.getElementById("search").placeholder=v==="people"?"Search employees…":"Search tag, serial, model, employee…";
+  if(v==="people")renderPeople();else applyFilters();
+}
+document.getElementById("segRegister").addEventListener("click",()=>setView("register"));
+document.getElementById("segPeople").addEventListener("click",()=>setView("people"));
+document.getElementById("search").addEventListener("input",()=>{if(view==="people")renderPeople();});
+
+// ---------- People view (offboarding) ----------
+const _openGroups=new Set();
+function renderPeople(){
+  const host=document.getElementById("people");
+  const q=(document.getElementById("search").value||"").trim().toLowerCase();
+  const groups=Xana.groupPeopleEnriched(allItems).filter(g=>!q||g.name.toLowerCase().includes(q));
+  if(!groups.length){
+    host.innerHTML='<div class="card empty"><div class="empty-ico">👥</div><h3>'+(q?"No employees match":"No assigned assets yet")+'</h3><p>'+(q?"Try a different name.":"Assets with an employee assigned appear here — set Employee on an asset to start tracking assignments.")+'</p></div>';
+    return;
+  }
+  host.innerHTML=groups.map(g=>{
+    const key=g.name.toLowerCase(),open=_openGroups.has(key);
+    const rows=allItems.filter(it=>(it.employee||"").trim().toLowerCase()===key);
+    const ret=canWrite()?'<button class="btn secondary" data-ret="'+esc(g.name)+'">Mark all returned</button>':"";
+    return '<div class="card pcard'+(open?" open":"")+'">'+
+      '<div class="phead" data-g="'+esc(key)+'"><div><span class="pname">'+esc(g.name)+'</span><span class="pcount">'+g.count+" asset"+(g.count===1?"":"s")+'</span></div><div style="display:flex;gap:8px;align-items:center">'+ret+'<span class="chev">▶</span></div></div>'+
+      '<div class="passets">'+rows.map(it=>
+        '<div class="prow" data-open="'+esc(String(it.id))+'"><b>'+esc(it.tag||"#"+it.id)+'</b><span class="pserial">'+esc(it.serial||"")+'</span><span class="pill" style="background:'+statusColor(it.status)+'">'+esc(it.status||"—")+'</span><span class="popen">Open →</span></div>'
+      ).join("")+"</div></div>";
+  }).join("");
+}
+document.getElementById("people").addEventListener("click",async(e)=>{
+  const ret=e.target.closest("[data-ret]");
+  if(ret){
+    const name=ret.getAttribute("data-ret");
+    const ids=(Xana.groupPeopleEnriched(allItems).find(g=>g.name===name)||{ids:[]}).ids;
+    if(!ids.length)return;
+    showConfirm(
+      "Mark all returned",
+      "Set all <b style='color:var(--text)'>"+ids.length+"</b> asset(s) of <b style='color:var(--text)'>"+esc(name)+"</b> to <b style='color:var(--text)'>Available</b> and clear the assignment?",
+      "Mark returned","var(--accent)",
+      async()=>{
+        let done=0;const fails=[];
+        for(const id of ids){
+          try{
+            await XanaSupabase.updateAsset(id,{Status:"Available",EmployeeName:""});
+            XanaSupabase.logTransfer(id,"Assigned to",name,"");
+            done++;
+          }catch(err){fails.push(id);}
+        }
+        await load();
+        if(view==="people")renderPeople();
+        toast(fails.length?"Returned "+done+", "+fails.length+" failed":"Returned "+done+" asset"+(done===1?"":"s")+" to stock",!!fails.length);
+      }
+    );
+    return;
+  }
+  const row=e.target.closest("[data-open]");
+  if(row){
+    const it=allItems.find(x=>String(x.id)===row.getAttribute("data-open"));
+    if(it)showDetail(it);
+    return;
+  }
+  const head=e.target.closest(".phead");
+  if(head){
+    const k=head.getAttribute("data-g");
+    if(_openGroups.has(k))_openGroups.delete(k);else _openGroups.add(k);
+    renderPeople();
+  }
+});
+
+// ---------- In-place scanning (camera sheet + USB wedge + walk mode) ----------
+// The Scan button opens the register's own camera sheet; a decoded code
+// jumps straight to that row's detail card. Walk mode keeps the camera
+// running and counts hits/misses with flash + beep feedback for
+// stock-takes. A wedge scanner (keyboard mode) works globally: fast bursts
+// ending in Enter are classified by Xana.classifyKeyBurst, except while
+// typing in a field.
+let _qrScanner=null,_scanning=false,_walk=false,_walkHits=0,_walkMiss=0;
+const _walkSeen=new Map();
+let _audio=null;
+function beep(freq){
+  try{
+    _audio=_audio||new (window.AudioContext||window.webkitAudioContext)();
+    const o=_audio.createOscillator(),g=_audio.createGain();
+    o.frequency.value=freq;o.type="sine";g.gain.value=.08;
+    o.connect(g);g.connect(_audio.destination);
+    o.start();o.stop(_audio.currentTime+.09);
+  }catch(e){/* audio blocked - stay silent */}
+}
 async function startScan(){
   document.getElementById("scanOverlay").classList.add("open");
   const status=document.getElementById("scanStatus");
@@ -792,15 +940,39 @@ async function startScan(){
     await _qrScanner.start(
       {facingMode:"environment"},
       {fps:10,qrbox:(w,h)=>{const s=Math.round(Math.min(w,h)*0.7);return{width:s,height:Math.max(80,Math.round(s*0.45))};}},
-      (text)=>{stopScan();handleScanHit(text);},
+      onDecode,
       ()=>{/* per-frame miss - ignore */}
     );
     _scanning=true;
-    status.textContent="Point at the barcode…";
+    status.textContent=_walk?"Walk mode — codes count as you go":"Point at the barcode…";
   }catch(e){
     stopScan();
     toast("Camera unavailable — use Search or a USB wedge scanner",true);
   }
+}
+function flashScan(ok){
+  const r=document.getElementById("scanReader");
+  if(!r)return;
+  r.classList.remove("flash-good","flash-bad");
+  void r.offsetWidth;
+  r.classList.add(ok?"flash-good":"flash-bad");
+  setTimeout(()=>r.classList.remove("flash-good","flash-bad"),350);
+}
+function onDecode(text){
+  if(_walk){
+    const now=Date.now(),last=_walkSeen.get(text)||0;
+    if(now-last<1500)return;   // dedupe the code sitting in frame
+    _walkSeen.set(text,now);
+    const hit=!!Xana.findAssetByCode(allItems,text);
+    if(hit)_walkHits++;else _walkMiss++;
+    document.getElementById("walkHits").textContent=_walkHits;
+    document.getElementById("walkMiss").textContent=_walkMiss;
+    document.getElementById("walkLast").textContent=(hit?"✅ ":"⚠️ ")+Xana.cleanScanInput(text);
+    flashScan(hit);beep(hit?880:220);
+    if(navigator.vibrate)navigator.vibrate(hit?30:[30,50,30]);
+    return;
+  }
+  stopScan();handleScanHit(text);
 }
 async function stopScan(){
   const s=_qrScanner;_qrScanner=null;_scanning=false;
@@ -809,6 +981,12 @@ async function stopScan(){
   const ov=document.getElementById("scanOverlay");
   if(ov)ov.classList.remove("open");
 }
+function setWalk(on){
+  _walk=on;
+  document.getElementById("walkToggle").classList.toggle("active",on);
+  document.getElementById("walkStats").style.display=on?"flex":"none";
+}
+document.getElementById("walkToggle")?.addEventListener("click",()=>{beep(_walk?440:880);setWalk(!_walk);});
 document.getElementById("scanClose")?.addEventListener("click",stopScan);
 document.getElementById("scanBackdrop")?.addEventListener("click",stopScan);
 function handleScanHit(raw){
