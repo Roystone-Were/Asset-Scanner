@@ -93,6 +93,21 @@
     return _client;
   }
 
+  // Throw-friendly wrapper that preserves the PostgREST error code (e.g.
+  // 23505 unique violation, 42501 RLS, 22P02 bad enum) on err.code so
+  // callers can tell permanent rejections from transient failures.
+  function sbError(error) {
+    const e = new Error("Supabase " + ((error && error.message) || "request failed"));
+    if (error && error.code) e.code = String(error.code);
+    return e;
+  }
+
+  // admin OR super_admin - mirrors the SQL is_admin() in 0016_super_admin.sql.
+  function isAdminRole(roles) {
+    const r = roles || [];
+    return r.includes("admin") || r.includes("super_admin");
+  }
+
   function fieldsToRow(fields) {
     const row = {};
     const extraPatch = {};
@@ -187,7 +202,7 @@
       .from("assets")
       .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra")
       .is("deleted_at", null);
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return (data || []).map(enrichAsset);
   }
 
@@ -198,7 +213,7 @@
       .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra,deleted_at")
       .not("deleted_at", "is", null)
       .order("deleted_at", { ascending: false });
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return (data || []).map((row) => ({
       ...enrichAsset(row),
       deletedAt: row.deleted_at,
@@ -274,7 +289,7 @@
         missingPurchase: it.filter((i) => !i.purchaseDate).length,
         unverified,
       },
-      items: it.slice(0, 500),
+      items: it,
     };
   }
 
@@ -299,7 +314,7 @@
       .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra")
       .is("deleted_at", null)
       .order("item_id", { ascending: true });
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return (data || []).map((row) => ({
       id: String(row.item_id),
       fields: rowToFields(row),
@@ -310,7 +325,7 @@
     // item_id is TEXT: client-side ORDER BY sorts alphabetically ('99' > '121').
     // Ask the database for numeric max + 1 instead.
     const { data, error } = await client().rpc("next_asset_item_id");
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return String(data);
   }
 
@@ -326,7 +341,8 @@
       // unique violation: someone else took that id — small backoff, recompute
       await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
     }
-    throw new Error("Supabase " + (lastErr ? lastErr.message : "insert failed"));
+    const err = lastErr || new Error("insert failed");
+    throw sbError(err);
   }
 
   async function updateAsset(id, patch) {
@@ -338,12 +354,12 @@
         p_item_id: String(id),
         p_patch: row.extra,
       });
-      if (rpcErr) throw new Error("Supabase " + rpcErr.message);
+      if (rpcErr) throw sbError(rpcErr)
       delete row.extra;
     }
     if (!Object.keys(row).length) return { ok: true };
     const { error } = await client().from("assets").update(row).eq("item_id", String(id));
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return { ok: true };
   }
 
@@ -355,26 +371,29 @@
 
   async function restoreAsset(id) {
     const { error } = await client().from("assets").update({ deleted_at: null }).eq("item_id", String(id));
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return { ok: true };
   }
 
   async function purgeAsset(id) {
     const { error } = await client().from("assets").delete().eq("item_id", String(id));
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return { ok: true };
   }
 
   // ---------- Auth (email OTP) ----------
-  async function sendOtp(email) {
+  async function sendOtp(email, opts) {
+    // Invite-only: never mint accounts from the public sign-in form.
+    // Optional emailRedirectTo keeps the ?next= intent through magic links.
+    const options = { shouldCreateUser: false };
+    if (opts && opts.emailRedirectTo) options.emailRedirectTo = opts.emailRedirectTo;
     const { error } = await client().auth.signInWithOtp({
       email: String(email || "").trim(),
-      options: { shouldCreateUser: false },
+      options,
     });
-    if (error) throw new Error(error.message);
+    if (error) throw error;
     return { sent: true };
   }
-
   async function signInWithPassword(email, password) {
     const { data, error } = await client().auth.signInWithPassword({
       email: String(email || "").trim(),
@@ -391,18 +410,21 @@
 
   // ---------- Roles ----------
   async function myRoles() {
-    try {
-      const { data, error } = await client().from("user_roles").select("role");
-      if (error) return [];
-      return (data || []).map((r) => r.role);
-    } catch (e) {
-      return [];
+    // One retry: a transient network blip must not bounce a signed-in user
+    // to /login. Persistent failure still degrades to "no roles".
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { data, error } = await client().from("user_roles").select("role");
+        if (!error) return (data || []).map((r) => r.role);
+      } catch (e) { /* retry then give up */ }
+      if (attempt === 0) await new Promise((res) => setTimeout(res, 400));
     }
+    return [];
   }
 
   async function landingFor() {
     const roles = await myRoles();
-    if (roles.includes("admin")) return "/dashboard";
+    if (isAdminRole(roles)) return "/dashboard";
     if (roles.includes("scanner")) return "/scan";
     if (roles.includes("asset_viewer")) return "/assets";
     if (roles.includes("dashboard_viewer")) return "/dashboard";
@@ -413,10 +435,10 @@
   function applyRoleNav(roles) {
     const r = roles || [];
     const allow = {
-      "/scan": r.includes("scanner") || r.includes("admin"),
-      "/assets": r.includes("asset_viewer") || r.includes("admin"),
-      "/dashboard": r.includes("dashboard_viewer") || r.includes("admin"),
-      "/admin": r.includes("admin"),
+      "/scan": r.includes("scanner") || isAdminRole(r),
+      "/assets": r.includes("asset_viewer") || isAdminRole(r),
+      "/dashboard": r.includes("dashboard_viewer") || isAdminRole(r),
+      "/admin": isAdminRole(r),
     };
     document.querySelectorAll('a[href]').forEach((a) => {
       const href = (a.getAttribute("href") || "").split(/[?#]/)[0];
@@ -485,7 +507,7 @@
       .eq("item_id", String(itemId))
       .order("event_date", { ascending: false })
       .limit(100);
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return data || [];
   }
 
@@ -502,7 +524,7 @@
       })
       .select("id")
       .single();
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return { id: data.id };
   }
 
@@ -511,7 +533,7 @@
       .from("asset_events")
       .update({ resolved: !!resolved })
       .eq("id", eventId);
-    if (error) throw new Error("Supabase " + error.message);
+    if (error) throw sbError(error)
     return { ok: true };
   }
 
@@ -547,6 +569,7 @@
     signInWithPassword,
     getSession,
     myRoles,
+    isAdminRole,
     landingFor,
     applyRoleNav,
     currentUserEmail,

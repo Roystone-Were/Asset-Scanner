@@ -47,8 +47,9 @@ async function callerIsAdmin(req) {
     const prof = await sb("profiles?select=id,active&id=eq." + me.id);
     if (!prof || !prof.length || !prof[0].active) return null;
     const roles = await sb("user_roles?select=role&user_id=eq." + me.id);
-    if (!((roles || []).some((r) => r.role === "admin") || (roles || []).some((r) => r.role === "super_admin"))) return null;
-    return me;
+    const mine = (roles || []).map((r) => r.role);
+    if (!mine.includes("admin") && !mine.includes("super_admin")) return null;
+    return { id: me.id, email: me.email, isSuper: mine.includes("super_admin") };
   } catch (e) {
     console.error("[admin-users] caller verify failed:", e.message);
     return null;
@@ -78,6 +79,22 @@ async function findUserIdByEmail(email) {
     if (users.length < 200) return null;
   }
   return null;
+}
+
+async function userRoleList(userId) {
+  const rows = await sb("user_roles?select=role&user_id=eq." + userId);
+  return (rows || []).map((r) => r.role);
+}
+
+// Guard rails so one admin click can't lock every admin out: nobody edits
+// their own account through this API, and only a super admin may touch
+// another super admin.
+async function assertTargetManageable(caller, userId) {
+  if (String(userId) === String(caller.id)) throw new Error("You cannot modify your own account here");
+  const targetRoles = await userRoleList(userId);
+  if (targetRoles.includes("super_admin") && !caller.isSuper) {
+    throw new Error("Only a super admin can modify another super admin");
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -126,6 +143,7 @@ module.exports = async function handler(req, res) {
         if (/already been registered|already exists/i.test(t)) {
           user = await findUserIdByEmail(email);
           if (!user) throw new Error("Account exists but could not be located");
+          await assertTargetManageable(admin, user.id);
         } else {
           throw new Error("Auth invite " + invRes.status + ": " + t.slice(0, 200));
         }
@@ -168,6 +186,7 @@ module.exports = async function handler(req, res) {
       if (password.length < 8) throw new Error("Password must be at least 8 characters");
 
       let user = await findUserIdByEmail(email);
+      if (user) await assertTargetManageable(admin, user.id);
       if (!user) {
         const cr = await authAdmin("admin/users", {
           method: "POST",
@@ -214,6 +233,7 @@ module.exports = async function handler(req, res) {
       const userId = String(body.userId || "");
       const password = String(body.password || "");
       if (!userId) throw new Error("userId required");
+      await assertTargetManageable(admin, userId);
       if (password.length < 8) throw new Error("Password must be at least 8 characters");
       await authAdmin("admin/users/" + userId, {
         method: "PUT",
@@ -235,6 +255,7 @@ module.exports = async function handler(req, res) {
       const userId = String(body.userId || "");
       const roles = Array.isArray(body.roles) ? [...new Set(body.roles.filter((r) => VALID_ROLES.includes(r)))] : [];
       if (!userId) throw new Error("userId required");
+      await assertTargetManageable(admin, userId);
       await sb("user_roles?user_id=eq." + userId, { method: "DELETE" });
       if (roles.length) {
         await sb("user_roles", {
@@ -261,6 +282,7 @@ module.exports = async function handler(req, res) {
     if (body.action === "delete_user") {
       const userId = String(body.userId || "");
       if (!userId) throw new Error("userId required");
+      await assertTargetManageable(admin, userId);
       await sb("profiles?id=eq." + userId, { method: "DELETE" });
       // Supabase auth admin requires the user id as a PATH segment, not a
       // query param — `?id=` returns 405 Method Not Allowed.
@@ -269,6 +291,17 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+
+    if (body.action === "sync_health") {
+      // Admin page reads the mirror queue through here: sharepoint_sync has
+      // no RLS policies (service-role only), so the browser cannot query it
+      // directly - a client-side select would silently return zero rows.
+      const rows = await sb(
+        "sharepoint_sync?select=op,status,attempts,last_error,created_at&status=in.(pending,failed,processing)&order=created_at.desc&limit=50"
+      );
+      res.status(200).json({ rows: rows || [] });
+      return;
+    }
     res.status(400).json({ error: "Unknown action" });
   } catch (e) {
     console.error("[admin-users]", e);

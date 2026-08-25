@@ -4,8 +4,8 @@ One unified system — **Scan** on the floor + **Dashboard** for execs — live 
 
 - **Live app (unified):** `https://<your-project>.vercel.app` → `/` landing, `/scan` scanner, `/dashboard` dashboard
   - Legacy: `https://xana-asset-lookup.vercel.app` (scanner) and `https://asset-scanner-iota.vercel.app` (dashboard) — now combined
-- **Data source:** SharePoint Online list `Xana Asset Inventory` on `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData`
-- **Auth:** Microsoft Entra (MSAL.js v2) — staff sign in with their own work account; the app reads the list as the signed-in user via Microsoft Graph.
+- **Source of truth:** Supabase Postgres (project `irqrnyixizzorvfmtvag`, eu-west-1). The SharePoint Online list `Xana Asset Inventory` on `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData` is a **read-only mirror**, kept in sync by the `api/sharepoint-sync.js` worker.
+- **Auth:** Supabase email OTP / password — invite-only (admin-managed in `/admin`), with roles `super_admin` · `admin` · `scanner` · `asset_viewer` · `dashboard_viewer`. RLS enforces roles server-side; UI gates are cosmetic.
 
 ## What's in this repo
 
@@ -29,9 +29,9 @@ One unified system — **Scan** on the floor + **Dashboard** for execs — live 
 
 ## How the lookup works
 
-The app matches the scanned/typed value (case-insensitive) against these columns
-only — server-side Graph `$filter` on indexed columns, with a paged full-fetch
-fallback:
+The app matches the scanned/typed value (case-insensitive) against these
+columns only — a client-side match over the live Supabase register, which is
+also cached locally for offline lookups:
 
 - **Title** — this is the "Asset Tag" column you see in the list UI (SharePoint
   renders Title as a link column; internal name `LinkTitle`, value in `Title`)
@@ -88,19 +88,18 @@ Graph as `AssetType` or `Asset_x0020_Type`; `fieldV()` normalizes `_xNNNN_` hex
 escapes and case before comparing. (The renamed column here lives at internal name
 `Asset`.)
 
-## Entra app registration (`pnp`)
+## Entra app registration (`pnp`) — sync worker only
+
+The browser apps no longer talk to Microsoft. The Entra app is used solely by
+`api/sharepoint-sync.js` (client-credentials flow) and the PowerShell
+automation scripts:
 
 - **Client ID:** `7caa51af-9f32-42d8-8264-da5b97c2f8eb`
 - **Tenant:** `refrontiergroup.onmicrosoft.com`
-- **SPA redirect URIs (Authentication → Platforms):**
-  - `https://xana-asset-lookup.vercel.app` (production)
-  - `http://localhost:8100` (local dev)
-- **Graph delegated permissions (admin-consented):** `Sites.ReadWrite.All`,
-  `User.Read`; the app requests `Sites.Read.All` at runtime.
-- Staff only need **read access to the site** (members of the private group) to use
-  the app — no admin rights.
+- **Graph application permission:** `Sites.ReadWrite.All` (admin-consented)
 
-## Data health
+All interactive sign-in runs through Supabase Auth (`/login`); staff accounts
+are created by an admin via `/admin` (email invite or manual password).
 
 `Health-Check.ps1` (run monthly by `.github/workflows/data-health.yml`) checks the
 list for duplicate serial numbers, missing tags/serials,
@@ -143,9 +142,7 @@ py -m http.server 8100
 # vercel dev  (from repo root, needs SUMMARY_* + CLIENT_SECRET env)
 ```
 
-For local scanner sign-in, temporarily set `redirectUri` in `scanner-app/index.html` to `http://localhost:8100/scan`, then restore before deploying.
 
-## Deploying to Vercel
 
 Unified project: root `vercel.json` routes `/scan` → `scanner-app/`, `/dashboard` + `/api` → `summary/`. Deploy from repo root:
 

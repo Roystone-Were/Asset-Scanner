@@ -847,8 +847,8 @@
       <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" style="margin-top:8px" />
       <h1>Xana Asset Lookup</h1>
       <p class="sub">
-        Scan the vendor barcode on a device (or type its Serial No.) to pull the
-        asset's details from SharePoint.
+        Scan the vendor barcode on a device (or type its Serial No.) to pull up
+        the asset's record.
       </p>
       <div id="authState">Signing in…</div>
       <div id="syncBadge" class="msg info hidden"></div>
@@ -970,12 +970,8 @@
       }
 
       // ---------- Config ----------
-      // Identity and data now live in Supabase (window.XanaSupabase).
+      // Identity and data live in Supabase (window.XanaSupabase);
       // SharePoint remains a read-only mirror fed by the sync worker.
-      const LIST_NAME = "Xana Asset Inventory";
-
-      // ---------- Auth (single sign-in page at /login) ----------
-      const ADMIN_EMAIL = "it@xanalife.com";
 
       let account = null; // { username: email } once signed in
 
@@ -1021,15 +1017,6 @@
         return allItems;
       }
 
-      // ---------- Access gate helper ----------
-      function showAccessRequired(email) {
-        const app = document.getElementById("app");
-        const state = document.getElementById("authState");
-        if (app) app.classList.add("hidden");
-        if (state) state.innerHTML = "🔒 Access required - Scanner is limited to IT. Contact IT Admin: <b>" + escapeHtml(ADMIN_EMAIL) + "</b> (" + escapeHtml(email || "") + ")";
-        const result = document.getElementById("result");
-        if (result) result.innerHTML = '<div class="msg err">🔒 Access required<br/>Your account <b>' + escapeHtml(email || "") + '</b> is not allowlisted for Scanner.<br/>Contact IT Admin: <b>' + escapeHtml(ADMIN_EMAIL) + '</b> to be added via /admin.</div>';
-      }
       async function lookup(code) {
         code = cleanScanInput(code);
         currentCode = code;
@@ -1410,7 +1397,7 @@
 
       async function addAsset(fields) {
         if (!navigator.onLine) {
-          queueWrite("new-" + Date.now(), fields, true);
+          queueWrite("new-" + Date.now(), fields);
           return { queued: true };
         }
         try {
@@ -1420,7 +1407,7 @@
           return { ok: true, id: created.id };
         } catch (e) {
           if (isOfflineish(e)) {
-            queueWrite("new-" + Date.now(), fields, true);
+            queueWrite("new-" + Date.now(), fields);
             return { queued: true };
           }
           throw e;
@@ -1530,11 +1517,11 @@
       const WRITE_QUEUE_KEY = "xana_write_queue_v1";
 
       function whoami() {
-        return (account && (account.name || account.username)) || "unknown";
+        return (account && account.username) || "unknown";
       }
 
-      // An error we can safely ride out on cached data: no network, a fetch
-      // that never reached Graph, or the token refresh that navigates away.
+      // An error we can safely ride out on cached data: no network, or a
+      // request that never reached Supabase.
       function isOfflineish(e) {
         if (!navigator.onLine) return true;
         const m = String((e && e.message) || e);
@@ -1630,36 +1617,49 @@
       }
 
       let flushing = false;
-      async function flushQueue() {
-        if (flushing) return;
+      // Permanent rejection: the adapter stamps the PostgREST error code on
+      // err.code (22P02 bad value, 235xx constraint, 42501 RLS, ...). The
+      // message regex is only a fallback for errors that carry no code -
+      // matching on message prefixes alone silently blocked the whole queue.
+      function isPermanentWriteError(err) {
+        if (err && err.code) return true;
+        const msg = String((err && err.message) || "");
+        return /row-level security|duplicate key|check constraint|violates|invalid input/i.test(msg);
+      }
+
+      async function flushQueueInner() {
         const q = getQueue();
-        if (!q.length || !navigator.onLine) return;
-        flushing = true;
         try {
-        let i = 0;
-        let synced = 0;
-        for (; i < q.length; i++) {
-          try {
-            if (String(q[i].id).indexOf("new-") === 0) {
-              // Queued "add asset" entry - insert instead of update.
-              const created = await XanaSupabase.insertAsset(q[i].patch);
-              mergeCache([{ id: created.id, fields: q[i].patch }]);
-            } else {
-              await XanaSupabase.updateAsset(q[i].id, q[i].patch);
-            }
-            synced++;
-          } catch (err) {
-              const msg = String((err && err.message) || "");
-              if (msg.indexOf("Supabase 4") === 0 || /row-level security|duplicate key/i.test(msg)) {
-                // e.g. 403-equivalent (RLS) for a read-only user or a bad
-                // value - retrying will never help. Drop it and keep going.
-                console.warn("dropping queued write that cannot succeed:", q[i], msg);
-                continue;
+          let i = 0;
+          let synced = 0;
+          let dropped = 0;
+          for (; i < q.length; i++) {
+            try {
+              if (String(q[i].id).indexOf("new-") === 0) {
+                // Queued "add asset" entry - insert instead of update.
+                const created = await XanaSupabase.insertAsset(q[i].patch);
+                mergeCache([{ id: created.id, fields: q[i].patch }]);
+              } else {
+                await XanaSupabase.updateAsset(q[i].id, q[i].patch);
               }
-              break; // offline again - keep the rest for later
+              synced++;
+            } catch (err) {
+              if (!navigator.onLine || !isPermanentWriteError(err)) break;
+              // Retrying will never help - drop it and keep going.
+              console.warn("dropping queued write that cannot succeed:", q[i], err && err.message);
+              dropped++;
             }
           }
-          setQueue(q.slice(i));
+          // Rewrite by identity, not by slice: entries another tab appended
+          // while we were flushing must survive this write-back.
+          const doneIds = new Set(q.slice(0, i).map((e) => e.id + ":" + e.ts));
+          setQueue(getQueue().filter((e) => !doneIds.has(e.id + ":" + e.ts)));
+          if (dropped > 0)
+            toast(
+              dropped + " offline change" + (dropped === 1 ? "" : "s") +
+                " could not be applied and was discarded",
+              "err",
+            );
           if (synced > 0)
             toast(
               synced + " change" + (synced === 1 ? "" : "s") + " synced ✓",
@@ -1667,6 +1667,22 @@
             );
         } catch (e) {
           console.warn("queue flush deferred:", e);
+        }
+      }
+
+      async function flushQueue() {
+        if (flushing) return;
+        flushing = true;
+        try {
+          // Cross-tab serialization: a shared tablet running two tabs must
+          // not drain the same queue twice. No-op where Web Locks is absent.
+          if (navigator.locks && navigator.locks.request) {
+            await navigator.locks.request("xana_write_queue_flush", { ifAvailable: true }, async (lock) => {
+              if (lock) await flushQueueInner();
+            });
+          } else {
+            await flushQueueInner();
+          }
         } finally {
           flushing = false;
         }
@@ -2447,7 +2463,7 @@
       async function startApp() {
         let roles = [];
         try { roles = await XanaSupabase.myRoles(); } catch (e) {}
-        if (!(roles.includes("scanner") || roles.includes("admin"))) {
+        if (!(roles.includes("scanner") || XanaSupabase.isAdminRole(roles))) {
           const l = await XanaSupabase.landingFor();
           location.href = l || "/login";
           return false;

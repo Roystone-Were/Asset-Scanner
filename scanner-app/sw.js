@@ -1,6 +1,6 @@
 // Xana Asset Lookup - offline app shell.
 // Cache name is versioned; bump it to force a refresh of the shell.
-const CACHE = "xana-shell-v3";
+const CACHE = "xana-shell-v4";
 const SHELL = [
   "index.html",
   "logic.js",
@@ -45,8 +45,12 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put("index.html", copy));
+          // Only cache good responses - a Vercel 404 page must never
+          // poison the offline shell fallback under the "index.html" key.
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put("index.html", copy));
+          }
           return res;
         })
         .catch(() => caches.match("index.html")),
@@ -57,6 +61,7 @@ self.addEventListener("fetch", (e) => {
         (hit) =>
           hit ||
           fetch(req).then((res) => {
+            if (!res.ok) return res;
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(req, copy));
             return res;

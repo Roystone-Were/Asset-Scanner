@@ -178,12 +178,18 @@ let account=null, accessToken=null;
 const ROLES=[["admin","Admin"],["scanner","Scanner"],["asset_viewer","Assets"],["dashboard_viewer","Dashboard"]];
 
 async function api(action,payload){
+  // Re-read the session each call: supabase-js auto-refreshes the stored
+  // token, so a page left open past expiry must not keep the stale bearer.
+  const s=await XanaSupabase.getSession().catch(()=>null);
+  if(!s){location.href="/login?next=/admin";throw new Error("Session expired — redirecting to sign-in.");}
+  accessToken=s.access_token;
   const r=await fetch("/api/admin-users",{
     method:"POST",
     headers:{Authorization:"Bearer "+accessToken,"Content-Type":"application/json"},
     body:JSON.stringify({action,...payload})
   });
   const d=await r.json().catch(()=>({}));
+  if(r.status===401){await XanaSupabase.signOut().catch(()=>{});location.href="/login?next=/admin";throw new Error("Session expired — redirecting to sign-in.");}
   if(!r.ok) throw new Error(d.error||("HTTP "+r.status));
   return d;
 }
@@ -440,12 +446,11 @@ function showListMsg(text,isErr){
 async function loadSync(){
   const el=document.getElementById("syncList");
   try{
-    const {data,error}=await XanaSupabase.client().from("sharepoint_sync")
-      .select("op,status,attempts,last_error,created_at")
-      .in("status",["pending","failed","processing"])
-      .order("created_at",{ascending:false})
-      .limit(50);
-    if(error)throw error;
+    // sharepoint_sync is service-role only (RLS default-deny), so read it
+    // through the server-verified admin API - a direct client() query would
+    // return zero rows and always claim "everything is mirrored".
+    const d=await api("sync_health");
+    const data=d.rows||[];
     if(!(data||[]).length){el.innerHTML='<div class="msg ok show">✓ Everything is mirrored to SharePoint.</div>';return;}
     el.innerHTML="<table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
       data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill'>"+esc(r.status)+"</span></td><td>"+r.attempts+"</td><td>"+new Date(r.created_at).toLocaleString()+"</td><td style='color:#dc2626;font-size:.75rem'>"+esc(r.last_error||"")+"</td></tr>").join("")+
@@ -459,9 +464,9 @@ async function loadSync(){
   const session=await XanaSupabase.getSession().catch(()=>null);
   if(!session||!session.user){location.href="/login?next=/admin";return;}
   account={username:String(session.user.email||"").toLowerCase()};
-  accessToken=session.access_token;
+  accessToken=null; // api() refreshes the bearer per call now
   const roles=await XanaSupabase.myRoles();
-  if(!roles.includes("admin")){
+  if(!XanaSupabase.isAdminRole(roles)){
     const l=await XanaSupabase.landingFor();
     location.href=l||"/login";
     return;

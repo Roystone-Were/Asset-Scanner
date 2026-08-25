@@ -458,7 +458,7 @@ function renderHistory(rows){
   if(!rows.length)return '<div class="hint" style="margin-top:10px">No recorded changes yet — edits made from now on will appear here.</div>';
   const items=rows.filter(r=>r.op==="update"&&r.fields&&Object.keys(r.fields).length).map(r=>{
     const bits=Object.entries(r.fields).map(([k,v])=>{
-      const label=FIELD_LABELS[k]||k;
+      const label=esc(FIELD_LABELS[k]||k);
       return "<b>"+label+"</b>: "+fmtVal(v.old)+" → "+fmtVal(v.new);
     });
     return '<div class="hrow"><span class="hwho">'+esc(r.changed_by||"—")+'</span><span class="hwhat">'+bits.join(" · ")+'</span><span class="hwhen">'+new Date(r.changed_at).toLocaleString()+'</span></div>';
@@ -774,7 +774,7 @@ async function startApp(){
   let roles=[];
   try{roles=await XanaSupabase.myRoles();}catch(e){}
   currentRoles=roles;
-  if(!(roles.includes("asset_viewer")||roles.includes("admin"))){
+  if(!(roles.includes("asset_viewer")||XanaSupabase.isAdminRole(roles))){
     const l=await XanaSupabase.landingFor();
     location.href=l||"/login";
     return;

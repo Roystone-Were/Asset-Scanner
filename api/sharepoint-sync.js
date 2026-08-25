@@ -175,18 +175,22 @@ function numeric(v) {
 
 function buildSpFields(asset, forInsert) {
   const fields = {};
+  // Full-mirror semantics: an explicit null CLEARS the SharePoint field
+  // (e.g. offboarding clears EmployeeName), "" normalizes to null, and
+  // undefined (key absent from the Supabase row) is left untouched.
   const put = (spName, value) => {
-    if (value !== null && value !== undefined && value !== "") fields[spName] = value;
+    if (value === undefined) return;
+    fields[spName] = value === null || value === "" ? null : value;
   };
   if (forInsert) put("SupabaseId", asset.id);
-  put("Title", asset.title || asset.asset_tag);
+  fields.Title = asset.title || asset.asset_tag || null;   // Title always managed
   for (const [col, sp] of Object.entries(FIELD_MAP)) {
     if (col === "title") continue;
     put(sp, asset[col]);
   }
   const extra = asset.extra || {};
   for (const [key, sp] of Object.entries(EXTRA_MAP)) {
-    if (key === "purchase_price") put(sp, numeric(extra[key]));
+    if (key === "purchase_price") put(sp, extra[key] === undefined ? undefined : numeric(extra[key]));
     else put(sp, extra[key]);
   }
   return fields;
@@ -298,15 +302,23 @@ async function processRow(row, assetsById, token) {
   return { id: row.id, op: row.op, error: "unknown op" };
 }
 
-// ---------- HTTP handler ----------
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "POST only" });
     return;
   }
 
-  const key = req.headers["x-sync-key"] || "";
-  if (!process.env.SYNC_ACCESS_KEY || key !== process.env.SYNC_ACCESS_KEY) {
+  const crypto = require("crypto");
+  const key = String(req.headers["x-sync-key"] || "");
+  const expected = process.env.SYNC_ACCESS_KEY || "";
+  // Constant-time comparison (hash both sides so lengths never leak).
+  const keyOk =
+    expected.length > 0 &&
+    crypto.timingSafeEqual(
+      crypto.createHash("sha256").update(key).digest(),
+      crypto.createHash("sha256").update(expected).digest()
+    );
+  if (!keyOk) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -315,7 +327,6 @@ module.exports = async function handler(req, res) {
     res.status(500).json({ error: "Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / CLIENT_SECRET env vars" });
     return;
   }
-
   let body = {};
   try { body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}; } catch (e) { /* default */ }
 

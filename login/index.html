@@ -34,17 +34,18 @@
 // combined home page, which owns sign-in now. Preserve ?next= intent.
 (function(){
   const next=new URLSearchParams(location.search).get("next");
+  // Same-origin paths only - "//evil.com" starts with "/" but is protocol-relative.
+  const safeNext=next&&next.startsWith("/")&&!next.startsWith("//")?next:null;
   const sessionCheck=XanaSupabase.getSession().catch(()=>null);
 
   // If a signed-in user hits /login, honor ?next or go home.
   sessionCheck.then(function(s){
     if(s&&s.user){
-      const n=next&&next.startsWith("/")?next:"/";
-      location.replace(n);
+      location.replace(safeNext||"/");
       return;
     }
     // Signed out: forward to home with next preserved for after sign-in.
-    location.replace(next?"/?next="+encodeURIComponent(next):"/");
+    location.replace(safeNext?"/?next="+encodeURIComponent(safeNext):"/");
   });
 })();
 </script>

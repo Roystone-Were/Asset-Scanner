@@ -1,4 +1,4 @@
-﻿// app.js —” Xana Asset Summary client: Supabase auth + theme toggle + dashboard
+﻿// app.js — Xana Asset Summary client: Supabase auth + theme toggle + dashboard
 "use strict";
 (function () {
   // ---------- Config ----------
@@ -85,11 +85,18 @@ const DEP_COLORS = {
   function statusColor(s) { return STATUS_COLORS[s] || "#3b82f6"; }
   function depColor(s) { return DEP_COLORS[s] || "#3b82f6"; }
 
+  // CSV cell that cannot execute as a spreadsheet formula (=, +, -, @, tab).
+  function csvCell(v) {
+    let s = String(v == null ? "" : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+
   async function load() {
     const btn = document.getElementById("refresh"); if (btn) btn.disabled = true;
     const main = document.getElementById("main");
     const meta = document.getElementById("meta");
-    main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live data—¦</div>';
+    main.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live data…</div>';
     try {
       const items = await XanaSupabase.listAssetsDetailed();
       const d = XanaSupabase.computeSummary(items);
@@ -114,8 +121,12 @@ const DEP_COLORS = {
     if (!i.warrantyMonths || !i.purchaseDate) return null;
     const d = new Date(i.purchaseDate + "T00:00:00");
     if (isNaN(d.getTime())) return null;
-    const expiry = new Date(d);
-    expiry.setMonth(expiry.getMonth() + Math.round(i.warrantyMonths));
+    const expiry = (() => {
+      // Clamp to month-end: Jan 31 + 1mo must be Feb 28/29, not Mar 3.
+      const y = d.getFullYear(), m = d.getMonth() + Math.round(i.warrantyMonths), day = d.getDate();
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      return new Date(y, m, Math.min(day, lastDay));
+    })();
     return { expiry, days: Math.ceil((expiry - new Date()) / 86400000) };
   }
   function mountWarrantyWidget(items) {
@@ -144,6 +155,17 @@ const DEP_COLORS = {
       client.from("asset_events").select("id,item_id,event_type,event_date,description,created_by").eq("event_type", "issue").eq("resolved", false).order("event_date", { ascending: false }).limit(20),
       client.from("asset_events").select("id,item_id,event_type,event_date,description,cost,resolved").in("event_type", ["repair", "maintenance"]).order("event_date", { ascending: false }).limit(8),
     ]);
+    if (openIssues.error || recent.error) {
+      // A failed events query returns no thrown error - never present
+      // "None open 🎉" when we simply could not look.
+      console.warn("asset_events query failed:", openIssues.error || recent.error);
+      const panel = document.createElement("div");
+      panel.className = "panel";
+      panel.style.marginTop = "14px";
+      panel.innerHTML = '<h2>🛠️ Field activity</h2><div style="font-size:.82rem;color:var(--muted)">Temporarily unavailable — open issues and repairs could not be loaded.</div>';
+      main.appendChild(panel);
+      return;
+    }
     const tagFor = {}; items.forEach(i => { tagFor[i.id] = i.tag || i.serial || ("#" + i.id); });
     const issues = openIssues.data || [];
     const repairs = recent.data || [];
@@ -288,7 +310,7 @@ const DEP_COLORS = {
       '<div><h3>Top departments</h3>' + topList(d.byDepartment) + '</div>' +
       '<div><h3>Locations</h3>' + topList(d.byLocation) + '</div>' +
       '</div>' +
-      '<div class="ep-foot">Straight-line depreciation · Source of truth: SharePoint Xana Asset Inventory · Generated from live data</div>';
+      '<div class="ep-foot">Straight-line depreciation · Source of truth: Supabase (mirrored to SharePoint) · Generated from live data</div>';
   }
 
   // ---------- KPI Animation ----------
@@ -442,7 +464,7 @@ const DEP_COLORS = {
     const rows = lastItems.map(i => [
       i.tag, i.type, i.model, i.serial, i.employee, i.location, i.status,
       i.purchaseDate, i.purchasePrice, i.bookValue, i.depStatus
-    ].map(v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(","));
+    ].map(csvCell).join(","));
     const csv = [headers.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -475,7 +497,7 @@ const DEP_COLORS = {
     const headers = [
       "Asset Tag", "Type", "Model", "Serial", "Employee", "Location", "Status",
       "Purchase Date", "Purchase Cost", "Useful Life (Years)", "Useful Life (Months)",
-      "Monthly Depreciation", "YTD Depreciation", "Accumulated Depreciation",
+      "Monthly Depreciation", "Depreciation This Year of Service", "Accumulated Depreciation",
       "Closing Book Value", "Depreciation Status"
     ];
     let totMonth = 0, totYtd = 0, totAccum = 0, totBook = 0;
@@ -488,7 +510,7 @@ const DEP_COLORS = {
         const monthsOld = Math.max(0, (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth()));
         const totalMonths = i.usefulLife * 12;
         accum = Math.min(i.purchasePrice, Math.round((monthsOld * monthly) * 100) / 100);
-        const monthsThisFY = monthsOld % 12 === 0 && monthsOld > 0 ? 12 : monthsOld % 12;   // calendar-year YTD
+        const monthsThisFY = monthsOld % 12 === 0 && monthsOld > 0 ? 12 : monthsOld % 12;   // anniversary-based: months into the current year of service
         ytd = Math.min(accum, Math.round((monthsThisFY * monthly) * 100) / 100);
       }
       totMonth += monthly; totYtd += ytd; totAccum += accum; totBook += i.bookValue;
@@ -497,7 +519,7 @@ const DEP_COLORS = {
         i.purchaseDate || "", i.purchasePrice || "", i.usefulLife || "", (i.usefulLife || 0) * 12,
         monthly.toFixed(2), ytd.toFixed(2), accum.toFixed(2),
         (Math.round(i.bookValue * 100) / 100).toFixed(2), i.depStatus
-      ].map(v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(",");
+      ].map(csvCell).join(",");
     });
     const totalsRow = [
       "TOTAL", "", "", "", "", "", "", "", "", "", "",
@@ -521,7 +543,12 @@ const DEP_COLORS = {
   }
 
   // ---------- Boot ----------
-  initAuth();
+  initAuth().catch(e => {
+    console.error(e);
+    const b = document.getElementById("boot");
+    if (b) { b.classList.add("done"); setTimeout(() => b.remove(), 300); }
+    showSignIn("Sign-in check failed — please reload.");
+  });
 })();
 
 

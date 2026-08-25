@@ -208,7 +208,6 @@
   <footer>Xana Asset System</footer>
 </div>
 
-<script src="/scanner-app/lib/supabase.min.js"></script>
 <script>
 "use strict";
 function show(el,on){el.style.display=on?"block":"none";}
@@ -228,6 +227,8 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){retur
   if (!session || !session.user) {
     // Signed out: show the sign-in card in the hero, hide workspace tiles.
     document.getElementById("signinCard").hidden = false;
+    const authNotice = XanaSupabase.popAuthNotice();
+    if (authNotice) msg("msg", authNotice, true);
     document.getElementById("tiles").style.display = "none";
     document.getElementById("tilesLabel").textContent = "Workspace pages appear here after you sign in";
     done();
@@ -263,11 +264,12 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){retur
       '<div class="card" style="grid-column:1/-1"><h2>No pages assigned yet</h2>' +
       '<p>Your account has no role assigned. Ask IT to grant you access in Admin.</p></div>';
   }
+  if (nextUrl && nextUrl !== "/") { location.replace(nextUrl); return; }
   done();
 })();
 
 // ---------- sign-in logic (from /login) ----------
-const nextUrl=(()=>{const n=new URLSearchParams(location.search).get("next");return n&&n.startsWith("/")?n:null;})();
+const nextUrl=(()=>{const n=new URLSearchParams(location.search).get("next");return n&&n.startsWith("/")&&!n.startsWith("//")?n:null;})();
 function setTab(which){
   const otp=which==="otp";
   document.getElementById("tabOtp").classList.toggle("active",otp);
@@ -282,14 +284,11 @@ document.getElementById("tabPwd")?.addEventListener("click",()=>setTab("pwd"));
 async function send(){
   const email=(document.getElementById("email").value||"").trim();
   if(!email||email.indexOf("@")<1){msg("msg","Enter a valid email address.",true);return;}
-  sessionStorage.setItem("xana_otp_email",email);
   const b=document.getElementById("btnSend");b.disabled=true;b.textContent="Sending…";
   try{
-    const { error } = await XanaSupabase.client().auth.signInWithOtp({
-      email: email,
-      options: { emailRedirectTo: location.origin + "/?magic=1" },
+    await XanaSupabase.sendOtp(email, {
+      emailRedirectTo: location.origin + "/?next=" + encodeURIComponent(nextUrl || "/"),
     });
-    if(error) throw error;
     document.getElementById("sentTo").textContent="Sent to "+email;
     show(document.getElementById("stepEmail"),false);
     show(document.getElementById("stepCode"),true);
@@ -304,7 +303,6 @@ document.getElementById("btnSend")?.addEventListener("click",send);
 document.getElementById("email")?.addEventListener("keydown",e=>{if(e.key==="Enter")send();});
 document.getElementById("btnResend")?.addEventListener("click",send);
 document.getElementById("btnBack")?.addEventListener("click",()=>{
-  sessionStorage.removeItem("xana_otp_email");
   show(document.getElementById("stepCode"),false);
   show(document.getElementById("stepEmail"),true);
 });
@@ -323,7 +321,7 @@ async function pwdSignin(){
       return;
     }
     const l=await XanaSupabase.landingFor();
-    location.href=l||location.pathname;   // stay on this page; tiles now visible
+    location.href=l||(nextUrl&&nextUrl!=="/"?nextUrl:location.pathname);   // stay on this page; tiles now visible
   }catch(e){
     msg("msg",/Invalid login/i.test(e.message)
       ? "Wrong email or password."
