@@ -9,46 +9,66 @@
   <script src="/js/supabase-client.js"></script>
   <link rel="stylesheet" href="/css/base.css" />
   <style>
-    :root { --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --accent:#16a34a; --blue:#2563eb; --text:#0f172a; --muted:#64748b; }
-    [data-theme="dark"] { --bg:#121212; --card:#1e1e1e; --border:#2b2b2b; --text:#f3f4f6; --muted:#9ca3af; }
+    :root {
+      --bg:#0b0e11; --panel:#14171c; --line:#232830;
+      --text:#f3f4f6; --muted:#9aa5b5;
+      --accent:#34d399; --accent-ink:#06281c;
+      --hairline:rgba(255,255,255,.07);
+      --ease:cubic-bezier(0.32,0.72,0,1);
+    }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-    .box{width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;text-align:center}
-    .logo{height:44px;margin-bottom:10px}
-    h1{font-size:1.15rem;margin-bottom:4px}
-    p.sub{color:var(--muted);font-size:.85rem;margin-bottom:18px}
-    input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:1rem;margin-bottom:10px}
+    body{
+      font-family:"Inter","Segoe UI",system-ui,sans-serif;
+      background:
+        radial-gradient(900px 460px at 50% -10%, rgba(52,211,153,.08), transparent 60%),
+        var(--bg);
+      color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 28px
+    }
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:44px}
+    .brand img{height:30px;width:auto}
+    .brand span{font-weight:700;font-size:1rem;color:var(--text)}
+    .box{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--hairline);border-radius:20px;padding:30px 26px;text-align:center;box-shadow:0 24px 60px -24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05)}
+    h1{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;margin-bottom:5px}
+    p.sub{color:var(--muted);font-size:.85rem;margin-bottom:20px}
+    input{width:100%;padding:12px;border-radius:11px;border:1px solid var(--line);background:#0d1014;color:var(--text);font-size:.95rem;margin-bottom:10px;transition:border-color .2s var(--ease)}
+    input::placeholder{color:#5b6572}
     input:focus{outline:none;border-color:var(--accent)}
-    button{width:100%;padding:12px;border-radius:10px;border:0;background:var(--accent);color:#fff;font-weight:600;font-size:.95rem;cursor:pointer}
-    button.secondary{background:transparent;color:var(--text);border:1px solid var(--border);margin-top:8px;font-weight:500}
-    button:disabled{opacity:.6}
+    button{width:100%;padding:12px;border-radius:11px;border:1px solid transparent;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:.92rem;cursor:pointer;transition:filter .2s var(--ease), transform .15s var(--ease)}
+    button:hover{filter:brightness(1.08)}
+    button:active{transform:scale(.98)}
+    button.secondary{background:transparent;color:var(--text);border:1px solid var(--line);margin-top:8px;font-weight:500}
+    button.secondary:hover{border-color:var(--muted);filter:none}
+    button:disabled{opacity:.55;cursor:default}
     .msg{margin-top:12px;padding:10px;border-radius:10px;font-size:.85rem;display:none}
     .msg.show{display:block}
-    .msg.err{background:rgba(209,52,56,.12);color:#dc2626}
-    .msg.info{background:rgba(37,99,235,.10);color:var(--blue)}
-    .links{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-    .links a{font-size:.78rem;color:var(--muted);text-decoration:none;padding:5px 9px;border:1px solid var(--border);border-radius:999px}
+    .msg.err{background:rgba(220,38,38,.14);color:#fca5a5}
+    .msg.info{background:rgba(52,211,153,.10);color:#a7f3d0}
+    .links{margin-top:22px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+    .links a{font-size:.78rem;color:var(--muted);text-decoration:none;padding:5px 11px;border:1px solid var(--line);border-radius:999px;transition:border-color .2s var(--ease)}
     .links a:hover{color:var(--text);border-color:var(--accent)}
     #codeInput{text-align:center;letter-spacing:8px;font-size:1.3rem}
-    .tabbtn{flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:9px;font-size:.85rem;font-weight:500;cursor:pointer}
-    .tabbtn.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+    .tabbtn{flex:1;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:.85rem;font-weight:500;cursor:pointer;width:auto}
+    .tabbtn:hover{color:var(--text)}
+    .tabbtn.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+    footer{margin-top:auto;padding-top:36px;color:var(--muted);font-size:.7rem;text-align:center}
   </style>
 </head>
 <body>
+  <div class="brand"><img src="/scanner-app/xana-logo.png" alt="Xana" onerror="this.style.display='none'" /><span>Xana Asset System</span></div>
+
   <div class="box">
-    <img src="/scanner-app/xana-logo.png" alt="Xana" class="logo" onerror="this.style.display='none'" />
-    <h1>Xana Asset System</h1>
-    <p class="sub">Sign in with your work email. Invite-only.</p>
+    <h1>Sign in</h1>
+    <p class="sub">Use your work email. Invite-only.</p>
 
     <div id="stepEmail">
-      <div style="display:flex;gap:6px;margin-bottom:12px">
+      <div style="display:flex;gap:6px;margin-bottom:14px">
         <button type="button" id="tabOtp" class="tabbtn active">Email me a link</button>
         <button type="button" id="tabPwd" class="tabbtn">Password</button>
       </div>
 
       <div id="otpForm">
         <input type="email" id="email" placeholder="you@xanalife.com" autocomplete="email" />
-        <button id="btnSend">Email me a sign-in button</button>
+        <button id="btnSend">Email me a sign-in link</button>
       </div>
 
       <div id="pwdForm" style="display:none">
@@ -81,9 +101,11 @@
     </div>
 
     <div class="links">
-      <a href="/scan">Scan</a><a href="/assets">Assets</a><a href="/dashboard">Dashboard</a><a href="/admin">Admin</a>
+      <a href="/">Home</a><a href="/scan">Scan</a><a href="/assets">Assets</a><a href="/dashboard">Dashboard</a>
     </div>
   </div>
+
+  <footer>Supabase is the source of truth, mirrored live to SharePoint</footer>
 
 <script>
 "use strict";
@@ -98,28 +120,21 @@ async function send(){
   sessionStorage.setItem("xana_otp_email",email);
   const b=document.getElementById("btnSend");b.disabled=true;b.textContent="Sending…";
   try{
-    await XanaSupabase.sendOtp(email);
+    const { error } = await XanaSupabase.client().auth.signInWithOtp({
+      email: email,
+      options: { emailRedirectTo: location.origin + "/?magic=1" },
+    });
+    if(error) throw error;
     document.getElementById("sentTo").textContent="Sent to "+email;
     show(document.getElementById("stepEmail"),false);
     show(document.getElementById("stepCode"),true);
   }catch(e){
-    msg("msg",e.message.includes("Signups not allowed")
-      ? "No account found for that email — access is invite-only. Contact IT Admin (it@xanalife.com)."
-      : e.message,true);
-  }finally{b.disabled=false;b.textContent="Email me a sign-in button";}
-}
-
-async function verify(){
-  // Kept for compatibility; the link flow signs users in directly.
-  noAccess();
+    msg("msg","Could not send the email. Check the address and try again.",true);
+  }finally{b.disabled=false;b.textContent="Email me a sign-in link";}
 }
 
 function noAccess(){
-  msg("msg","✅ Signed in — but your account has no access assigned yet. Contact it@xanalife.com.",true);
-  const b=document.createElement("button");
-  b.className="secondary";b.textContent="Sign out";b.style.marginTop="8px";
-  b.onclick=async()=>{await XanaSupabase.signOut();location.reload();};
-  document.getElementById("stepCode").appendChild(b);
+  msg("msg","Signed in — but your account has no access assigned yet. Contact IT Admin (it@xanalife.com).",true);
 }
 
 document.getElementById("btnSend").addEventListener("click",send);
