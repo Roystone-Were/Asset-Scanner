@@ -42,10 +42,6 @@
     button:disabled{opacity:.55}
     button:active{transform:scale(.98)}
     @keyframes dsp{to{transform:rotate(360deg)}}
-    .tabs{display:flex;gap:8px;margin-top:16px}
-    .tab{flex:1;text-align:center;padding:11px;border-radius:11px;border:1px solid var(--hairline);background:var(--card);color:var(--muted);font-weight:600;font-size:.88rem;cursor:pointer;box-shadow:var(--shadow-ambient), var(--inner-highlight);transition:border-color var(--duration-fast,140ms) var(--ease-out)}
-    .tab:hover{color:var(--text)}
-    .tab.active{color:var(--text);border-color:var(--accent)}
     label.chk{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;color:var(--muted);margin-right:10px;cursor:pointer}
     .msg{margin-top:10px;padding:10px;border-radius:10px;text-align:center;font-size:.85rem;display:none}
     .msg.show{display:block}
@@ -62,7 +58,52 @@
     .choice-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;border:1px solid var(--hairline);border-radius:10px;margin-top:6px;background:var(--card)}
     .lists-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .lists-grid .card{margin-top:0}
-    @media(max-width:760px){.lists-grid{grid-template-columns:1fr}table thead{display:none}table tr{display:block;margin-bottom:10px;border:1px solid var(--hairline);border-radius:10px;padding:8px}table td{display:block;border:0;padding:4px 8px}}
+    /* --- premium pass: grain, focus, segmented tabs, sheets, skeletons, user rows --- */
+    body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.04;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
+    :focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 65%,transparent);outline-offset:2px}
+    .tab{flex:0 0 auto;text-align:center;padding:8px 18px;border-radius:999px;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:.84rem;cursor:pointer;box-shadow:none;transition:color .3s var(--ease-out),background-color .3s var(--ease-out),box-shadow .3s var(--ease-out)}
+    .seg{display:inline-flex;background:var(--card2);border:1px solid var(--hairline);border-radius:999px;padding:3px;gap:2px;margin-top:16px}
+    .tab.active{color:var(--text);background:var(--card);border-color:transparent;box-shadow:var(--shadow-ambient)}
+    .cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .cardhead h3{margin-bottom:0}
+    .countchip{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;margin-left:8px;border-radius:999px;background:var(--card2);border:1px solid var(--hairline);font-size:.72rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;vertical-align:2px}
+    .skel{border-radius:10px;background:linear-gradient(100deg,var(--card2) 40%,color-mix(in srgb,var(--card2) 35%,var(--card)) 50%,var(--card2) 60%);background-size:200% 100%;animation:shimmer 1.4s var(--ease-out) infinite}
+    @keyframes shimmer{to{background-position:-200% 0}}
+    .empty{text-align:center;padding:44px 20px}
+    .empty-ico{font-size:30px;opacity:.45;margin-bottom:8px}
+    .empty h3{font-size:.98rem;font-weight:600;margin-bottom:4px}
+    .empty p{color:var(--muted);font-size:.83rem;max-width:44ch;margin:0 auto 14px;line-height:1.55}
+    .ucell{display:flex;align-items:center;gap:11px}
+    .uavatar{flex:0 0 auto;width:32px;height:32px;border-radius:10px;background:color-mix(in srgb,var(--accent) 14%,var(--card2));color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem}
+    .ucell b{display:block;font-size:.86rem;font-weight:600;letter-spacing:-.01em}
+    .uname{display:block;font-size:.74rem;color:var(--muted)}
+    .uactions{white-space:nowrap;text-align:right}
+    td.num{font-variant-numeric:tabular-nums}
+    td.err-cell{color:var(--red);font-size:.75rem;max-width:280px;white-space:normal}
+    .pill.st-pending{background:rgba(217,119,6,.12);border-color:rgba(217,119,6,.3);color:#d97706}
+    .pill.st-processing{background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.3);color:var(--blue)}
+    .pill.st-failed{background:rgba(220,38,38,.1);border-color:rgba(220,38,38,.3);color:var(--red)}
+    .pill.st-done{background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.3);color:var(--accent)}
+    tbody tr{transition:background-color .15s var(--ease-out)}
+    tbody tr:hover{background:color-mix(in srgb,var(--accent) 3%,transparent)}
+    /* slide-over sheet (matches the assets page pattern) */
+    .sheet{position:fixed;inset:0;z-index:70;display:none}
+    .sheet.open{display:block}
+    .sheet-backdrop{position:absolute;inset:0;background:rgba(10,12,16,.45);opacity:0;transition:opacity .24s var(--ease-out)}
+    .sheet.open .sheet-backdrop{opacity:1}
+    .sheet-panel{position:absolute;right:0;top:0;bottom:0;width:440px;max-width:92vw;background:var(--card);border-left:1px solid var(--hairline);box-shadow:var(--shadow-lifted);padding:22px;overflow:auto;transform:translateX(100%);transition:transform .42s cubic-bezier(0.34,1.56,0.64,1)}
+    .sheet.open .sheet-panel{transform:translateX(0)}
+    .sheet h2{font-size:1.02rem;font-weight:700;letter-spacing:-.01em;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+    .flabel{font-size:.74rem;font-weight:600;color:var(--muted);margin:12px 0 5px;display:block;text-transform:uppercase;letter-spacing:.05em}
+    .flabel .opt{text-transform:none;letter-spacing:0;font-weight:500}
+    .sheet input[type=text],.sheet input[type=email]{width:100%}
+    .rolegrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+    .sheet .msg{margin-top:14px}
+    .card, .sheet-panel { animation: rise .48s var(--ease-out) backwards; }
+    @keyframes rise { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    .sheet.open .sheet-panel { animation: slideIn .42s cubic-bezier(0.34,1.56,0.64,1); }
+    @keyframes slideIn { from { transform:translateX(100%); } to { transform:translateX(0); } }
   </style>
 </head>
 <body>
@@ -90,41 +131,21 @@
   <div id="denied" class="hidden"></div>
 
   <div id="gate" style="display:none">
-    <div class="tabs">
-      <div class="tab active" data-tab="users">Users</div>
-      <div class="tab" data-tab="lists">Lists</div>
-      <div class="tab" data-tab="sync">Sync health</div>
-      <div class="tab" data-tab="bin">Recycle bin</div>
+    <div class="seg" id="tabs" role="tablist" aria-label="Admin sections">
+      <div class="tab active" data-tab="users" role="tab">Users</div>
+      <div class="tab" data-tab="lists" role="tab">Lists</div>
+      <div class="tab" data-tab="sync" role="tab">Sync health</div>
+      <div class="tab" data-tab="bin" role="tab">Recycle bin</div>
     </div>
 
     <!-- ================= USERS ================= -->
     <section id="pane-users">
       <div class="card">
-        <h3 style="margin-bottom:10px">Invite a user</h3>
-        <div class="grid2">
-          <input type="email" id="invEmail" placeholder="email e.g. itsupport@xanalife.com" />
-          <input type="text" id="invName" placeholder="full name (optional)" />
+        <div class="cardhead">
+          <h3>All users <span class="countchip" id="userCount">–</span></h3>
+          <button id="btnOpenInvite">+ Invite user</button>
         </div>
-        <div style="margin:10px 0 12px" id="invRoles">
-          <label class="chk"><input type="checkbox" value="scanner" checked /> Scanner</label>
-          <label class="chk"><input type="checkbox" value="asset_viewer" /> Asset viewer</label>
-          <label class="chk"><input type="checkbox" value="dashboard_viewer" /> Dashboard viewer</label>
-          <label class="chk"><input type="checkbox" value="admin" /> Admin</label>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button id="btnInvite" class="small" style="background:var(--accent)">Send invite &amp; create account</button>
-          <button id="btnManual" class="small secondary">Create with password instead…</button>
-        </div>
-        <div id="manualBox" style="display:none;margin-top:10px;padding:12px;border:1px dashed var(--border);border-radius:10px">
-          <p style="font-size:.8rem;color:var(--muted);margin-bottom:8px">No email will be sent. Set an initial password and share it with the user in person or by phone — they'll be forced to choose their own at first sign-in.</p>
-          <input type="text" id="manualPass" placeholder="initial password (min 8 characters)" style="width:100%;margin-bottom:8px" autocomplete="off"/>
-          <button class="small" id="btnManualSave">Create account with this password</button>
-        </div>
-        <div id="invMsg" class="msg"></div>
-      </div>
-      <div class="card">
-        <h3 style="margin-bottom:4px">All users</h3>
-        <div id="usersList"><div class="msg info show">Loading…</div></div>
+        <div id="usersList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px"></div></div>
       </div>
     </section>
 
@@ -167,6 +188,35 @@
   </div>
 </div>
 
+
+<!-- Invite slide-over sheet -->
+<div class="sheet" id="inviteSheet">
+  <div class="sheet-backdrop" id="invBackdrop"></div>
+  <div class="sheet-panel">
+    <h2>Invite user <button type="button" class="theme-toggle" id="invClose">✕</button></h2>
+    <label class="flabel">Work email</label>
+    <input type="email" id="invEmail" placeholder="e.g. itsupport@xanalife.com" autocomplete="off" />
+    <label class="flabel">Full name <span class="opt">(optional)</span></label>
+    <input type="text" id="invName" placeholder="e.g. Ada Kim" autocomplete="off" />
+    <label class="flabel">Roles</label>
+    <div id="invRoles" class="rolegrid">
+      <label class="chk"><input type="checkbox" value="scanner" checked /> Scanner</label>
+      <label class="chk"><input type="checkbox" value="asset_viewer" /> Asset viewer</label>
+      <label class="chk"><input type="checkbox" value="dashboard_viewer" /> Dashboard viewer</label>
+      <label class="chk"><input type="checkbox" value="admin" /> Admin</label>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+      <button id="btnInvite">Send invite</button>
+      <button id="btnManual" class="secondary">Create with password instead…</button>
+    </div>
+    <div id="manualBox" style="display:none;margin-top:12px;padding:14px;border:1px dashed var(--border);border-radius:12px;background:var(--card2)">
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:8px;line-height:1.5">No email will be sent. Set an initial password and share it in person or by phone — they'll choose their own at first sign-in.</p>
+      <input type="text" id="manualPass" placeholder="initial password (min 8 characters)" style="width:100%;margin-bottom:8px" autocomplete="off"/>
+      <button class="small" id="btnManualSave">Create account with this password</button>
+    </div>
+    <div id="invMsg" class="msg"></div>
+  </div>
+</div>
 <script>
 "use strict";
 const STORAGE_THEME="xana_theme";
@@ -202,15 +252,29 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   if(t.dataset.tab==="bin") loadBin();
 }));
 
+// ---------- invite sheet ----------
+function openInvite(){document.getElementById("inviteSheet").classList.add("open");setTimeout(()=>document.getElementById("invEmail").focus(),350);}
+function closeInvite(){document.getElementById("inviteSheet").classList.remove("open");}
+document.getElementById("btnOpenInvite").addEventListener("click",openInvite);
+document.getElementById("invClose").addEventListener("click",closeInvite);
+document.getElementById("invBackdrop").addEventListener("click",closeInvite);
+
+// ---------- shared skeleton ----------
+const SKEL_ROWS=(n)=>'<div class="skel" style="height:30px;margin-bottom:8px"></div>'.repeat(n);
+
 // ---------- recycle bin ----------
 async function loadBin(){
   const el=document.getElementById("binList");
   try{
+    el.innerHTML=SKEL_ROWS(3);
     const rows=await XanaSupabase.listDeletedAssets();
-    if(!rows.length){el.innerHTML='<div class="msg ok show">✓ Recycle bin is empty.</div>';return;}
+    if(!rows.length){
+      el.innerHTML='<div class="empty"><div class="empty-ico">🗑️</div><h3>Recycle bin is empty</h3><p>Deleted assets rest here before they are gone for good. Nothing to restore right now.</p></div>';
+      return;
+    }
     el.innerHTML="<table><thead><tr><th>Tag</th><th>Type</th><th>Model</th><th>Serial</th><th>Deleted</th><th></th></tr></thead><tbody>"+
-      rows.map(r=>"<tr><td><b>"+esc(r.tag||("#"+r.id))+"</b></td><td>"+esc(r.type||"")+"</td><td>"+esc(r.model||"")+"</td><td>"+esc(r.serial||"—")+"</td><td>"+new Date(r.deletedAt).toLocaleString()+"</td>"+
-        "<td style='white-space:nowrap'><button class='small' data-restore='"+r.id+"'>Restore</button> <button class='small danger' data-purge='"+r.id+"' data-tag='"+esc(r.tag||("#"+r.id))+"'>Purge</button></td></tr>").join("")+
+      rows.map(r=>"<tr><td><b>"+esc(r.tag||("#"+r.id))+"</b></td><td>"+esc(r.type||"")+"</td><td>"+esc(r.model||"")+"</td><td>"+esc(r.serial||"—")+"</td><td class='num'>"+new Date(r.deletedAt).toLocaleString()+"</td>"+
+        "<td style='white-space:nowrap'><button class='small secondary' data-restore='"+r.id+"'>Restore</button> <button class='small danger' data-purge='"+r.id+"' data-tag='"+esc(r.tag||("#"+r.id))+"'>Purge</button></td></tr>").join("")+
       "</tbody></table>";
   }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
 }
@@ -238,19 +302,27 @@ document.getElementById("binList").addEventListener("click",async(e)=>{
 async function loadUsers(){
   const el=document.getElementById("usersList");
   try{
+    el.innerHTML=SKEL_ROWS(4);
     const d=await api("list");
-    if(!(d.users||[]).length){el.innerHTML='<div class="msg info show">No users yet.</div>';return;}
+    const users=d.users||[];
+    document.getElementById("userCount").textContent=users.length;
+    if(!users.length){
+      el.innerHTML='<div class="empty"><div class="empty-ico">👤</div><h3>No users yet</h3><p>Invite your first teammate — they get an email that signs them straight in.</p><button id="emptyInvite">Invite a user</button></div>';
+      document.getElementById("emptyInvite")?.addEventListener("click",openInvite);
+      return;
+    }
     el.innerHTML='<table><thead><tr><th>User</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
-      d.users.map(u=>{
+      users.map(u=>{
+        const initial=esc((u.full_name||u.email||"?").trim().charAt(0).toUpperCase());
         const boxes=ROLES.map(([val,label])=>'<label class="chk"><input type="checkbox" data-role="'+val+'" data-user="'+u.id+'" '+(u.roles.includes(val)?"checked":"")+"/> "+label+"</label>").join("");
-        return "<tr><td><b>"+esc(u.email)+"</b><br/><span class='pill'>"+esc(u.full_name||"—")+"</span></td>"+
+        return "<tr>"+
+          "<td><div class='ucell'><span class='uavatar'>"+initial+"</span><div><b>"+esc(u.email)+"</b><span class='uname'>"+esc(u.full_name||"—")+"</span></div></div></td>"+
           "<td>"+boxes+"</td>"+
           "<td><label class='chk'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+"/> Active</label></td>"+
-          "<td><button class='small' data-resetpw='"+u.id+"'>Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
+          "<td class='uactions'><button class='small secondary' data-resetpw='"+u.id+"'>Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
       }).join("")+"</tbody></table>";
   }catch(e){el.innerHTML='<div class="msg err show">'+esc(e.message)+"</div>";}
 }
-
 document.getElementById("btnInvite").addEventListener("click",async()=>{
   const email=(document.getElementById("invEmail").value||"").trim().toLowerCase();
   const name=(document.getElementById("invName").value||"").trim();
@@ -449,11 +521,12 @@ async function loadSync(){
     // sharepoint_sync is service-role only (RLS default-deny), so read it
     // through the server-verified admin API - a direct client() query would
     // return zero rows and always claim "everything is mirrored".
+    el.innerHTML=SKEL_ROWS(3);
     const d=await api("sync_health");
     const data=d.rows||[];
-    if(!(data||[]).length){el.innerHTML='<div class="msg ok show">✓ Everything is mirrored to SharePoint.</div>';return;}
+    if(!(data||[]).length){el.innerHTML='<div class="empty"><div class="empty-ico">✓</div><h3>Everything is mirrored</h3><p>Every change has reached the SharePoint mirror. Failed rows stop retrying after 5 attempts and would appear here.</p></div>';return;}
     el.innerHTML="<table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
-      data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill'>"+esc(r.status)+"</span></td><td>"+r.attempts+"</td><td>"+new Date(r.created_at).toLocaleString()+"</td><td style='color:#dc2626;font-size:.75rem'>"+esc(r.last_error||"")+"</td></tr>").join("")+
+      data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill st-"+esc(r.status)+"'>"+esc(r.status)+"</span></td><td class='num'>"+r.attempts+"</td><td class='num'>"+new Date(r.created_at).toLocaleString()+"</td><td class='err-cell'>"+esc(r.last_error||"")+"</td></tr>").join("")+
       "</tbody></table>";
   }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
 }
