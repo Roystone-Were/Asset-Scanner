@@ -11,3 +11,32 @@
 table, .kpi .value, .fin-grid .item .v, .health .item .v {
   font-feature-settings: "tnum" 1;
 }
+
+/* Smooth momentum-style scrolling everywhere.
+   - thin overlay scrollbars instead of hidden ones (scrollbars:none hid
+     affordance and made wheel scrolling feel abrupt/janky on Windows)
+   - overscroll containment stops scroll-chaining to the page from
+     inner tables/popovers
+   - keep scrollbar-width:none ONLY where it was deliberate (none) */
+html {
+  scroll-behavior: smooth;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120,130,145,.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(120,130,145,.3);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(120,130,145,.5); }
+
+/* Inner scrollers (tables, popovers, sheets) shouldn't chain to the page */
+.tbl-scroll, .fpop, .sheet-panel {
+  overscroll-behavior: contain;
+}
