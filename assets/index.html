@@ -602,14 +602,16 @@ function cloneIntoForm(it){
   set("addPDate",it.purchaseDate);
   set("addPrice",it.purchasePrice?String(it.purchasePrice):"");
   document.getElementById("addPriceEstimate").checked=!!it.estimatePending;
-  // unique-per-item fields start empty; tag field is editable and focused
+  // unique-per-item fields start empty; suggest the next free XL-<n> tag
   const tagInput=document.getElementById("addTag");
   tagInput.removeAttribute("readonly");
-  tagInput.value="";
+  let next=0;
+  for(const x of allItems){const m=/^XL-(\d+)$/.exec((x.tag||"").trim());if(m)next=Math.max(next,parseInt(m[1],10));}
+  tagInput.value="XL-"+(next+1);
   set("addSerial","");
   closeDetail();
-  setTimeout(()=>{tagInput&&tagInput.focus();},350);
-  flash(document.getElementById("addMsg"),"ok","Cloned from "+(it.tag||it.serial)+" — enter the new Tag & Serial.");
+  setTimeout(()=>{tagInput&&tagInput.focus();tagInput&&tagInput.select();},350);
+  flash(document.getElementById("addMsg"),"ok","Cloned from "+(it.tag||it.serial)+" — suggested next free tag; adjust if needed.");
 }
 function closeDetail(){
   const d=document.getElementById("detail");
@@ -653,6 +655,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   // Tags are user-entered — no auto-generation.
   const problems=[];
   if(!tag) problems.push("Asset Tag is required.");
+  else if(allItems.some(x=>(x.tag||"").toLowerCase()===tag.toLowerCase())) problems.push("Asset Tag \u201C"+tag+"\u201D is already in use — pick a unique tag.");
   if(!serial) problems.push("Serial Number is required.");
   if(!dept) problems.push("Department is required.");
   if(pPrice===""&&!est) problems.push("Purchase Price is required — or tick \u201Cestimate pending\u201D.");
