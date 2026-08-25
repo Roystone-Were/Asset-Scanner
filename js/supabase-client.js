@@ -125,6 +125,7 @@
     Printer: 4, Scanner: 4, Tablet: 3, Phone: 3,
     POS: 5, "Cash Drawer": 8, Scale: 8,
     "Speaker/Mic": 5, Router: 5, Switch: 5, UNVR: 5,
+    Keyboard: 3, Mouse: 2, Headset: 3,
     Other: 3, TV: 5,
   };
 
