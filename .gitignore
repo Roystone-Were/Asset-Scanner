@@ -22,3 +22,5 @@ health-metrics.json
 
 # Backfill task lists (filled locally, never commit)
 /backfill/*.csv
+dash_tmp.html
+nav_served.css
