@@ -97,6 +97,7 @@
     const row = {};
     const extraPatch = {};
     for (const key of Object.keys(fields || {})) {
+      if (key === "_softDelete") { row.deleted_at = new Date().toISOString(); continue; }
       const col = FIELD_TO_COL[key];
       const val = fields[key];
       if (key === "LastVerified") extraPatch.last_verified = val === null ? null : String(val);
@@ -180,9 +181,24 @@
   async function listAssetsDetailed() {
     const { data, error } = await client()
       .from("assets")
-      .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra");
+      .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra")
+      .is("deleted_at", null);
     if (error) throw new Error("Supabase " + error.message);
     return (data || []).map(enrichAsset);
+  }
+
+  // Recycle bin: soft-deleted assets only
+  async function listDeletedAssets() {
+    const { data, error } = await client()
+      .from("assets")
+      .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra,deleted_at")
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false });
+    if (error) throw new Error("Supabase " + error.message);
+    return (data || []).map((row) => ({
+      ...enrichAsset(row),
+      deletedAt: row.deleted_at,
+    }));
   }
 
   // ---------- Portfolio summary ----------
@@ -277,6 +293,7 @@
     const { data, error } = await client()
       .from("assets")
       .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra")
+      .is("deleted_at", null)
       .order("item_id", { ascending: true });
     if (error) throw new Error("Supabase " + error.message);
     return (data || []).map((row) => ({
@@ -326,7 +343,19 @@
     return { ok: true };
   }
 
+  // Soft delete — moves to recycle bin (restorable). The outbox/audit
+  // triggers fire on UPDATE too, so the mirror sees it like any change.
   async function deleteAsset(id) {
+    return updateAsset(id, { _softDelete: true });
+  }
+
+  async function restoreAsset(id) {
+    const { error } = await client().from("assets").update({ deleted_at: null }).eq("item_id", String(id));
+    if (error) throw new Error("Supabase " + error.message);
+    return { ok: true };
+  }
+
+  async function purgeAsset(id) {
     const { error } = await client().from("assets").delete().eq("item_id", String(id));
     if (error) throw new Error("Supabase " + error.message);
     return { ok: true };
@@ -507,6 +536,9 @@
     insertAsset,
     updateAsset,
     deleteAsset,
+    restoreAsset,
+    purgeAsset,
+    listDeletedAssets,
     sendOtp,
     signInWithPassword,
     getSession,
