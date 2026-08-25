@@ -7,6 +7,7 @@
   <script src="/scanner-app/lib/supabase.min.js"></script>
   <script src="/js/supabase-client.js"></script>
   <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/nav.css" />
   <style>
     :root { --bg:#f7f8fa; --card:#ffffff; --card2:#f1f4f8; --border:#e6eaf0; --accent:#16a34a; --blue:#2563eb; --text:#0b1220; --muted:#5c6b80; --red:#dc2626; --radius:16px;
       --hairline:rgba(11,18,32,.06);
@@ -23,15 +24,7 @@
     }
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    .navbar{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--border)}
-    .navbar_container{max-width:1080px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
-    .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
-    .navbar_logo img{height:26px;width:auto}
-    .navbar_menu{display:flex;gap:6px;align-items:center}
-    .navbar_menu a{padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
-    .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
-    .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
-    .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
+    /* navbar styles live in /css/nav.css */
     .main{padding:26px 22px 40px;max-width:1080px;margin:0 auto}
     h1{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
     p.sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}

@@ -8,6 +8,7 @@
 <script src="/js/supabase-client.js"></script>
 <script src="/scanner-app/logic.js"></script>
 <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/nav.css" />
 <style>
   :root {
     --bg:#f7f8fa; --card:#ffffff; --card2:#f1f4f8; --border:#e6eaf0; --accent:#16a34a; --accent2:#3b82f6; --text:#0b1220; --muted:#5c6b80; --red:#dc2626; --green:#16a34a; --orange:#d97706; --book:#0d9488; --radius:16px;
@@ -34,15 +35,7 @@
   
   body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
   /* --- Hurry-style top navbar (green shade + blur, not transparent) --- */
-  .navbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--card) 88%, var(--accent) 12%);backdrop-filter:blur(10px) saturate(1.1);-webkit-backdrop-filter:blur(10px) saturate(1.1);border-bottom:1px solid var(--border)}
-  .navbar_container{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:58px;gap:16px}
-  .navbar_logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;text-decoration:none;color:var(--text)}
-  .navbar_logo img{height:26px;width:auto}
-  .navbar_menu{display:flex;gap:6px;align-items:center}
-  .navbar_menu a{padding:7px 12px;border-radius:8px;font-size:.82rem;font-weight:500;text-decoration:none;color:var(--muted);border:1px solid transparent}
-  .navbar_menu a:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
-  .navbar_menu a.active{background:var(--card2);color:var(--text);border-color:var(--border);font-weight:600}
-  .navbar_right{display:flex;align-items:center;gap:10px}
+  /* navbar styles live in /css/nav.css */
   .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
   .theme-toggle:hover{background:var(--card2)}
   .menu-button{display:none;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text)}
