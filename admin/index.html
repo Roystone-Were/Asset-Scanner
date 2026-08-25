@@ -406,7 +406,7 @@ async function loadSync(){
   try{
     const {data,error}=await XanaSupabase.client().from("sharepoint_sync")
       .select("op,status,attempts,last_error,created_at")
-      .in_("status",["pending","failed","processing"])
+      .in("status",["pending","failed","processing"])
       .order("created_at",{ascending:false})
       .limit(50);
     if(error)throw error;
