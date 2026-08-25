@@ -95,8 +95,11 @@
   .editrow:hover>span:last-child::after{content:" ✎";font-size:.7rem;color:var(--accent)}
   .inlineedit{max-width:220px;padding:6px 8px;font-size:.85rem;border-radius:8px;border:1px solid var(--accent);background:var(--card);color:var(--text)}
   .hint{font-size:.72rem;color:var(--muted);margin-top:6px}
-  .detail-actions{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
-  .detail-actions .btn,.detail-actions a.btn{flex:1 1 auto;min-width:110px;text-align:center;padding:10px 12px}
+  .detail-actions{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .detail-actions .btn,.detail-actions a.btn{flex:0 1 auto;min-width:0;text-align:center;padding:9px 14px;font-size:.82rem;border-radius:10px}
+  .detail-actions .spacer{flex:1}
+  .detail-actions .btn.danger{background:rgba(220,38,38,.08);color:#dc2626;border:1px solid transparent}
+  .detail-actions .btn.danger:hover{background:rgba(220,38,38,.15)}
   .hrow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--border);font-size:.8rem;flex-wrap:wrap}
   .hwho{color:var(--accent);font-weight:600;min-width:180px}
   .hwhat{flex:1;min-width:200px}
@@ -223,6 +226,12 @@ async function initAuth(){
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("lost"))return "#d13438";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
 function money(n){return "KES "+Math.round(n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");}
+function fmtWhen(iso){
+  if(!iso)return "";
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return String(iso);
+  return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+}
 function warrantyInfo(it){
   if(!it.warrantyMonths||!it.purchaseDate)return null;
   const d=new Date(it.purchaseDate+"T00:00:00");
@@ -364,8 +373,8 @@ function showDetail(it){
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
-    '<div class="row"><span>Last Verified</span><span>'+(esc(it.lastVerified||"")||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><button class="btn secondary" id="cloneBtn">Clone</button><a class="btn" href="#" id="openAdd2">+ Add Item</a><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn secondary" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
+    '<div class="row"><span>Last Verified</span><span>'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
+    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><button class="btn secondary" id="cloneBtn">Clone</button><span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
