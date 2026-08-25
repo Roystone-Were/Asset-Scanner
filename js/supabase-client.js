@@ -326,6 +326,12 @@
     return { ok: true };
   }
 
+  async function deleteAsset(id) {
+    const { error } = await client().from("assets").delete().eq("item_id", String(id));
+    if (error) throw new Error("Supabase " + error.message);
+    return { ok: true };
+  }
+
   // ---------- Auth (email OTP) ----------
   async function sendOtp(email) {
     const { error } = await client().auth.signInWithOtp({
@@ -500,6 +506,7 @@
     computeSummary,
     insertAsset,
     updateAsset,
+    deleteAsset,
     sendOtp,
     signInWithPassword,
     getSession,

@@ -137,7 +137,8 @@
     transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-base) var(--ease-out);
   }
   button:hover, .btn:hover { box-shadow:var(--shadow-lifted); }
-  button:active, .btn:active { transform: scale(0.98); transition-duration:80ms; }
+  button:active{transform:scale(.98);transition-duration:80ms}
+  @keyframes dsp{to{transform:rotate(360deg)}}
   .sheet-backdrop { transition: opacity var(--duration-base) var(--ease-out); }
   .sheet-panel { transition: transform var(--duration-slow) var(--ease-spring); }
   #main, #detail { animation: rise var(--duration-base) var(--ease-out); }
@@ -232,6 +233,40 @@ function fmtWhen(iso){
   if(isNaN(d.getTime()))return String(iso);
   return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
 }
+function rolesIncludeAdmin(){
+  return currentRoles.includes("admin")||currentRoles.includes("super_admin");
+}
+// Delete-asset confirm dialog (admin only)
+function showDeleteDialog(it){
+  closeModal();
+  const ov=document.createElement("div");
+  ov.id="delModal";
+  ov.style.cssText="position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease";
+  ov.innerHTML='<div role="dialog" style="background:var(--card);border:1px solid var(--hairline);border-radius:16px;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);padding:22px;width:340px;max-width:90vw;text-align:center;transform:scale(.96);transition:transform .18s var(--ease-out)">'
+    +'<div style="font-weight:700;font-size:.95rem;margin-bottom:8px">Delete asset</div>'
+    +'<div style="font-size:.83rem;color:var(--muted);line-height:1.45;margin-bottom:16px">Permanently delete <b style="color:var(--text)">'+esc(it.tag||"#"+it.id)+'</b><br/>serial '+esc(it.serial||"—")+'? It is removed from the register and mirrored as deleted to SharePoint. History stays archived.</div>'
+    +'<div id="dlgBtns" style="display:flex;gap:8px">'
+    +'<button class="btn secondary" id="dlgCancel" style="flex:1">Cancel</button>'
+    +'<button class="btn" id="dlgOk" style="flex:1;background:#dc2626">Delete</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  requestAnimationFrame(()=>{ov.style.opacity="1";ov.firstElementChild.style.transform="scale(1)";});
+  const close=()=>{ov.style.opacity="0";setTimeout(()=>ov.remove(),180);};
+  ov.querySelector("#dlgCancel").onclick=close;
+  ov.onclick=e=>{if(e.target===ov)close();};
+  ov.querySelector("#dlgOk").onclick=async()=>{
+    const btns=ov.querySelector("#dlgBtns");
+    btns.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:8px 0;color:var(--muted);font-size:.83rem"><span style="width:17px;height:17px;border:2.5px solid var(--border);border-top-color:#dc2626;border-radius:50%;display:inline-block;animation:dsp .7s linear infinite"></span>Deleting…</div>';
+    try{
+      await XanaSupabase.deleteAsset(it.id);
+      close();
+      document.getElementById("detail").innerHTML="";
+      await load();
+      toast((it.tag||"Asset")+" deleted",false);
+    }catch(err){close();toast("Delete failed: "+err.message,true);}
+  };
+}
+function closeModal(){document.getElementById("delModal")?.remove();}
 function warrantyInfo(it){
   if(!it.warrantyMonths||!it.purchaseDate)return null;
   const d=new Date(it.purchaseDate+"T00:00:00");
@@ -374,13 +409,15 @@ function showDetail(it){
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><button class="btn secondary" id="cloneBtn">Clone</button><span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button></div><div id="histPanel"></div><div id="evPanel"></div></div>';
+    '</div><div id="editBar"></div><div class="detail-actions"><a class="btn secondary" href="/scan">Scan this</a><button class="btn secondary" id="cloneBtn">Clone</button><span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
   document.getElementById("cloneBtn")?.addEventListener("click",()=>{
     cloneIntoForm(it);
   });
+  // Delete — admin/super_admin only, confirm dialog, mirrors to SharePoint
+  document.getElementById("delBtn")?.addEventListener("click",()=>showDeleteDialog(it));
   // inline editing — tap a value to change it
   let current=it;
   const bar=document.getElementById("editBar");
@@ -515,8 +552,20 @@ function flash(el,kind,text){
   el.querySelectorAll(".msg").forEach(m=>m.remove());
   el.insertAdjacentHTML("beforeend",'<div class="msg '+kind+'">'+(kind==="err"?esc(text):text)+'</div>');
 }
+// ---------- in-page dialog + toast (same pattern as admin) ----------
+let _toastT=null;
+function toast(text,isErr){
+  const t=document.createElement("div");
+  t.style.cssText="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"var(--text)")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out)";
+  t.textContent=text;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity="1";t.style.transform="translateX(-50%) translateY(-4px)";});
+  clearTimeout(_toastT);
+  _toastT=setTimeout(()=>{t.style.opacity="0";setTimeout(()=>t.remove(),250);},3200);
+}
 // One live editor across the whole card, tracked here.
 let _openEditor=null;   // {cell, input, name, orig, id}
+let currentRoles=[];    // captured at boot for render-time gating
 function closeEditor(save){
   if(!_openEditor) return;
   const {cell,input,name,orig,id}=_openEditor;
@@ -728,6 +777,7 @@ async function startApp(){
   state.textContent="✅ Signed in as "+account.username;
   let roles=[];
   try{roles=await XanaSupabase.myRoles();}catch(e){}
+  currentRoles=roles;
   if(!(roles.includes("asset_viewer")||roles.includes("admin"))){
     const l=await XanaSupabase.landingFor();
     location.href=l||"/login";
