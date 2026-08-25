@@ -357,18 +357,18 @@ function showDetail(it){
   const c=statusColor(it.status);
   const detail=document.getElementById("detail");
   detail.innerHTML='<div class="card" id="assetCard"><h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>'+
-    '<div class="hint">Tap Status, Location, Employee or Condition to change it. Edits save to the register and mirror to SharePoint.</div>'+
+    '<div class="hint">Tap any value to change it. Edits save to the register and mirror to SharePoint.</div>'+
     '<div class="detail-grid">'+
-    '<div class="row"><span>Serial No.</span><span>'+esc(it.serial||"—")+'</span></div>'+
-    '<div class="row"><span>Asset Type</span><span>'+esc(it.type||"")+'</span></div>'+
-    '<div class="row"><span>Model</span><span>'+esc(it.model||"")+'</span></div>'+
-    '<div class="row"><span>Department</span><span>'+esc(it.department||"—")+'</span></div>'+
+    '<div class="row editrow"><span>Serial No.</span><span data-edit="SerialNumber">'+(esc(it.serial||"")||"—")+'</span></div>'+
+    '<div class="row editrow"><span>Asset Type</span><span data-edit="Asset">'+esc(it.type||"")+'</span></div>'+
+    '<div class="row editrow"><span>Model</span><span data-edit="Model">'+esc(it.model||"")+'</span></div>'+
+    '<div class="row editrow"><span>Department</span><span data-edit="Department">'+(esc(it.department||"")||"—")+'</span></div>'+
     '<div class="row editrow"><span>Employee</span><span data-edit="EmployeeName">'+(esc(it.employee||"")||"—")+'</span></div>'+
     '<div class="row editrow"><span>Location</span><span data-edit="Location">'+(esc(it.location||"")||"—")+'</span></div>'+
     '<div class="row editrow"><span>Status</span><span data-edit="Status">'+esc(it.status||"")+'</span></div>'+
     '<div class="row editrow"><span>Condition</span><span data-edit="Condition">'+(esc(it.condition||"")||"—")+'</span></div>'+
-    '<div class="row"><span>Purchase Date</span><span>'+esc(it.purchaseDate||"—")+'</span></div>'+
-    '<div class="row"><span>Purchase Price</span><span>'+money(it.purchasePrice)+'</span></div>'+
+    '<div class="row editrow"><span>Purchase Date</span><span data-edit="PurchaseDate">'+(esc(it.purchaseDate||"")||"—")+'</span></div>'+
+    '<div class="row editrow"><span>Purchase Price</span><span data-edit="PurchasePrice">'+(it.purchasePrice?money(it.purchasePrice):(it.estimatePending?"estimate pending":"—"))+'</span></div>'+
     '<div class="row"><span>Book Value</span><span style="color:var(--book)"><b>'+money(it.bookValue)+'</b></span></div>'+
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
@@ -499,13 +499,14 @@ function renderEventForm(histPanel,current){
 let _choices=null;
 async function getChoices(){
   if(_choices) return _choices;
-  _choices={status:["In Use","Available","Retired","Left With","Lost"],location:["Syokimau","Katani","Ruiru","Githurai","Lumumba Dr","TRM Dr"]};
+  _choices={status:["In Use","Available","Retired","Left With","Lost"],location:["Syokimau","Katani","Ruiru","Githurai","Lumumba Dr","TRM Dr"],type:["Laptop","CPU","Monitor","Desktop","Printer","Scanner","Mouse","Keyboard","Phone","POS","Cash Drawer","Scale","Speaker/Mic","Router","Switch","UNVR","TV"]};
   try{
     const {data,error}=await XanaSupabase.client().from("app_choices").select("category,value");
     if(error) throw error;
     for(const r of data||[]){
       if(r.category==="status"&&!_choices.status.includes(r.value))_choices.status.push(r.value);
       if(r.category==="location"&&!_choices.location.includes(r.value))_choices.location.push(r.value);
+      if(r.category==="asset_type"&&!_choices.type.includes(r.value))_choices.type.push(r.value);
     }
   }catch(e){/* offline or table empty — fallbacks hold */}
   return _choices;
@@ -528,6 +529,15 @@ function closeEditor(save){
   const bar=document.getElementById("editBar");
   if(bar){bar.innerHTML='<div class="msg info">Saving…</div>';}
   const patch={};patch[name]=val;
+  // PurchasePrice: numeric coercion; empty clears the value
+  if(name==="PurchasePrice"){
+    if(val===""){delete patch.PurchasePrice;patch.PurchasePrice=null;}
+    else{
+      const num=parseFloat(val.replace(/[^0-9.-]/g,""));
+      if(isNaN(num)){cell.textContent=orig;if(bar){bar.innerHTML='<div class="msg err">Enter a number.</div>';}return;}
+      patch.PurchasePrice=num;
+    }
+  }
   XanaSupabase.updateAsset(id,patch)
     .then(()=>{
       if(bar){bar.innerHTML='<div class="msg ok">Saved ✓</div>';setTimeout(()=>{const m=bar.querySelector(".msg");if(m)m.remove();},2500);}
@@ -558,6 +568,19 @@ async function beginEdit(cell,current){
       .concat((hit?[hit]:[]).concat(opts.filter(o=>o!==hit)).map(o=>'<option'+(o===hit?' selected':'')+'>'+esc(o)+'</option>'))
       .join('');
     control={el:'<select class="inlineedit">'+options+'</select>'};
+  }else if(name==="Asset"){
+    const opts=(_choices.type||[]).filter(Boolean);
+    const hit=opts.find(o=>o.toLowerCase()===orig.toLowerCase());
+    const options=['<option value="">— none —</option>']
+      .concat((hit?[hit]:[]).concat(opts.filter(o=>o!==hit)).map(o=>'<option'+(o===hit?' selected':'')+'>'+esc(o)+'</option>'))
+      .join('');
+    control={el:'<select class="inlineedit">'+options+'</select>'};
+  }else if(name==="PurchaseDate"){
+    control={el:'<input class="inlineedit" type="date" value="'+esc(orig==='"—"'?"":orig)+'" />'};
+  }else if(name==="PurchasePrice"){
+    // strip KES formatting for editing; empty means clear
+    const num=(current&&current.purchasePrice)?String(current.purchasePrice):"";
+    control={el:'<input class="inlineedit" type="number" min="0" step="0.01" placeholder="amount" value="'+esc(num)+'" />'};
   }else{
     control={el:'<input class="inlineedit" type="text" value="'+esc(orig)+'" />'};
   }
