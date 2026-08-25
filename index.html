@@ -97,6 +97,7 @@
 <div class="wrap">
   <div class="top">
     <div class="brand"><img src="/scanner-app/xana-logo.png" alt="" /><span>Xana Asset System</span></div>
+    <div class="signin-mini" id="signinMini"></div>
     <div id="who"></div>
   </div>
 
@@ -154,9 +155,12 @@
   const session = await XanaSupabase.getSession().catch(function () { return null; });
 
   if (!session || !session.user) {
-    document.querySelector(".signin-mini").classList.add("show");
-    document.querySelector(".signin-mini").innerHTML =
-      '<span>New here?</span><b><a href="/login" style="color:var(--accent);text-decoration:none">Sign in with your work email →</a></b>';
+    const mini = document.getElementById("signinMini");
+    if (mini) {
+      mini.classList.add("show");
+      mini.innerHTML =
+        '<span>New here?</span><b><a href="/login" style="color:var(--accent);text-decoration:none">Sign in with your work email →</a></b>';
+    }
     done();
     return;
   }
