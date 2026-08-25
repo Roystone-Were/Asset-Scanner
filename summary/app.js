@@ -370,7 +370,7 @@ const DEP_COLORS = {
       .join("");
 
     return (
-      '<div class="flex"><div class="donut-wrap" style="width:180px;height:180px;"><svg viewBox="0 0 180 180" style="width:100%;height:100%;transform:rotate(-90deg);">' +
+      '<div class="flex"><div class="donut-wrap" style="width:150px;height:150px;"><svg viewBox="0 0 180 180" style="width:100%;height:100%;transform:rotate(-90deg);">' +
       svgPaths +
       '</svg><div class="donut-center"><div class="n">' + total + '</div><div class="t">assets</div></div></div><div class="legend">' + legend + "</div></div>");
   }
