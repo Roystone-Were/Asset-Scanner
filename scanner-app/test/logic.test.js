@@ -269,6 +269,20 @@ test("classifyKeyBurst rejects human typing, short codes, missing Enter", () => 
   assert.strictEqual(X.classifyKeyBurst(shifted).text, "MICL");
 });
 
+test("findAssetByCode matches tag, serial and #id on enriched rows", () => {
+  const items = [
+    { id: "1", tag: "MICL0045", serial: "PW0MGGLA" },
+    { id: "2", tag: "XL-7", serial: "MXL2153DKN" },
+  ];
+  assert.strictEqual(X.findAssetByCode(items, "micl0045").id, "1");
+  assert.strictEqual(X.findAssetByCode(items, " MICL0045 ").id, "1");
+  assert.strictEqual(X.findAssetByCode(items, "mxl2153dkn").id, "2");
+  assert.strictEqual(X.findAssetByCode(items, "#2").id, "2");
+  assert.strictEqual(X.findAssetByCode(items, "METROCARE IMAGING — MICL0045").id, "1");
+  assert.strictEqual(X.findAssetByCode(items, "nope"), null);
+  assert.strictEqual(X.findAssetByCode(items, ""), null);
+});
+
 test("diffFields reports tracked column changes with labels", () => {
   const prev = { Title: "MICL0045", Status: "In Use", Location: "Syokimau" };
   const next = { Title: "MICL0045", Status: "Lost", Location: "Syokimau" };

@@ -7,6 +7,7 @@
 <script src="/scanner-app/lib/supabase.min.js"></script>
 <script src="/js/supabase-client.js"></script>
 <script src="/scanner-app/logic.js"></script>
+<script src="/scanner-app/lib/html5-qrcode.min.js"></script>
 <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/nav.css" />
 <style>
@@ -197,6 +198,17 @@
     </label>
     <div class="form-actions"><button class="btn secondary" id="addCancel">Cancel</button><button class="btn" id="addSave">Save Asset</button></div>
     <div id="addMsg"></div>
+  </div>
+</div>
+
+<!-- In-place Scan Sheet -->
+<div class="sheet" id="scanOverlay">
+  <div class="sheet-backdrop" id="scanBackdrop"></div>
+  <div class="sheet-panel">
+    <h2>📷 Scan <button type="button" class="theme-toggle" id="scanClose">✕</button></h2>
+    <div id="scanReader" style="border-radius:12px;overflow:hidden;background:#000;min-height:120px"></div>
+    <div id="scanStatus" class="hint" style="margin-top:8px"></div>
+    <div class="hint" style="margin-top:4px">Matches Asset Tag or Serial. A USB wedge scanner works anywhere on this page — no button needed.</div>
   </div>
 </div>
 
@@ -763,6 +775,70 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
     await load();
   }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
 });
+
+// ---------- In-place scanning (camera sheet + USB wedge) ----------
+// The Scan button opens the register's own camera sheet and a decoded code
+// jumps straight to that row's detail card - no trip to /scan. A wedge
+// scanner (keyboard mode) works globally: fast bursts ending in Enter are
+// classified by Xana.classifyKeyBurst, except while typing in a field.
+let _qrScanner=null,_scanning=false;
+async function startScan(){
+  document.getElementById("scanOverlay").classList.add("open");
+  const status=document.getElementById("scanStatus");
+  try{
+    if(!window.Html5Qrcode) throw new Error("camera library not loaded");
+    status.textContent="Starting camera…";
+    _qrScanner=new Html5Qrcode("scanReader",{verbose:false});
+    await _qrScanner.start(
+      {facingMode:"environment"},
+      {fps:10,qrbox:(w,h)=>{const s=Math.round(Math.min(w,h)*0.7);return{width:s,height:Math.max(80,Math.round(s*0.45))};}},
+      (text)=>{stopScan();handleScanHit(text);},
+      ()=>{/* per-frame miss - ignore */}
+    );
+    _scanning=true;
+    status.textContent="Point at the barcode…";
+  }catch(e){
+    stopScan();
+    toast("Camera unavailable — use Search or a USB wedge scanner",true);
+  }
+}
+async function stopScan(){
+  const s=_qrScanner;_qrScanner=null;_scanning=false;
+  try{if(s)await s.stop();}catch(e){/* already stopped */}
+  document.getElementById("scanReader").innerHTML="";
+  const ov=document.getElementById("scanOverlay");
+  if(ov)ov.classList.remove("open");
+}
+document.getElementById("scanClose")?.addEventListener("click",stopScan);
+document.getElementById("scanBackdrop")?.addEventListener("click",stopScan);
+function handleScanHit(raw){
+  const it=Xana.findAssetByCode(allItems,raw);
+  if(it){
+    showDetail(it);
+    toast("Opened "+(it.tag||"asset #"+it.id),false);
+  }else{
+    toast("No asset matches \u201C"+Xana.cleanScanInput(raw)+"\u201D",true);
+  }
+}
+let _keyBuf=[];
+document.addEventListener("keydown",(e)=>{
+  if(_scanning)return;
+  const t=e.target;
+  if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.tagName==="SELECT"||t.isContentEditable)){
+    _keyBuf=[];   // a focused field owns its own keystrokes (incl. Enter)
+    return;
+  }
+  if(e.key==="Enter"){
+    // classifyKeyBurst expects the Enter terminator INSIDE the buffer.
+    _keyBuf.push({key:"Enter",t:Date.now()});
+    const r=Xana.classifyKeyBurst(_keyBuf);
+    _keyBuf=[];
+    if(r.isScan){e.preventDefault();handleScanHit(r.text);}
+    return;
+  }
+  _keyBuf.push({key:e.key,t:Date.now()});
+  if(_keyBuf.length>64)_keyBuf=_keyBuf.slice(-64);
+});
 // Hurry-style mobile menu
 const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
 menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
@@ -782,7 +858,7 @@ async function startApp(){
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").classList.remove("hidden");
   document.getElementById("search").addEventListener("input",applyFilters);
-  document.getElementById("btnScan").addEventListener("click",()=> location.href="/scan");
+  document.getElementById("btnScan").addEventListener("click",startScan);
   // kick off data load + choices fetch in parallel; don't block the UI on choices
   const choicesP=(async()=>{
     try{

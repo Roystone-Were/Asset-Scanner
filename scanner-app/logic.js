@@ -321,6 +321,30 @@
     return ids;
   }
 
+  // Resolve a scanned/typed code against enriched register rows
+  // ({ id, tag, serial, ... } - the listAssetsDetailed shape). "#123" is a
+  // direct asset-id lookup; anything else is cleaned (vendor barcode
+  // prefixes stripped) and matched case-insensitively against Tag or
+  // Serial, both sides trimmed. Returns the row or null.
+  function findAssetByCode(items, rawCode) {
+    const raw = String(rawCode || "").trim();
+    if (!raw) return null;
+    const idHit = parseIdQuery(raw);
+    if (idHit) {
+      for (const it of items || []) {
+        if (String(it.id) === idHit) return it;
+      }
+      return null;
+    }
+    const clean = cleanScanInput(raw).toLowerCase();
+    if (!clean) return null;
+    for (const it of items || []) {
+      if (String(it.tag || "").toLowerCase().trim() === clean) return it;
+      if (String(it.serial || "").toLowerCase().trim() === clean) return it;
+    }
+    return null;
+  }
+
   // Columns the history view diffs between two item versions, as
   // [internal/display-ish name, label]. fieldV() tolerates the display-name
   // variants Graph may return for each.
@@ -405,6 +429,7 @@
     assetsOfEmployee,
     parseIdQuery,
     parseIdListQuery,
+    findAssetByCode,
     STATUS_CHOICES,
     LOCATION_CHOICES,
     REGION_CHOICES,
