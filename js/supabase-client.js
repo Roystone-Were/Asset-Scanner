@@ -152,7 +152,10 @@
     return {
       id: String(row.item_id),
       tag: str(row.asset_tag) || str(row.title),
-      serial: str(row.serial),
+      // "0000" is a deliberate placeholder ("serial to be added later"),
+      // not a real serial — normalize it away so duplicate checks,
+      // health stats and deep-links don't treat it as an identity.
+      serial: (() => { const s = str(row.serial); return s === "0000" ? "" : s; })(),
       model: str(row.model),
       employee: str(row.employee),
       department: str(extra.department),

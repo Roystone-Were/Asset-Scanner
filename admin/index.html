@@ -101,6 +101,7 @@
       <div class="tab active" data-tab="users">Users</div>
       <div class="tab" data-tab="lists">Lists</div>
       <div class="tab" data-tab="sync">Sync health</div>
+      <div class="tab" data-tab="bin">Recycle bin</div>
     </div>
 
     <!-- ================= USERS ================= -->
@@ -161,6 +162,15 @@
         <div id="syncList"><div class="msg info show">Loading…</div></div>
       </div>
     </section>
+    <!-- ================= RECYCLE BIN ================= -->
+    <section id="pane-bin" style="display:none">
+      <div class="card">
+        <h3>Recycle bin</h3>
+        <p class="sub" style="margin-top:4px">Deleted assets live here. Restore puts them back on the register; purge removes them permanently (mirrored as deleted to SharePoint).</p>
+        <div id="binList"><div class="msg info show">Loading…</div></div>
+      </div>
+    </section>
+
   </div>
 </div>
 
@@ -188,9 +198,42 @@ async function api(action,payload){
 // ---------- tabs ----------
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
-  ["users","lists","sync"].forEach(n=>{document.getElementById("pane-"+n).style.display=t.dataset.tab===n?"block":"none";});
+  ["users","lists","sync","bin"].forEach(n=>{document.getElementById("pane-"+n).style.display=t.dataset.tab===n?"block":"none";});
   if(t.dataset.tab==="sync") loadSync();
+  if(t.dataset.tab==="bin") loadBin();
 }));
+
+// ---------- recycle bin ----------
+async function loadBin(){
+  const el=document.getElementById("binList");
+  try{
+    const rows=await XanaSupabase.listDeletedAssets();
+    if(!rows.length){el.innerHTML='<div class="msg ok show">✓ Recycle bin is empty.</div>';return;}
+    el.innerHTML="<table><thead><tr><th>Tag</th><th>Type</th><th>Model</th><th>Serial</th><th>Deleted</th><th></th></tr></thead><tbody>"+
+      rows.map(r=>"<tr><td><b>"+esc(r.tag||("#"+r.id))+"</b></td><td>"+esc(r.type||"")+"</td><td>"+esc(r.model||"")+"</td><td>"+esc(r.serial||"—")+"</td><td>"+new Date(r.deletedAt).toLocaleString()+"</td>"+
+        "<td style='white-space:nowrap'><button class='small' data-restore='"+r.id+"'>Restore</button> <button class='small danger' data-purge='"+r.id+"' data-tag='"+esc(r.tag||("#"+r.id))+"'>Purge</button></td></tr>").join("")+
+      "</tbody></table>";
+  }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
+}
+document.getElementById("binList").addEventListener("click",async(e)=>{
+  const rs=e.target.closest("[data-restore]");
+  if(rs){
+    try{
+      await XanaSupabase.restoreAsset(rs.dataset.restore);
+      toast("Asset restored to the register",false);
+      await loadBin();
+    }catch(err){toast(err.message,true);}
+    return;
+  }
+  const pg=e.target.closest("[data-purge]");
+  if(pg){
+    showDialog({title:"Purge permanently",
+      body:"Erase <b>"+esc(pg.dataset.tag)+"</b> forever? This cannot be undone. The deletion is mirrored to SharePoint.",
+      confirmText:"Purge forever",danger:true,
+      onConfirm:async()=>{await XanaSupabase.purgeAsset(pg.dataset.purge);await loadBin();return {message:"Asset purged"};}
+    });
+  }
+});
 
 // ---------- users ----------
 async function loadUsers(){

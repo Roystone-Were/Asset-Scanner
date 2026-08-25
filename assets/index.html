@@ -244,7 +244,7 @@ function showDeleteDialog(it){
   ov.style.cssText="position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease";
   ov.innerHTML='<div role="dialog" style="background:var(--card);border:1px solid var(--hairline);border-radius:16px;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);padding:22px;width:340px;max-width:90vw;text-align:center;transform:scale(.96);transition:transform .18s var(--ease-out)">'
     +'<div style="font-weight:700;font-size:.95rem;margin-bottom:8px">Delete asset</div>'
-    +'<div style="font-size:.83rem;color:var(--muted);line-height:1.45;margin-bottom:16px">Permanently delete <b style="color:var(--text)">'+esc(it.tag||"#"+it.id)+'</b><br/>serial '+esc(it.serial||"—")+'? It is removed from the register and mirrored as deleted to SharePoint. History stays archived.</div>'
+    +'<div style="font-size:.83rem;color:var(--muted);line-height:1.45;margin-bottom:16px">Move <b style="color:var(--text)">'+esc(it.tag||"#"+it.id)+'</b> (serial '+esc(it.serial||"—")+') to the recycle bin? You can restore it later from Admin.</div>'
     +'<div id="dlgBtns" style="display:flex;gap:8px">'
     +'<button class="btn secondary" id="dlgCancel" style="flex:1">Cancel</button>'
     +'<button class="btn" id="dlgOk" style="flex:1;background:#dc2626">Delete</button>'
@@ -416,7 +416,7 @@ function showDetail(it){
   document.getElementById("cloneBtn")?.addEventListener("click",()=>{
     cloneIntoForm(it);
   });
-  // Delete — admin/super_admin only, confirm dialog, mirrors to SharePoint
+  // Delete — admin/super_admin only, confirm dialog, moves to recycle bin
   document.getElementById("delBtn")?.addEventListener("click",()=>showDeleteDialog(it));
   // inline editing — tap a value to change it
   let current=it;
