@@ -4,231 +4,49 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sign in · Xana</title>
-  <link rel="icon" href="/scanner-app/icon-192.png" />
   <script src="/scanner-app/lib/supabase.min.js"></script>
   <script src="/js/supabase-client.js"></script>
   <link rel="stylesheet" href="/css/base.css" />
   <style>
-    :root {
-      --bg:#0b0e11; --panel:#14171c; --line:#232830;
-      --text:#f3f4f6; --muted:#9aa5b5;
-      --accent:#34d399; --accent-ink:#06281c;
-      --hairline:rgba(255,255,255,.07);
-      --ease:cubic-bezier(0.32,0.72,0,1);
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
     body{
       font-family:"Inter","Segoe UI",system-ui,sans-serif;
-      background:
-        radial-gradient(900px 460px at 50% -10%, rgba(52,211,153,.08), transparent 60%),
-        var(--bg);
-      color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 28px
+      background:var(--bg);color:var(--text);
+      min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
     }
-    .brand{display:flex;align-items:center;gap:10px;margin-bottom:44px}
-    .brand img{height:30px;width:auto}
-    .brand span{font-weight:700;font-size:1rem;color:var(--text)}
-    .box{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--hairline);border-radius:20px;padding:30px 26px;text-align:center;box-shadow:0 24px 60px -24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05)}
-    h1{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;margin-bottom:5px}
-    p.sub{color:var(--muted);font-size:.85rem;margin-bottom:20px}
-    input{width:100%;padding:12px;border-radius:11px;border:1px solid var(--line);background:#0d1014;color:var(--text);font-size:.95rem;margin-bottom:10px;transition:border-color .2s var(--ease)}
-    input::placeholder{color:#5b6572}
-    input:focus{outline:none;border-color:var(--accent)}
-    button{width:100%;padding:12px;border-radius:11px;border:1px solid transparent;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:.92rem;cursor:pointer;transition:filter .2s var(--ease), transform .15s var(--ease)}
-    button:hover{filter:brightness(1.08)}
-    button:active{transform:scale(.98)}
-    button.secondary{background:transparent;color:var(--text);border:1px solid var(--line);margin-top:8px;font-weight:500}
-    button.secondary:hover{border-color:var(--muted);filter:none}
-    button:disabled{opacity:.55;cursor:default}
-    .msg{margin-top:12px;padding:10px;border-radius:10px;font-size:.85rem;display:none}
+    .msg{margin-top:12px;padding:10px;border-radius:10px;font-size:.85rem;display:none;text-align:left;line-height:1.5}
     .msg.show{display:block}
     .msg.err{background:rgba(220,38,38,.14);color:#fca5a5}
     .msg.info{background:rgba(52,211,153,.10);color:#a7f3d0}
-    .links{margin-top:22px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-    .links a{font-size:.78rem;color:var(--muted);text-decoration:none;padding:5px 11px;border:1px solid var(--line);border-radius:999px;transition:border-color .2s var(--ease)}
-    .links a:hover{color:var(--text);border-color:var(--accent)}
-    #codeInput{text-align:center;letter-spacing:8px;font-size:1.3rem}
-    .tabbtn{flex:1;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:.85rem;font-weight:500;cursor:pointer;width:auto}
-    .tabbtn:hover{color:var(--text)}
-    .tabbtn.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
-    footer{margin-top:auto;padding-top:36px;color:var(--muted);font-size:.7rem;text-align:center}
+    a{color:var(--accent)}
   </style>
 </head>
 <body>
-  <div class="brand"><img src="/scanner-app/xana-logo.png" alt="Xana" onerror="this.style.display='none'" /><span>Xana Asset System</span></div>
-
-  <div class="box">
-    <h1>Sign in</h1>
-    <p class="sub">Use your work email. Invite-only.</p>
-
-    <div id="stepEmail">
-      <div style="display:flex;gap:6px;margin-bottom:14px">
-        <button type="button" id="tabOtp" class="tabbtn active">Email me a link</button>
-        <button type="button" id="tabPwd" class="tabbtn">Password</button>
-      </div>
-
-      <div id="otpForm">
-        <input type="email" id="email" placeholder="you@xanalife.com" autocomplete="email" />
-        <button id="btnSend">Email me a sign-in link</button>
-      </div>
-
-      <div id="pwdForm" style="display:none">
-        <input type="email" id="pwdEmail" placeholder="you@xanalife.com" autocomplete="email" />
-        <input type="password" id="pwdPass" placeholder="Password" autocomplete="current-password" />
-        <button id="btnPwdSignin">Sign in</button>
-      </div>
-
-      <div id="msg" class="msg"></div>
-    </div>
-
-    <div id="stepCode" style="display:none">
-      <p class="sub" id="sentTo" style="margin-bottom:10px"></p>
-      <div class="msg info show" style="text-align:left;line-height:1.5">
-        📩 <b>Open the email we just sent</b> and tap the sign-in button inside it.<br/>
-        That button logs you in right here — nothing to type.
-      </div>
-      <button class="secondary" id="btnResend">Send again</button>
-      <button class="secondary" id="btnBack">Use a different email</button>
-      <div id="msgCode" class="msg"></div>
-    </div>
-
-    <div id="stepPasswordForm" style="display:none">
-      <p class="sub">Your account uses a temporary password set by IT.<br/>Choose your own password to continue.</p>
-      <input type="password" id="newPass1" placeholder="New password (min 8 characters)" autocomplete="new-password" />
-      <input type="password" id="newPass2" placeholder="Repeat new password" autocomplete="new-password" />
-      <button id="btnSavePass">Save password &amp; continue</button>
-      <button class="secondary" id="btnCancelPass">Sign out instead</button>
-      <div id="msgPass" class="msg"></div>
-    </div>
-
-    <div class="links">
-      <a href="/">Home</a><a href="/scan">Scan</a><a href="/assets">Assets</a><a href="/dashboard">Dashboard</a>
-    </div>
+  <div style="max-width:400px;text-align:center">
+    <img src="/scanner-app/xana-logo.png" alt="Xana" style="height:40px;margin-bottom:18px;opacity:.9" />
+    <h1 style="font-size:1.2rem;font-weight:700;margin-bottom:8px">Sign-in moved home</h1>
+    <p class="msg info show">Signing in now happens on the main page.<br/>Taking you there…</p>
+    <p style="margin-top:16px"><a href="/">Click here if nothing happens</a></p>
   </div>
-
-  <footer>Supabase is the source of truth, mirrored live to SharePoint</footer>
 
 <script>
 "use strict";
-function show(el,on){el.style.display=on?"block":"none";}
-function msg(id,text,isErr){const m=document.getElementById(id);m.textContent=text||"";m.className="msg show "+(isErr?"err":"info");}
+// Anyone landing on /login (old links, bookmarks, OTP redirects) goes to the
+// combined home page, which owns sign-in now. Preserve ?next= intent.
+(function(){
+  const next=new URLSearchParams(location.search).get("next");
+  const sessionCheck=XanaSupabase.getSession().catch(()=>null);
 
-const nextUrl=(()=>{const n=new URLSearchParams(location.search).get("next");return n&&n.startsWith("/")?n:null;})();
-
-async function send(){
-  const email=(document.getElementById("email").value||"").trim();
-  if(!email||email.indexOf("@")<1){msg("msg","Enter a valid email address.",true);return;}
-  sessionStorage.setItem("xana_otp_email",email);
-  const b=document.getElementById("btnSend");b.disabled=true;b.textContent="Sending…";
-  try{
-    const { error } = await XanaSupabase.client().auth.signInWithOtp({
-      email: email,
-      options: { emailRedirectTo: location.origin + "/?magic=1" },
-    });
-    if(error) throw error;
-    document.getElementById("sentTo").textContent="Sent to "+email;
-    show(document.getElementById("stepEmail"),false);
-    show(document.getElementById("stepCode"),true);
-  }catch(e){
-    msg("msg","Could not send the email. Check the address and try again.",true);
-  }finally{b.disabled=false;b.textContent="Email me a sign-in link";}
-}
-
-function noAccess(){
-  msg("msg","Signed in — but your account has no access assigned yet. Contact IT Admin (it@xanalife.com).",true);
-}
-
-document.getElementById("btnSend").addEventListener("click",send);
-document.getElementById("email").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
-document.getElementById("btnResend")?.addEventListener("click",send);
-document.getElementById("btnBack").addEventListener("click",()=>{
-  sessionStorage.removeItem("xana_otp_email");
-  show(document.getElementById("stepCode"),false);
-  show(document.getElementById("stepEmail"),true);
-});
-
-// ---- Tab switching: OTP link vs password sign-in ----
-function setTab(which){
-  const otp=which==="otp";
-  document.getElementById("tabOtp").classList.toggle("active",otp);
-  document.getElementById("tabPwd").classList.toggle("active",!otp);
-  show(document.getElementById("otpForm"),otp);
-  show(document.getElementById("pwdForm"),!otp);
-  msg("msg","");
-}
-document.getElementById("tabOtp").addEventListener("click",()=>setTab("otp"));
-document.getElementById("tabPwd").addEventListener("click",()=>setTab("pwd"));
-
-async function pwdSignin(){
-  const email=(document.getElementById("pwdEmail").value||"").trim();
-  const pass=document.getElementById("pwdPass").value||"";
-  if(!email||email.indexOf("@")<1){msg("msg","Enter a valid email address.",true);return;}
-  if(!pass){msg("msg","Enter your password.",true);return;}
-  const b=document.getElementById("btnPwdSignin");b.disabled=true;b.textContent="Signing in…";
-  try{
-    await XanaSupabase.signInWithPassword(email,pass);
-    // Same gate as boot(): force change before landing.
-    if(await XanaSupabase.mustChangePassword()){
-      show(document.getElementById("stepEmail"),false);
-      show(document.getElementById("stepPasswordForm"),true);
+  // If a signed-in user hits /login, honor ?next or go home.
+  sessionCheck.then(function(s){
+    if(s&&s.user){
+      const n=next&&next.startsWith("/")?next:"/";
+      location.replace(n);
       return;
     }
-    const l=await XanaSupabase.landingFor();
-    if(l){location.href=l;return;}
-    noAccess();
-  }catch(e){
-    msg("msg",/Invalid login/i.test(e.message)
-      ? "Wrong email or password. If you've forgotten it, contact IT Admin (it@xanalife.com)."
-      : e.message,true);
-  }finally{b.disabled=false;b.textContent="Sign in";}
-}
-document.getElementById("btnPwdSignin").addEventListener("click",pwdSignin);
-document.getElementById("pwdPass").addEventListener("keydown",e=>{if(e.key==="Enter")pwdSignin();});
-
-
-(async function boot(){
-  const notice=XanaSupabase.popAuthNotice();
-  if(notice) msg("msg",notice,true);
-  const session=await XanaSupabase.getSession().catch(()=>null);
-  if(session&&session.user){
-    // Manual-password onboarding: force a change before landing anywhere.
-    if(await XanaSupabase.mustChangePassword()){
-      show(document.getElementById("stepEmail"),false);
-      show(document.getElementById("stepCode"),false);
-      show(document.getElementById("stepPasswordForm"),true);
-      return;
-    }
-    const l=await XanaSupabase.landingFor();
-    if(l){location.href=l;return;}
-    noAccess();
-    return;
-  }
-  const saved=sessionStorage.getItem("xana_otp_email");
-  if(saved){
-    document.getElementById("sentTo").textContent="Sent to "+saved;
-    show(document.getElementById("stepEmail"),false);
-    show(document.getElementById("stepCode"),true);
-  }
+    // Signed out: forward to home with next preserved for after sign-in.
+    location.replace(next?"/?next="+encodeURIComponent(next):"/");
+  });
 })();
-
-document.getElementById("btnSavePass").addEventListener("click",async()=>{
-  const p1=document.getElementById("newPass1").value, p2=document.getElementById("newPass2").value;
-  if(p1.length<8){msg("msgPass","Password must be at least 8 characters.",true);return;}
-  if(p1!==p2){msg("msgPass","The two passwords don't match.",true);return;}
-  const b=document.getElementById("btnSavePass");b.disabled=true;b.textContent="Saving…";
-  try{
-    await XanaSupabase.completePasswordChange(p1);
-    const l=await XanaSupabase.landingFor();
-    if(l){location.href=l;return;}
-    noAccess();
-  }catch(e){
-    msg("msgPass",e.message,true);
-    b.disabled=false;b.textContent="Save password & continue";
-  }
-});
-document.getElementById("btnCancelPass").addEventListener("click",async()=>{
-  await XanaSupabase.signOut();location.reload();
-});
-
 </script>
 </body>
 </html>
