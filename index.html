@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <script>try{var __t=localStorage.getItem("xana_theme");document.documentElement.setAttribute("data-theme",__t||"dark")}catch(e){}</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Xana Asset System</title>
   <link rel="icon" href="/scanner-app/icon-192.png" />
@@ -18,6 +19,22 @@
       --shadow:0 24px 60px -24px rgba(0,0,0,.55);
       --ease:cubic-bezier(0.32,0.72,0,1);
     }
+    html[data-theme="light"]{
+      --bg:#f7f8fa; --panel:#ffffff; --line:#e6eaf0;
+      --text:#0b1220; --muted:#5c6b80;
+      --accent:#059669; --accent-ink:#ffffff; --sky:#0284c7;
+      --hairline:rgba(11,18,32,.06);
+      --shadow:0 24px 60px -28px rgba(11,18,32,.18);
+    }
+    html[data-theme="light"] body{
+      background:
+        radial-gradient(1100px 500px at 85% -10%, rgba(5,150,105,.06), transparent 60%),
+        radial-gradient(900px 420px at 0% 110%, rgba(2,132,199,.05), transparent 55%),
+        var(--bg);
+    }
+    html[data-theme="light"] input{background:#ffffff;color:var(--text)}
+    html[data-theme="light"] input::placeholder{color:#8a94a6}
+    html[data-theme="light"] .tabbtn{color:var(--muted)}
     *{box-sizing:border-box;margin:0;padding:0}
     body{
       font-family:"Geist","Segoe UI",system-ui,sans-serif;
@@ -31,6 +48,9 @@
 
     /* header row */
     .top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:52px}
+    .topright{display:flex;align-items:center;gap:12px}
+    .theme-toggle{background:transparent;border:1px solid var(--line);width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;font-size:.95rem;cursor:pointer;color:var(--text);border-radius:50%;transition:border-color .2s var(--ease),transform .3s var(--ease)}
+    .theme-toggle:hover{border-color:var(--muted);transform:rotate(15deg)}
     .brand{display:flex;align-items:center;gap:10px}
     .brand img{height:30px;width:auto}
     .brand span{font-weight:700;font-size:1rem;letter-spacing:-.01em;color:var(--text)}
@@ -125,7 +145,10 @@
 <div class="wrap">
   <div class="top">
     <div class="brand"><img src="/scanner-app/xana-logo.png" alt="" /><span>Xana Asset System</span></div>
-    <div id="who"></div>
+    <div class="topright">
+      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
+      <div id="who"></div>
+    </div>
   </div>
 
   <section class="hero">
@@ -205,6 +228,10 @@
 
 <script>
 "use strict";
+const STORAGE_THEME="xana_theme";
+function applyThemeLanding(){const s=localStorage.getItem(STORAGE_THEME)||"dark";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
+applyThemeLanding();
+document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
 function show(el,on){el.style.display=on?"block":"none";}
 function msg(id,text,isErr){const m=document.getElementById(id);if(!m)return;m.textContent=text||"";m.className="msg show "+(isErr?"err":"info");}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c];});}
