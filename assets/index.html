@@ -136,6 +136,7 @@
   .sheet-backdrop { transition: opacity var(--duration-base) var(--ease-out); }
   .sheet-panel { transition: transform var(--duration-slow) var(--ease-spring); }
   #main, #detail { animation: rise var(--duration-base) var(--ease-out); }
+  #detail { scroll-margin-top: 86px; }   /* clear the sticky navbar when scrolled to */
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   /* --- premium pass: grain, focus rings, bezel toolbar, segmented view, skeletons --- */
   body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.04;
@@ -472,6 +473,7 @@ function showDetail(it){
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
     '<div class="row"><span>Last Verified</span><span>'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
+    '</div><div id="editBar"></div><div class="detail-actions"><button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button><span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>'+
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
@@ -521,7 +523,14 @@ function showDetail(it){
     await loadEvents(current,evPanel);
     this.textContent="Hide events";
   });
-  detail.scrollIntoView({behavior:"smooth"});
+  // Glide down to the card. A guarded corrective snap follows: if the
+  // smooth pass was interrupted (background tabs throttle frames), it
+  // finishes the trip; if the glide already arrived, it does nothing.
+  detail.scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => {
+    if (Math.abs(detail.getBoundingClientRect().top - 86) > 6)
+      detail.scrollIntoView({ block: "start" });
+  }, 650);
 }
 const FIELD_LABELS={title:"Tag",asset_tag:"Asset tag",asset_type:"Type",model:"Model",serial:"Serial",employee:"Employee",status:"Status",location:"Location",extra:"Details"};
 function fmtVal(v){if(v===null||v===undefined)return"—";let s=String(v).replace(/^"|"$/g,"");return s===""?"—":esc(s);}
