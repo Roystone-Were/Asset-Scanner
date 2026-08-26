@@ -486,8 +486,8 @@ function showDetail(it){
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
-    '<div class="row"><span>Last Verified</span><span>'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions"><button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button><span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>'+
+    '<div class="row"><span>Last Verified</span><span id="lastVerifiedVal">'+(fmtWhen(it.lastVerified)||"—")+'</span></div>' +
+    '</div><div id="editBar"></div><div class="detail-actions"><button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button>'+(canWrite()?'<button class="btn secondary" id="verifyBtn">✓ Verify</button>':'')+'<span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>'+
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
@@ -495,6 +495,13 @@ function showDetail(it){
     cloneIntoForm(it);
   });
   document.getElementById("rescanBtn")?.addEventListener("click",startScan);
+  // Verify — stamps LastVerified/LastVerifiedBy (same write the scanner-app makes)
+  document.getElementById("verifyBtn")?.addEventListener("click",async function(){
+    this.disabled=true;this.textContent="Verifying…";
+    const r=await verifyAsset(it);
+    if(r.ok){this.textContent="✓ Verified "+fmtWhen(r.when);refreshVerifiedRow(it);}
+    else{this.disabled=false;this.textContent="✓ Verify";toast("Verify failed: "+(r.reason||""),true);}
+  });
   // Delete — admin/super_admin only, confirm dialog, moves to recycle bin
   document.getElementById("delBtn")?.addEventListener("click",()=>showDeleteDialog(it));
   // inline editing — tap a value to change it
@@ -1180,14 +1187,31 @@ function setWalk(on){
 document.getElementById("walkToggle")?.addEventListener("click",()=>{beep(_walk?440:880);setWalk(!_walk);});
 document.getElementById("scanClose")?.addEventListener("click",stopScan);
 document.getElementById("scanBackdrop")?.addEventListener("click",stopScan);
+function refreshVerifiedRow(it){
+  const el=document.getElementById("lastVerifiedVal");
+  if(el)el.textContent=fmtWhen(it.lastVerified)||"—";
+}
+// one verification write shared by scan hits and the detail-card button
+async function verifyAsset(it){
+  if(!canWrite())return{ok:false,reason:"read-only role"};
+  const when=new Date().toISOString();
+  try{
+    await XanaSupabase.updateAsset(it.id,{LastVerified:when,LastVerifiedBy:account.username});
+    it.lastVerified=when;it.lastVerifiedBy=account.username;
+    return{ok:true,when};
+  }catch(e){return{ok:false,reason:(e&&e.message)||String(e)};}
+}
 function handleScanHit(raw){
   const it=Xana.findAssetByCode(allItems,raw);
-  if(it){
-    showDetail(it);
-    toast("Opened "+(it.tag||"asset #"+it.id),false);
-  }else{
-    toast("No asset matches \u201C"+Xana.cleanScanInput(raw)+"\u201D",true);
-  }
+  if(!it){toast("No asset matches \u201C"+Xana.cleanScanInput(raw)+"\u201D",true);return;}
+  showDetail(it);
+  toast("Opened "+(it.tag||"asset #"+it.id),false);
+  // a physical scan IS the verification — stamp it automatically
+  verifyAsset(it).then(r=>{
+    if(!r.ok)return;               // read-only roles just open the record
+    refreshVerifiedRow(it);
+    toast("✓ Verified "+(it.tag||"asset #"+it.id)+" — "+account.username,false);
+  }).catch(()=>{/* never block the open on a failed stamp */});
 }
 let _keyBuf=[];
 document.addEventListener("keydown",(e)=>{
