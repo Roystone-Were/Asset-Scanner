@@ -38,7 +38,7 @@
   body{font-family:"Geist","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
   /* --- Hurry-style top navbar (green shade + blur, not transparent) --- */
   /* navbar styles live in /css/nav.css */
-  .theme-toggle{background:transparent;border:1px solid var(--border);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;color:var(--text);border-radius:8px}
+  .theme-toggle{background:transparent;border:1px solid var(--border);min-width:32px;width:auto;height:32px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600;cursor:pointer;color:var(--text);border-radius:999px}
   .theme-toggle:hover{background:var(--card2)}
   .menu-button{display:none;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text)}
   .menu-button .icon{font-size:1rem}
@@ -151,7 +151,7 @@
   .skel{border-radius:10px;background:linear-gradient(100deg,var(--card2) 40%,color-mix(in srgb,var(--card2) 35%,var(--card)) 50%,var(--card2) 60%);background-size:200% 100%;animation:shimmer 1.4s var(--ease-out) infinite}
   @keyframes shimmer{to{background-position:-200% 0}}
   .empty{text-align:center;padding:52px 20px}
-  .empty-ico{font-size:34px;opacity:.45;margin-bottom:8px}
+  
   .empty h3{font-size:1rem;font-weight:600;margin-bottom:4px}
   .empty p{color:var(--muted);font-size:.84rem;max-width:42ch;margin:0 auto 14px}
   .walkstats{display:flex;gap:14px;font-size:.8rem;color:var(--muted);align-items:center}
@@ -185,7 +185,7 @@
       <a href="/admin">Admin</a>
     </div>
     <div class="navbar_right">
-      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
+      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">Light</button>
       <button class="menu-button" id="menuBtn"><span>Menu</span><span class="icon">☰</span></button>
     </div>
   </div>
@@ -201,14 +201,14 @@
         <button type="button" id="segPeople">People</button>
       </div>
       <input type="text" id="search" placeholder="Search tag, serial, model, employee…" autocomplete="off" />
-      <button class="btn book" id="btnScan">📷 Scan</button>
+      <button class="btn book" id="btnScan">Scan</button>
       <button class="btn" id="btnAdd">+ Add Asset</button>
     </div>
     <div id="main"><div class="card"><div class="skel" style="height:16px;width:32%;margin-bottom:16px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px"></div></div></div>
     <div id="people" class="hidden"></div>
     <div id="detail"></div>
   </div>
-  <div id="denied" class="hidden"><div class="card"><div class="msg err">🔒 Access required — Assets is limited to signed-in staff with a viewer role. Contact IT Admin: <b>it@xanalife.com</b></div></div></div>
+  <div id="denied" class="hidden"><div class="card"><div class="msg err">Access required — Assets is limited to signed-in staff with a viewer role. Contact IT Admin: <b>it@xanalife.com</b></div></div></div>
 </div>
 
 <!-- Add Asset Sheet -->
@@ -244,12 +244,12 @@
 <div class="sheet" id="scanOverlay">
   <div class="sheet-backdrop" id="scanBackdrop"></div>
   <div class="sheet-panel">
-    <h2>📷 Scan <button type="button" class="theme-toggle" id="scanClose">✕</button></h2>
+    <h2>Scan <button type="button" class="theme-toggle" id="scanClose">✕</button></h2>
     <div id="scanReader" style="border-radius:12px;overflow:hidden;background:#000;min-height:120px"></div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
-      <button type="button" class="btn secondary" id="walkToggle">🚶 Walk mode</button>
+      <button type="button" class="btn secondary" id="walkToggle">Walk mode</button>
       <div class="walkstats" id="walkStats" style="display:none">
-        <span>✅ <b id="walkHits">0</b></span><span>⚠️ <b id="walkMiss">0</b></span><span id="walkLast"></span>
+        <span>Hits <b id="walkHits">0</b></span><span>Miss <b id="walkMiss">0</b></span><span id="walkLast"></span>
       </div>
     </div>
     <div id="scanStatus" class="hint" style="margin-top:8px"></div>
@@ -261,8 +261,8 @@
 "use strict";
 const ADMIN_EMAIL="it@xanalife.com";
 const STORAGE_THEME="xana_theme";
-function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
-applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
+function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"Light":"Dark";}
+applyTheme(); document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"Light":"Dark";});
 
 let account=null, allItems=[], filtered=[], sortKey="tag", sortDir=1, currentPage=0; const PAGE_SIZE=30;
 // ---------- Auth (single sign-in page at /login) ----------
@@ -414,7 +414,7 @@ function applyFilters(){
 function renderTable(){
   const main=document.getElementById("main");
   if(!filtered.length){
-    main.innerHTML='<div class="card empty"><div class="empty-ico">📦</div><h3>No matching assets</h3><p>'+(allItems.length?"Try a different search, or clear the column filters.":"The register is empty — add your first asset, or scan one on the floor.")+'</p><button class="btn" id="emptyClear">Clear search</button></div>';
+    main.innerHTML='<div class="card empty"><h3>No matching assets</h3><p>'+(allItems.length?"Try a different search, or clear the column filters.":"The register is empty — add your first asset, or scan one on the floor.")+'</p><button class="btn" id="emptyClear">Clear search</button></div>';
     document.getElementById("emptyClear")?.addEventListener("click",()=>{
       document.getElementById("search").value="";
       for(const k of Object.keys(colFilters))colFilters[k]=new Set();
@@ -551,11 +551,11 @@ function renderHistory(rows){
 }
 // ---------- Asset event log (issues / repairs / transfers / maintenance) ----------
 const EV_META={
-  issue:{icon:"⚠️",label:"Issue"},
-  repair:{icon:"🔧",label:"Repair"},
-  maintenance:{icon:"🛠️",label:"Maintenance"},
-  transfer:{icon:"📍",label:"Transfer"},
-  note:{icon:"📝",label:"Note"},
+  issue:{label:"Issue"},
+  repair:{label:"Repair"},
+  maintenance:{label:"Maintenance"},
+  transfer:{label:"Transfer"},
+  note:{label:"Note"},
 };
 async function loadEvents(current,histPanel){
   try{
@@ -568,7 +568,7 @@ async function loadEvents(current,histPanel){
       const m=EV_META[r.event_type]||{icon:"•",label:r.event_type};
       const cost=r.cost!=null&&r.cost!==""?"<b>KES "+Number(r.cost).toLocaleString()+"</b> · ":"";
       const badge=(r.event_type==="issue"&&!r.resolved)?' <span class="pill" style="background:#dc2626;font-size:.6rem;padding:2px 7px">OPEN</span>':"";
-      return '<div class="hrow"><span class="hwhat">'+m.icon+" <b>"+m.label+'</b>'+badge+" — "+esc(r.description)+"<br/><span class=\"hwhen\">"+cost+esc(r.created_by||"—")+" · "+new Date(r.event_date).toLocaleDateString()+'</span></span></div>';
+      return '<div class="hrow"><span class="hwhat"><b>'+m.label+'</b>'+badge+" — "+esc(r.description)+"<br/><span class=\"hwhen\">"+cost+esc(r.created_by||"—")+" · "+new Date(r.event_date).toLocaleDateString()+'</span></span></div>';
     }).join("");
   }catch(err){
     histPanel.innerHTML='<div class="msg err">'+esc(err.message||err)+'</div>';
@@ -867,7 +867,7 @@ function renderPeople(){
   const q=(document.getElementById("search").value||"").trim().toLowerCase();
   const groups=Xana.groupPeopleEnriched(allItems).filter(g=>!q||g.name.toLowerCase().includes(q));
   if(!groups.length){
-    host.innerHTML='<div class="card empty"><div class="empty-ico">👥</div><h3>'+(q?"No employees match":"No assigned assets yet")+'</h3><p>'+(q?"Try a different name.":"Assets with an employee assigned appear here — set Employee on an asset to start tracking assignments.")+'</p></div>';
+    host.innerHTML='<div class="card empty"><h3>'+(q?"No employees match":"No assigned assets yet")+'</h3><p>'+(q?"Try a different name.":"Assets with an employee assigned appear here — set Employee on an asset to start tracking assignments.")+'</p></div>';
     return;
   }
   host.innerHTML=groups.map(g=>{
@@ -977,7 +977,7 @@ function onDecode(text){
     if(hit)_walkHits++;else _walkMiss++;
     document.getElementById("walkHits").textContent=_walkHits;
     document.getElementById("walkMiss").textContent=_walkMiss;
-    document.getElementById("walkLast").textContent=(hit?"✅ ":"⚠️ ")+Xana.cleanScanInput(text);
+    document.getElementById("walkLast").textContent=(hit?"✓ ":"✗ ")+Xana.cleanScanInput(text);
     flashScan(hit);beep(hit?880:220);
     if(navigator.vibrate)navigator.vibrate(hit?30:[30,50,30]);
     return;
@@ -1034,7 +1034,7 @@ overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.
 // Asset Type dropdown is populated from app_choices in startApp() below
 async function startApp(){
   const state=document.getElementById("authState");
-  state.textContent="✅ Signed in as "+account.username;
+  state.textContent="Signed in as "+account.username;
   let roles=[];
   try{roles=await XanaSupabase.myRoles();}catch(e){}
   currentRoles=roles;

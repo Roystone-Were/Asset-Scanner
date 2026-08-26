@@ -20,7 +20,7 @@ const DEP_COLORS = {
     const stored = localStorage.getItem(STORAGE_THEME) || "light";
     document.documentElement.setAttribute("data-theme", stored);
     const tog = document.getElementById("themeToggle");
-    if (tog) tog.textContent = stored === "dark" ? "☀️" : "☽";
+    if (tog) tog.textContent = stored === "dark" ? "Light" : "Dark";
   }
   applyTheme(); // apply immediately on script load
   document.addEventListener("DOMContentLoaded", () => {
@@ -30,7 +30,7 @@ const DEP_COLORS = {
         const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", cur);
         localStorage.setItem(STORAGE_THEME, cur);
-        tog.textContent = cur === "dark" ? "☀️" : "☽";
+        tog.textContent = cur === "dark" ? "Light" : "Dark";
       });
     }
   });
@@ -157,12 +157,12 @@ const DEP_COLORS = {
     ]);
     if (openIssues.error || recent.error) {
       // A failed events query returns no thrown error - never present
-      // "None open 🎉" when we simply could not look.
+      // "None open" when we simply could not look.
       console.warn("asset_events query failed:", openIssues.error || recent.error);
       const panel = document.createElement("div");
       panel.className = "panel";
       panel.style.marginTop = "14px";
-      panel.innerHTML = '<h2>🛠️ Field activity</h2><div style="font-size:.82rem;color:var(--muted)">Temporarily unavailable — open issues and repairs could not be loaded.</div>';
+      panel.innerHTML = '<h2>Field activity</h2><div style="font-size:.82rem;color:var(--muted)">Temporarily unavailable — open issues and repairs could not be loaded.</div>';
       main.appendChild(panel);
       return;
     }
@@ -172,12 +172,12 @@ const DEP_COLORS = {
     const panel = document.createElement("div");
     panel.className = "panel";
     panel.style.marginTop = "14px";
-    let html = "<h2>🛠️ Field activity</h2>";
+    let html = "<h2>Field activity</h2>";
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
       '<div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Open issues (' + issues.length + ')</h3>' +
       (issues.length
         ? issues.map(i => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[i.item_id] || "#" + i.item_id) + "</b> — " + esc(i.description) + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(i.event_date).toLocaleDateString() + " · " + esc(i.created_by || "—") + '</span></div>').join("")
-        : '<div style="font-size:.8rem;color:var(--muted)">None open 🎉</div>') +
+        : '<div style="font-size:.8rem;color:var(--muted)">None open</div>') +
       '</div><div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Recent repairs &amp; maintenance</h3>' +
       (repairs.length
         ? repairs.map(r => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[r.item_id] || "#" + r.item_id) + "</b> — " + esc(r.description) + (r.cost ? ' <b>KES ' + Number(r.cost).toLocaleString() + "</b>" : "") + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(r.event_date).toLocaleDateString() + '</span></div>').join("")
@@ -209,8 +209,8 @@ const DEP_COLORS = {
       financePanel(d.finance) +
       `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
       healthStrip(h) +
-      `<div class="panel" id="warrantyPanel"><h2>🛡️ Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
-      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportDep" style="margin-left:auto;">📊 Depreciation export</button><button class="editbtn" id="exportCsv">📥 Export CSV</button></div></div>`;
+      `<div class="panel" id="warrantyPanel"><h2>Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
+      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="editbtn" id="exportCsv">Export CSV</button></div></div>`;
 
     // Now populate the table after the DOM elements exist
     renderTable();

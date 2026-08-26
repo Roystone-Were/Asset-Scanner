@@ -114,7 +114,7 @@
     <div class="navbar_menu">
       <a href="/">Home</a><a href="/assets">Assets</a><a href="/dashboard">Dashboard</a><a class="active" href="/admin">Admin</a>
     </div>
-    <button type="button" class="theme-toggle" id="themeToggle">☀️</button>
+    <button type="button" class="theme-toggle" id="themeToggle">Light</button>
   </div>
 </nav>
 
@@ -221,8 +221,8 @@
 <script>
 "use strict";
 const STORAGE_THEME="xana_theme";
-function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);document.getElementById("themeToggle").textContent=s==="dark"?"☀️":"☽";}
-applyTheme();document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
+function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);document.getElementById("themeToggle").textContent=s==="dark"?"Light":"Dark";}
+applyTheme();document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"Light":"Dark";});
 
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 let account=null, accessToken=null;
@@ -270,7 +270,7 @@ async function loadBin(){
     el.innerHTML=SKEL_ROWS(3);
     const rows=await XanaSupabase.listDeletedAssets();
     if(!rows.length){
-      el.innerHTML='<div class="empty"><div class="empty-ico">🗑️</div><h3>Recycle bin is empty</h3><p>Deleted assets rest here before they are gone for good. Nothing to restore right now.</p></div>';
+      el.innerHTML='<div class="empty"><h3>Recycle bin is empty</h3><p>Deleted assets rest here before they are gone for good. Nothing to restore right now.</p></div>';
       return;
     }
     el.innerHTML="<table><thead><tr><th>Tag</th><th>Type</th><th>Model</th><th>Serial</th><th>Deleted</th><th></th></tr></thead><tbody>"+
@@ -308,7 +308,7 @@ async function loadUsers(){
     const users=d.users||[];
     document.getElementById("userCount").textContent=users.length;
     if(!users.length){
-      el.innerHTML='<div class="empty"><div class="empty-ico">👤</div><h3>No users yet</h3><p>Invite your first teammate — they get an email that signs them straight in.</p><button id="emptyInvite">Invite a user</button></div>';
+      el.innerHTML='<div class="empty"><h3>No users yet</h3><p>Invite your first teammate — they get an email that signs them straight in.</p><button id="emptyInvite">Invite a user</button></div>';
       document.getElementById("emptyInvite")?.addEventListener("click",openInvite);
       return;
     }
@@ -525,7 +525,7 @@ async function loadSync(){
     el.innerHTML=SKEL_ROWS(3);
     const d=await api("sync_health");
     const data=d.rows||[];
-    if(!(data||[]).length){el.innerHTML='<div class="empty"><div class="empty-ico">✓</div><h3>Everything is mirrored</h3><p>Every change has reached the SharePoint mirror. Failed rows stop retrying after 5 attempts and would appear here.</p></div>';return;}
+    if(!(data||[]).length){el.innerHTML='<div class="empty"><h3>Everything is mirrored</h3><p>Every change has reached the SharePoint mirror. Failed rows stop retrying after 5 attempts and would appear here.</p></div>';return;}
     el.innerHTML="<table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
       data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill st-"+esc(r.status)+"'>"+esc(r.status)+"</span></td><td class='num'>"+r.attempts+"</td><td class='num'>"+new Date(r.created_at).toLocaleString()+"</td><td class='err-cell'>"+esc(r.last_error||"")+"</td></tr>").join("")+
       "</tbody></table>";
@@ -545,7 +545,7 @@ async function loadSync(){
     location.href=l||"/login";
     return;
   }
-  state.textContent="✅ Signed in as "+account.username;
+  state.textContent="Signed in as "+account.username;
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").style.display="block";
   const boot=document.getElementById("boot");

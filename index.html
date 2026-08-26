@@ -49,8 +49,8 @@
     /* header row */
     .top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:52px}
     .topright{display:flex;align-items:center;gap:12px}
-    .theme-toggle{background:transparent;border:1px solid var(--line);width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;font-size:.95rem;cursor:pointer;color:var(--text);border-radius:50%;transition:border-color .2s var(--ease),transform .3s var(--ease)}
-    .theme-toggle:hover{border-color:var(--muted);transform:rotate(15deg)}
+    .theme-toggle{background:transparent;border:1px solid var(--line);min-width:34px;width:auto;height:34px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600;cursor:pointer;color:var(--text);border-radius:999px;transition:border-color .2s var(--ease)}
+    .theme-toggle:hover{border-color:var(--muted)}
     .brand{display:flex;align-items:center;gap:10px}
     .brand img{height:30px;width:auto}
     .brand span{font-weight:700;font-size:1rem;letter-spacing:-.01em;color:var(--text)}
@@ -146,7 +146,7 @@
   <div class="top">
     <div class="brand"><img src="/scanner-app/xana-logo.png" alt="" /><span>Xana Asset System</span></div>
     <div class="topright">
-      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">☀️</button>
+      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">Dark</button>
       <div id="who"></div>
     </div>
   </div>
@@ -185,7 +185,7 @@
       <div id="stepCode" style="display:none">
         <div class="sub" id="sentTo" style="margin-bottom:10px"></div>
         <div class="msg info show" style="text-align:left;line-height:1.5">
-          📩 <b>Open the email we just sent</b> and tap the sign-in button inside it.<br/>
+          <b>Open the email we just sent</b> and tap the sign-in button inside it.<br/>
           That button logs you in right here — nothing to type.
         </div>
         <button type="button" class="linkish" id="btnResend">Send again</button><br/>
@@ -229,9 +229,9 @@
 <script>
 "use strict";
 const STORAGE_THEME="xana_theme";
-function applyThemeLanding(){const s=localStorage.getItem(STORAGE_THEME)||"dark";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"☀️":"☽";}
+function applyThemeLanding(){const s=localStorage.getItem(STORAGE_THEME)||"dark";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"Light":"Dark";}
 applyThemeLanding();
-document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"☀️":"☽";});
+document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"Light":"Dark";});
 function show(el,on){el.style.display=on?"block":"none";}
 function msg(id,text,isErr){const m=document.getElementById(id);if(!m)return;m.textContent=text||"";m.className="msg show "+(isErr?"err":"info");}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c];});}

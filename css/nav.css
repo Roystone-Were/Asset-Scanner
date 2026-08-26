@@ -36,12 +36,12 @@
 }
 .navbar_right{display:flex;align-items:center;gap:8px}
 .theme-toggle{
-  background:transparent;border:1px solid var(--line);width:34px;height:34px;
+  background:transparent;border:1px solid var(--line);min-width:34px;width:auto;height:34px;padding:0 12px;
   display:inline-flex;align-items:center;justify-content:center;
-  font-size:.95rem;cursor:pointer;color:var(--text);border-radius:50%;
-  transition:border-color .2s var(--ease-out), transform .3s var(--ease-out);
+  font-size:.72rem;font-weight:600;cursor:pointer;color:var(--text);border-radius:999px;
+  transition:border-color .2s var(--ease-out);
 }
-.theme-toggle:hover{border-color:var(--muted);transform:rotate(15deg)}
+.theme-toggle:hover{border-color:var(--muted)}
 
 @media(max-width:900px){
   .navbar{padding-top:10px}
