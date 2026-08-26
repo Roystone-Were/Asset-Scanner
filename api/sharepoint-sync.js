@@ -267,7 +267,10 @@ async function processRow(row, assetsById, token) {
   if (row.op === "insert" || row.op === "update") {
     if (!asset) {
       // Asset row vanished (e.g. deleted before its insert synced).
-      if (gid) await graph("DELETE", itemsUrl() + "/" + gid, undefined, token);
+      if (gid) {
+        try { await graph("DELETE", itemsUrl() + "/" + gid, undefined, token); }
+        catch (e) { if (e.status !== 404) throw e; } // already gone = desired end state
+      }
       await markDone(row);
       return { id: row.id, op: row.op, result: "closed-no-asset" };
     }
@@ -293,7 +296,15 @@ async function processRow(row, assetsById, token) {
   }
 
   if (row.op === "delete") {
-    if (gid) await graph("DELETE", itemsUrl() + "/" + gid, undefined, token);
+    if (gid) {
+      try {
+        await graph("DELETE", itemsUrl() + "/" + gid, undefined, token);
+      } catch (e) {
+        // Already gone (double-delete or manual removal in SharePoint) =
+        // desired end state; treat as success so the row completes.
+        if (e.status !== 404) throw e;
+      }
+    }
     await markDone(row);
     return { id: row.id, op: "delete", result: gid ? "deleted" : "nothing-in-sp" };
   }

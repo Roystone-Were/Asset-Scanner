@@ -75,7 +75,7 @@ select cron.schedule(
   'sharepoint-sync-retry',
   '*/5 * * * *',
   $job$
-  select extensions.net.http_post(
+  select net.http_post(
     url     := (select value from public.app_config where key = 'sync_worker_url'),
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
