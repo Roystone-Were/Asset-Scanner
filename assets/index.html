@@ -356,7 +356,7 @@ function distinctValues(key){
     const v=(it[key]||"").toString().trim();
     s.add(v||"(blank)");
   }
-  return [...s].sort((a,b)=>a.localeCompare(b));
+  return [...s].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
 }
 function colFilterCount(){
   return Object.values(colFilters).reduce((n,set)=>n+set.size,0);
@@ -413,8 +413,11 @@ function applyFilters(){
     return true;
   });
   filtered.sort((a,b)=>{
-    const av=(a[sortKey]||"").toString().toLowerCase(), bv=(b[sortKey]||"").toString().toLowerCase();
-    if(av<bv) return -sortDir; if(av>bv) return sortDir; return 0;
+    // Natural sort: XL-2 < XL-10 < XL-11 < XL-100 (numeric collation),
+    // case-insensitive, with item_id as a stable tie-break.
+    const cmp=(a[sortKey]||"").toString().localeCompare((b[sortKey]||"").toString(),undefined,{numeric:true,sensitivity:"base"});
+    if(cmp) return cmp*sortDir;
+    return String(a.item_id||"").localeCompare(String(b.item_id||""),undefined,{numeric:true})*sortDir;
   });
   currentPage=0; renderTable();
 }
