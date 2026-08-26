@@ -233,7 +233,7 @@
     <label>Department *</label><select id="addDept"><option value="">— select —</option></select>
     <label>Condition</label><input type="text" id="addCondition" placeholder="New" />
     <label>Purchase Date</label><input type="date" id="addPDate" />
-    <label>Purchase Price (KES)</label><input type="number" id="addPrice" placeholder="120000" />
+    <label id="addPriceLabel">Purchase Price (KES)</label><input type="number" id="addPrice" placeholder="120000" />
     <label class="chk"><input type="checkbox" id="addPriceEstimate" /> Price is an estimate (pending invoice)</label>
     <label>Warranty (months from purchase)</label><input type="number" id="addWarrantyMonths" min="0" placeholder="e.g. 12, 24, 36 — blank = none" />
     <label>Image</label>
@@ -242,6 +242,10 @@
       <img id="imgPreview" alt="preview" style="max-width:100%;max-height:180px;border-radius:8px;margin-top:8px;display:none" />
       <div id="imgName" style="font-size:.7rem;color:var(--muted);margin-top:4px"></div>
     </label>
+    <label class="chk"><input type="checkbox" id="addBundle" /> Bundled setup (e.g. desktop + monitor + keyboard + mouse)</label>
+    <div id="bundleRows" class="hidden"></div>
+    <button type="button" class="btn secondary" id="bundleAddRow" style="display:none;margin-top:8px">+ Add component</button>
+    <div id="bundleSum" style="display:none;font-size:.75rem;color:var(--muted);margin-top:6px"></div>
     <div id="addMsg" style="margin-top:2px"></div>
     <div class="form-actions"><button class="btn secondary" id="addCancel">Cancel</button><button class="btn" id="addSave">Save Asset</button></div>
   </div>
@@ -794,6 +798,130 @@ document.getElementById("addImage")?.addEventListener("change",e=>{
   r.onload=()=>{const img=document.getElementById("imgPreview");img.src=r.result;img.style.display="block";pendingImage=r.result;};
   r.readAsDataURL(f);
 });
+// ---------- Bundled setup: one submit -> tower (main form) + component rows ----------
+const BUNDLE_PRESET=[{type:"Monitor"},{type:"Keyboard"},{type:"Mouse"}];
+// Default share of the total per component, in basis points (10000 = 100%) so
+// allocations stay exact in whole KES. The tower/CPU share (7000) belongs to the
+// main form; preset rows split the remaining 30% (2300/400/300). Any other row
+// type (second monitor, UPS, printer, …) defaults to 1000 until edited.
+const BUNDLE_ROW_BP={Monitor:2300,Keyboard:400,Mouse:300};
+const BUNDLE_OTHER_BP=1000;
+const BUNDLE_TOWER_BP=7000;
+const addBundle=document.getElementById("addBundle");
+const bundleRowsEl=document.getElementById("bundleRows");
+const bundleAddRowBtn=document.getElementById("bundleAddRow");
+const bundleSumEl=document.getElementById("bundleSum");
+function bundleOn(){return addBundle.checked;}
+function bundleRowBP(type){return BUNDLE_ROW_BP[type]||BUNDLE_OTHER_BP;}
+function bundleRowHTML(idx){
+  const proto=document.getElementById("addType"); // same option list the main select uses (app_choices + fallback)
+  return '<div class="b-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px">'
+    +'<div style="display:flex;gap:6px;align-items:center"><b style="font-size:.72rem;color:var(--muted)">Component '+idx+'</b>'
+    +'<span style="flex:1"></span>'
+    +'<button type="button" class="btn secondary b-remove" title="Remove component" style="padding:2px 10px">✕</button></div>'
+    +'<div style="display:flex;gap:6px;margin-top:6px"><select class="b-type" style="flex:1"><option value="">— select type —</option>'+(proto?proto.innerHTML:"")+'</select>'
+    +'<input class="b-tag" placeholder="Tag *" style="width:45%" /></div>'
+    +'<input class="b-serial" placeholder="Serial (optional)" style="margin-top:6px" />'
+    +'<input class="b-model" placeholder="Model" style="margin-top:6px" />'
+    +'<input type="number" class="b-price" placeholder="Price (KES)" style="margin-top:6px" /></div>';
+}
+// suggested tags continue after the max XL-<n> seen in the register, the main tag, or other rows
+function nextBundleTags(){
+  let next=0;
+  for(const x of allItems){const m=/^XL-(\d+)$/.exec((x.tag||"").trim());if(m)next=Math.max(next,parseInt(m[1],10));}
+  const mm=/^XL-(\d+)$/.exec((document.getElementById("addTag").value||"").trim());
+  if(mm)next=Math.max(next,parseInt(mm[1],10));
+  const taken=new Set();
+  for(const row of [...bundleRowsEl.children]){
+    const v=(row.querySelector(".b-tag").value||"").trim();
+    if(v){taken.add(v.toLowerCase());const m=/^XL-(\d+)$/.exec(v);if(m)next=Math.max(next,parseInt(m[1],10));}
+  }
+  for(const row of [...bundleRowsEl.children]){
+    const inp=row.querySelector(".b-tag");
+    if((inp.value||"").trim())continue;
+    do{next++;}while(taken.has("xl-"+next));
+    inp.value="XL-"+next;taken.add("xl-"+next);
+  }
+}
+function updateBundleSum(){
+  if(!bundleOn())return;
+  bundleSumEl.style.display="";
+  const tRaw=(document.getElementById("addPrice").value||"").trim();
+  const T=tRaw!==""&&isFinite(parseFloat(tRaw))?Math.round(parseFloat(tRaw)):null;
+  let sum=0,incomplete=false;
+  for(const r of [...bundleRowsEl.children]){
+    const raw=(r.querySelector(".b-price").value||"").trim();
+    if(raw===""){incomplete=true;continue;}
+    const v=parseFloat(raw);
+    if(!isFinite(v)){incomplete=true;continue;}
+    sum+=v;
+  }
+  // the main field keeps showing the total; the tower books the residual at save time
+  const tower=T!=null?T-sum:0;
+  const over=T!=null&&tower<0; // component prices exceed the total
+  const fmt=n=>"KES "+Math.round(n).toLocaleString("en-US");
+  bundleSumEl.textContent="Allocated "+fmt(sum+Math.max(0,tower))+(T!=null?" of "+fmt(T):"")+(incomplete?" — every component needs a price":"");
+  bundleSumEl.style.color=(over||incomplete)?"#fca5a5":"var(--muted)";
+}
+// distribute the total across rows whose price the user has not manually edited (per-row dirty flag,
+// cleared only by resetBundle): non-dirty rows renormalize over the pool the tower leaves; dirty rows untouched.
+function allocateBundlePrices(){
+  if(!bundleOn())return;
+  const total=parseFloat(document.getElementById("addPrice").value);
+  if(!(total>0)){updateBundleSum();return;}
+  const T=Math.round(total);
+  const rows=[...bundleRowsEl.children];
+  const nd=rows.filter(r=>r.dataset.dirty!=="1");
+  let dirtySum=0;
+  for(const r of rows){if(r.dataset.dirty==="1"){const v=parseFloat(r.querySelector(".b-price").value);if(isFinite(v))dirtySum+=v;}}
+  const pool=Math.max(0,T-Math.round(T*BUNDLE_TOWER_BP/10000)-Math.round(dirtySum));
+  if(nd.length){
+    const ssum=nd.reduce((s,r)=>s+bundleRowBP(r.querySelector(".b-type").value),0)||1;
+    const alloc=nd.map(r=>Math.floor(pool*bundleRowBP(r.querySelector(".b-type").value)/ssum));
+    const rem=pool-alloc.reduce((a,b)=>a+b,0);
+    let bi=0;for(let i=1;i<alloc.length;i++)if(alloc[i]>alloc[bi])bi=i; // largest non-dirty row absorbs rounding remainder
+    alloc[bi]+=rem;
+    nd.forEach((r,i)=>{r.querySelector(".b-price").value=String(alloc[i]);});
+  }
+  updateBundleSum();
+}
+function resetBundle(){
+  addBundle.checked=false;
+  document.getElementById("addPriceLabel").textContent="Purchase Price (KES)";
+  bundleRowsEl.classList.add("hidden");
+  bundleRowsEl.innerHTML="";
+  bundleAddRowBtn.style.display="none";
+  bundleSumEl.style.display="none";
+  bundleSumEl.style.color="var(--muted)";
+}
+addBundle.addEventListener("change",()=>{
+  if(bundleOn()){
+    document.getElementById("addPriceLabel").textContent="Total bundle price (KES)";
+    bundleRowsEl.innerHTML=BUNDLE_PRESET.map((p,i)=>bundleRowHTML(i+1)).join("");
+    [...bundleRowsEl.children].forEach((r,i)=>{r.querySelector(".b-type").value=BUNDLE_PRESET[i].type;});
+    bundleRowsEl.classList.remove("hidden");
+    bundleAddRowBtn.style.display="";
+    nextBundleTags();allocateBundlePrices();
+  }else{
+    resetBundle();
+  }
+});
+bundleAddRowBtn.addEventListener("click",()=>{
+  bundleRowsEl.insertAdjacentHTML("beforeend",bundleRowHTML(bundleRowsEl.children.length+1));
+  nextBundleTags();allocateBundlePrices();
+});
+bundleRowsEl.addEventListener("input",e=>{
+  const row=e.target.closest(".b-row");if(!row)return;
+  if(e.target.classList.contains("b-price")){row.dataset.dirty="1";updateBundleSum();}
+  else if(e.target.classList.contains("b-type"))allocateBundlePrices(); // share changed -> reallocate untouched rows
+  else updateBundleSum();                                               // typing a tag must not fight the user
+});
+bundleRowsEl.addEventListener("click",e=>{
+  const btn=e.target.closest(".b-remove");if(!btn)return;
+  btn.closest(".b-row").remove();
+  nextBundleTags();allocateBundlePrices();
+});
+document.getElementById("addPrice").addEventListener("input",()=>{allocateBundlePrices();});
 document.getElementById("addSave")?.addEventListener("click", async()=>{
   const tagInput=document.getElementById("addTag");
   const tag=(tagInput.value||"").trim();
@@ -808,6 +936,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   const pDate=document.getElementById("addPDate").value;
   const pPrice=(document.getElementById("addPrice").value||"").trim();
   const est=document.getElementById("addPriceEstimate").checked;
+  const wMonths=(document.getElementById("addWarrantyMonths").value||"").trim();
   const msg=document.getElementById("addMsg");
   // required at creation: TAG, serial, department, price (or estimate flag).
   // Tags are user-entered — no auto-generation.
@@ -817,41 +946,81 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(!serial) problems.push("Serial Number is required.");
   if(!dept) problems.push("Department is required.");
   if(pPrice===""&&!est) problems.push("Purchase Price is required — or tick \u201Cestimate pending\u201D.");
+  // Bundled setup: the main form describes the tower; every component row needs Tag, Type, Price.
+  let components=null;
+  if(bundleOn()){
+    components=[];
+    [...bundleRowsEl.children].forEach((row,i)=>{
+      const rtype=(row.querySelector(".b-type").value||"").trim();
+      const rtag=(row.querySelector(".b-tag").value||"").trim();
+      const rserial=(row.querySelector(".b-serial").value||"").trim();
+      const rmodel=(row.querySelector(".b-model").value||"").trim();
+      const rprice=(row.querySelector(".b-price").value||"").trim();
+      const label=rtype||("Component "+(i+1));
+      if(!rtag) problems.push(label+": Tag is required.");
+      if(!rtype) problems.push(label+": Type is required.");
+      if(rprice===""||!isFinite(parseFloat(rprice))) problems.push(label+": Price is required.");
+      components.push({tag:rtag,serial:rserial,model:rmodel,type:rtype,price:rprice});
+    });
+    // the tower books the residual of the total after the component rows
+    let rowSum=0;
+    for(const c of components){const v=parseFloat(c.price);if(isFinite(v))rowSum+=v;}
+    const total=parseFloat(pPrice);
+    const towerPrice=pPrice!==""&&isFinite(total)?String(Math.round(total-rowSum)):"";
+    components.unshift({tag,serial,model,type,price:towerPrice});
+  }
   if(problems.length){
     msg.innerHTML='<div class="msg err">'+problems.map(p=>"• "+esc(p)).join("<br>")+'</div>';
     return;
   }
   msg.innerHTML='<div class="msg info">Saving…</div>';
-  const fields={Title:tag, Status:status, Location:location};
-  if(serial) fields.SerialNumber=serial;
-  if(model) fields.Model=model;
-  if(type) fields.Asset=type;
-  if(employee) fields.EmployeeName=employee;
-  if(dept) fields.Department=dept;
-  if(cond) fields.Condition=cond;
-  if(pDate) fields.PurchaseDate=pDate;
-  if(pPrice) fields.PurchasePrice=pPrice;
-  if(est) fields.EstimatePending=true;
-  const wMonths=(document.getElementById("addWarrantyMonths").value||"").trim();
-  if(wMonths!=="") fields.WarrantyMonths=wMonths;
+  // fields shared by every component of a bundle
+  const shared={Status:status,Location:location};
+  if(employee) shared.EmployeeName=employee;
+  if(dept) shared.Department=dept;
+  if(cond) shared.Condition=cond;
+  if(pDate) shared.PurchaseDate=pDate;
+  if(est) shared.EstimatePending=true;
+  if(wMonths!=="") shared.WarrantyMonths=wMonths;
+  const fieldsFor=c=>{
+    const f={Title:c.tag,...shared};
+    if(c.serial) f.SerialNumber=c.serial;
+    if(c.model) f.Model=c.model;
+    if(c.type) f.Asset=c.type;
+    if(c.price!==""&&isFinite(parseFloat(c.price))) f.PurchasePrice=c.price;
+    return f;
+  };
+  const list=components||[{tag,serial,model,type,price:pPrice}];
+  const createdTags=[];let created=null;
   try{
-    const created=await XanaSupabase.insertAsset(fields);
-    // optional image -> Supabase Storage (non-fatal on failure)
-    if(pendingImage){
+    for(const c of list){
+      created=await XanaSupabase.insertAsset(fieldsFor(c));
+      createdTags.push(c.tag+(c.type?" ("+c.type+")":""));
+    }
+    // optional image -> Supabase Storage on the primary asset (non-fatal on failure)
+    if(pendingImage&&created){
       try{
         await XanaSupabase.uploadAssetImage(created.id,pendingImage,pendingImageName||"asset.jpg");
       }catch(e){console.warn("image upload failed:",e);}
     }
-    msg.innerHTML='<div class="msg ok">Added as '+esc(tag)+' ✓</div>';
+    if(list.length>1){
+      msg.innerHTML='<div class="msg ok">Added '+list.length+' assets ✓: '+createdTags.map(t=>esc(t)).join(", ")+'</div>';
+    }else{
+      msg.innerHTML='<div class="msg ok">Added as '+esc(tag)+' ✓</div>';
+    }
     pendingImage=null; document.getElementById("imgPreview").style.display="none"; document.getElementById("imgName").textContent="";
     // reset form
     ["addSerial","addModel","addType","addEmployee","addDept","addCondition","addPrice"].forEach(id=> document.getElementById(id).value="");
     document.getElementById("addPDate").value="";
     document.getElementById("addPriceEstimate").checked=false;
     tagInput.value="";
+    resetBundle();
     setTimeout(closeAdd,900);
     await load();
-  }catch(e){msg.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';}
+  }catch(e){
+    msg.innerHTML='<div class="msg err">'+esc(e.message||e)+
+      (createdTags.length?"<br>Created so far: "+esc(createdTags.join(", ")):"")+'</div>';
+  }
 });
 
 // ---------- View switching (Register ⇄ People) ----------
