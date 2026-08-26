@@ -560,6 +560,8 @@ function showDetail(it){
   }, 650);
 }
 const FIELD_LABELS={title:"Tag",asset_tag:"Asset tag",asset_type:"Type",model:"Model",serial:"Serial",employee:"Employee",status:"Status",location:"Location",extra:"Details"};
+const EXTRA_FRIENDLY={department:"Department",employee_number:"Employee #",phone_number:"Phone",condition:"Condition",ram:"RAM",region:"Region",purchase_date:"Purchase Date",purchase_price:"Purchase Price",date_issued:"Date Issued",estimate_pending:"Estimate pending",warranty_months:"Warranty",image_url:"Image",useful_life:"Useful Life",sp_created:"Created in SP",sp_modified:"Modified in SP",last_verified:"Last verified",last_verified_by:"Verified by"};
+function friendlyExtra(k){ return EXTRA_FRIENDLY[k]||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
 function fmtVal(v){
   if(v===null||v===undefined)return"—";
   if(typeof v==="object"){
@@ -581,6 +583,7 @@ function diffObjectKeys(o,n){
 function renderHistory(rows){
   if(!rows.length)return '<div class="hint" style="margin-top:10px">No recorded changes yet — edits made from now on will appear here.</div>';
   const items=rows.filter(r=>r.op==="update"&&r.fields&&Object.keys(r.fields).length).map(r=>{
+    const who= r.changed_by==="service_role" ? "System" : (r.changed_by||"—");
     const bits=Object.entries(r.fields).map(([k,v])=>{
       const label=esc(FIELD_LABELS[k]||k);
       if(v&&typeof v==="object"&&("old" in v||"new" in v)){
@@ -589,18 +592,19 @@ function renderHistory(rows){
         if(!changed.length) return "<b>Details</b>: no field changes";
         const meaningful=changed.filter(x=>!VERIFICATION_KEYS.has(x));
         if(!meaningful.length){
-          const who=esc(v.new&&v.new.last_verified_by||v.new&&v.new.lastVerifiedBy||r.changed_by||"—");
-          return "<b>✓ Verified</b> by "+who;
+          const verifier=esc(v.new&&v.new.last_verified_by||v.new&&v.new.lastVerifiedBy||r.changed_by||"—");
+          const verifierDisplay= verifier==="service_role" ? "System" : verifier;
+          return "<b>✓ Verified</b> by "+verifierDisplay;
         }
-        return "<b>Details</b>: "+esc(meaningful.join(", "));
+        return "<b>Details</b>: "+esc(meaningful.map(friendlyExtra).join(", "));
       }
       return "<b>"+label+"</b>: "+fmtVal(v);
     });
-    return '<div class="hrow"><span class="hwho">'+esc(r.changed_by||"—")+'</span><span class="hwhat">'+bits.join(" · ")+'</span><span class="hwhen">'+new Date(r.changed_at).toLocaleString()+'</span></div>';
+    return '<div class="hrow"><span class="hwho">'+esc(who)+'</span><span class="hwhat">'+bits.join(" · ")+'</span><span class="hwhen">'+new Date(r.changed_at).toLocaleString()+'</span></div>';
   });
   const created=rows.find(r=>r.op==="insert");
   const out=[];
-  if(created)out.push('<div class="hrow"><span class="hwho">'+esc(created.changed_by||"—")+'</span><span class="hwhat">Registered</span><span class="hwhen">'+new Date(created.changed_at).toLocaleString()+'</span></div>');
+  if(created){ const cwho= created.changed_by==="service_role" ? "System" : (created.changed_by||"—"); out.push('<div class="hrow"><span class="hwho">'+esc(cwho)+'</span><span class="hwhat">Registered</span><span class="hwhen">'+new Date(created.changed_at).toLocaleString()+'</span></div>'); }
   out.push(...(items.length?items:['<div class="hrow"><span class="hwhat">No field changes recorded yet.</span></div>']));
   return '<div style="margin-top:10px"><div class="hint">Change history (latest first)</div>'+out.join("")+'</div>';
 }
