@@ -109,16 +109,23 @@
   /* --- add form sheet --- */
   .sheet{position:fixed;inset:0;z-index:40;display:none}
   .sheet.open{display:block}
-  .sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;transition:opacity var(--duration-base) var(--ease-out)}
+  .sheet-backdrop{position:absolute;inset:0;background:rgba(8,10,14,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;transition:opacity var(--duration-base) var(--ease-out)}
   .sheet.open .sheet-backdrop{opacity:1}
-  .sheet-panel{position:absolute;right:0;top:0;bottom:0;width:480px;max-width:92vw;background:var(--card);border-left:1px solid var(--hairline);box-shadow:var(--shadow-lifted);padding:22px;overflow:auto;transform:translateX(100%);transition:transform var(--duration-slow) var(--ease-spring)}
+  /* Tinted panel - a quiet step down from the page surface in light mode,
+     a deeper well in dark mode - so white inputs read as raised cores. */
+  .sheet-panel{position:absolute;right:0;top:0;bottom:0;width:480px;max-width:92vw;background:var(--card2);border-left:1px solid var(--hairline);box-shadow:var(--shadow-lifted);padding:22px;overflow:auto;transform:translateX(100%);transition:transform var(--duration-slow) var(--ease-spring)}
+  [data-theme="dark"] .sheet-panel{background:#12151c}
   .sheet.open .sheet-panel{transform:translateX(0)}
-  .sheet h2{font-size:1.05rem;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
-  .sheet label{font-size:.75rem;color:var(--muted);margin:8px 0 4px;display:block}
-  .sheet input,.sheet select{width:100%;margin-bottom:6px}
-  .img-drop{border:1px dashed var(--border);border-radius:10px;padding:12px;text-align:center;background:var(--card2);cursor:pointer}
+  .sheet h2{font-size:1rem;font-weight:700;letter-spacing:-.01em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+  .sheet-panel > label{font-size:.7rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 5px;display:block}
+  .sheet input,.sheet select{width:100%;margin-bottom:6px;background:var(--card)}
+  [data-theme="dark"] .sheet input,[data-theme="dark"] .sheet select{background:#0d1014}
+  .img-drop{border:1px dashed var(--border);border-radius:10px;padding:12px;text-align:center;background:var(--card);cursor:pointer}
   .form-actions{display:flex;gap:8px;margin-top:14px}
   .form-actions button{flex:1}
+  /* camera viewfinder: dark bezel both themes, soft inner corners */
+  #scanReader{padding:6px;background:#0c0f14;border:1px solid var(--hairline);border-radius:16px;min-height:120px}
+  #scanReader video,#scanReader img{border-radius:11px;display:block}
 
   /* Motion */
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
@@ -236,7 +243,6 @@
       <div id="imgName" style="font-size:.7rem;color:var(--muted);margin-top:4px"></div>
     </label>
     <div class="form-actions"><button class="btn secondary" id="addCancel">Cancel</button><button class="btn" id="addSave">Save Asset</button></div>
-    <div id="addMsg"></div>
   </div>
 </div>
 
@@ -245,7 +251,7 @@
   <div class="sheet-backdrop" id="scanBackdrop"></div>
   <div class="sheet-panel">
     <h2>Scan <button type="button" class="theme-toggle" id="scanClose">✕</button></h2>
-    <div id="scanReader" style="border-radius:12px;overflow:hidden;background:#000;min-height:120px"></div>
+    <div id="scanReader"></div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
       <button type="button" class="btn secondary" id="walkToggle">Walk mode</button>
       <div class="walkstats" id="walkStats" style="display:none">
