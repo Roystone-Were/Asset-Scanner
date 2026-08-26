@@ -105,6 +105,7 @@
   .legend .row { display:flex; align-items:center; gap:8px; font-size:.85rem; }
   .legend .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
   .legend .count { margin-left:auto; color:var(--muted); }
+  .sub-h { font-size:.78rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:0 0 10px; }
   .bars { display:flex; flex-direction:column; gap:12px; }
   .bar-row .bar-top { display:flex; justify-content:space-between; font-size:.82rem; margin-bottom:5px; }
   .bar-row .bar-top .lbl { color:var(--muted); font-weight:500; }
@@ -266,7 +267,7 @@
   menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
   overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
 </script>
-  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=5"></script>
+  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=6"></script>
 </body>
 </html>
 

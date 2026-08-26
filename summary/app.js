@@ -197,6 +197,11 @@ const DEP_COLORS = {
     // Calculate health score (0-100) for conditional coloring
     const healthScore = calculateHealthScore(h, t.total);
 
+    // Fills the Status panel's dead space under the donut with a verification-freshness breakdown.
+    const statusFreshnessBlock =
+      '<div style="border-top:1px solid var(--hairline);margin:16px 0 12px"></div>' +
+      '<h3 class="sub-h">Verification freshness</h3>' +
+      verificationBars(verificationBreakdown(lastItems));
     main.innerHTML =
       `<div class="kpis">
         ${kpi("Total Assets", t.total, null, null, "neutral")}
@@ -207,7 +212,7 @@ const DEP_COLORS = {
       </div>
       <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
-      `<div class="grid">${panel(donut(d.byStatus), "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
+      `<div class="grid">${panel(donut(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
       healthStrip(h) +
       `<div class="panel" id="warrantyPanel"><h2>Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="editbtn" id="exportCsv">Export CSV</button></div></div>`;
@@ -396,6 +401,20 @@ const DEP_COLORS = {
       svgPaths +
       '</svg><div class="donut-center"><div class="n">' + total + '</div><div class="t">assets</div></div></div><div class="legend">' + legend + "</div></div>");
   }
+  // Bucket assets by lastVerified age: fresh <=30d, recent <=90d, overdue >90d,
+  // never when missing/unparseable. Mirrors the unverified-90d rule in supabase-client.js.
+  function verificationBreakdown(items) {
+    const b = { fresh: 0, recent: 0, overdue: 0, never: 0 };
+    for (const i of items || []) {
+      const t = i.lastVerified ? new Date(i.lastVerified).getTime() : NaN;
+      if (isNaN(t)) { b.never++; continue; }
+      const days = (Date.now() - t) / 86400000;
+      if (days <= 30) b.fresh++;
+      else if (days <= 90) b.recent++;
+      else b.overdue++;
+    }
+    return b;
+  }
   function bars(obj, color) {
     const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10),
       max = Math.max(1, ...e.map((x) => x[1]));
@@ -406,6 +425,27 @@ const DEP_COLORS = {
           ([k, v]) =>
             '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + v + "</span></div>" +
             '<div class="bar-track"><div class="bar-fill" data-w="' + ((v / max) * 100) + '" style="width:0;background:' + color + '"></div></div></div>',
+        )
+        .join("") +
+      "</div>"
+    );
+  }
+  function verificationBars(v) {
+    // Fixed four-bucket freshness view; per-row colors unlike bars().
+    const rows = [
+      ["Verified \u226430d", v.fresh, "#16a34a"],
+      ["31\u201390d", v.recent, "#d97706"],
+      ["Overdue 90d+", v.overdue, "#dc2626"],
+      ["Never verified", v.never, "#64748b"],
+    ];
+    const total = Math.max(1, v.fresh + v.recent + v.overdue + v.never);
+    return (
+      '<div class="bars">' +
+      rows
+        .map(
+          ([k, n, c]) =>
+            '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + n + "</span></div>" +
+            '<div class="bar-track"><div class="bar-fill" data-w="' + ((n / total) * 100) + '" style="width:0;background:' + c + '"></div></div></div>',
         )
         .join("") +
       "</div>"
