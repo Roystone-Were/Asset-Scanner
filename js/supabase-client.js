@@ -188,6 +188,8 @@
       depStatus,
       lastVerified: str(extra.last_verified),
       estimatePending: extra.estimate_pending === true || extra.estimate_pending === "true",
+      imageUrl: str(extra.image_url),
+
       warrantyMonths: (() => {
         const w = extra.warranty_months;
         if (w === null || w === undefined || w === "") return null;
@@ -498,6 +500,19 @@
     const pub = client().storage.from("asset-images").getPublicUrl(path);
     return pub && pub.data ? pub.data.publicUrl : null;
   }
+  // Persist an image URL onto the asset's extra jsonb so the detail card can
+  // show it without re-uploading. Server side: asset_extra_merge keeps the
+  // rest of the blob untouched (migration 0010).
+  async function attachAssetImage(itemId, url) {
+    if (!itemId || !url) return { ok: false };
+    const { error } = await client().rpc("asset_extra_merge", {
+      p_item_id: String(itemId),
+      p_patch: { image_url: String(url) },
+    });
+    if (error) throw sbError(error);
+    return { ok: true };
+  }
+
 
   // ---------- Asset events (issues / repairs / transfers / maintenance) ----------
   async function listAssetEvents(itemId) {
@@ -578,6 +593,7 @@
     mustChangePassword,
     completePasswordChange,
     uploadAssetImage,
+    attachAssetImage,
     listAssetEvents,
     addAssetEvent,
     setEventResolved,
