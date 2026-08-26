@@ -646,15 +646,18 @@ function flash(el,kind,text){
   el.insertAdjacentHTML("beforeend",'<div class="msg '+kind+'">'+(kind==="err"?esc(text):text)+'</div>');
 }
 // ---------- in-page dialog + toast (same pattern as admin) ----------
-let _toastT=null;
 function toast(text,isErr){
   const t=document.createElement("div");
-  t.style.cssText="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"var(--text)")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out)";
+  const above=document.querySelectorAll(".app-toast").length;   // stack newest under older ones
+  t.className="app-toast";
+  t.style.cssText="position:fixed;left:50%;bottom:"+(26+above*46)+"px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"var(--text)")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out)";
   t.textContent=text;
   document.body.appendChild(t);
   requestAnimationFrame(()=>{t.style.opacity="1";t.style.transform="translateX(-50%) translateY(-4px)";});
-  clearTimeout(_toastT);
-  _toastT=setTimeout(()=>{t.style.opacity="0";setTimeout(()=>t.remove(),250);},3200);
+  setTimeout(()=>{                     // per-toast timer — every toast removes itself
+    t.style.opacity="0";
+    setTimeout(()=>t.remove(),250);
+  },3200);
 }
 // One live editor across the whole card, tracked here.
 let _openEditor=null;   // {cell, input, name, orig, id}
