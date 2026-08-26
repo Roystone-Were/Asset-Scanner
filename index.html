@@ -146,7 +146,7 @@
   <div class="top">
     <div class="brand"><img src="/scanner-app/xana-logo.png" alt="" /><span>Xana Asset System</span></div>
     <div class="topright">
-      <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark">Dark</button>
+      <button type="button" class="theme-switch" id="themeToggle" role="switch" aria-checked="true" aria-label="Toggle dark mode" title="Toggle dark mode"><span class="ts-opt ts-sun" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/></svg></span><span class="ts-opt ts-moon" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 14.2A8.6 8.6 0 0 1 9.8 3.4a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span><span class="ts-thumb" aria-hidden="true"></span></button>
       <div id="who"></div>
     </div>
   </div>
@@ -229,9 +229,9 @@
 <script>
 "use strict";
 const STORAGE_THEME="xana_theme";
-function applyThemeLanding(){const s=localStorage.getItem(STORAGE_THEME)||"dark";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.textContent=s==="dark"?"Light":"Dark";}
+function applyThemeLanding(){const s=localStorage.getItem(STORAGE_THEME)||"dark";document.documentElement.setAttribute("data-theme",s);const t=document.getElementById("themeToggle");if(t)t.setAttribute("aria-checked",s==="dark");}
 applyThemeLanding();
-document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").textContent=c==="dark"?"Light":"Dark";});
+document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").setAttribute("aria-checked",c==="dark");});
 function show(el,on){el.style.display=on?"block":"none";}
 function msg(id,text,isErr){const m=document.getElementById(id);if(!m)return;m.textContent=text||"";m.className="msg show "+(isErr?"err":"info");}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c];});}

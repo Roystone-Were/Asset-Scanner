@@ -20,7 +20,7 @@ const DEP_COLORS = {
     const stored = localStorage.getItem(STORAGE_THEME) || "light";
     document.documentElement.setAttribute("data-theme", stored);
     const tog = document.getElementById("themeToggle");
-    if (tog) tog.textContent = stored === "dark" ? "Light" : "Dark";
+    if (tog) tog.setAttribute("aria-checked", stored === "dark");
   }
   applyTheme(); // apply immediately on script load
   document.addEventListener("DOMContentLoaded", () => {
@@ -30,7 +30,7 @@ const DEP_COLORS = {
         const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", cur);
         localStorage.setItem(STORAGE_THEME, cur);
-        tog.textContent = cur === "dark" ? "Light" : "Dark";
+        tog.setAttribute("aria-checked", cur === "dark");
       });
     }
   });

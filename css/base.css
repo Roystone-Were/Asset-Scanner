@@ -7,6 +7,15 @@
   font-display: swap;
 }
 
+/* --- theme switch: sliding sun/moon pill (state keyed off html[data-theme]) --- */
+.theme-switch{position:relative;display:inline-flex;align-items:center;width:62px;height:30px;padding:3px;border:1px solid var(--hairline);border-radius:999px;background:var(--card2);cursor:pointer;box-shadow:var(--shadow-ambient),var(--inner-highlight);transition:background-color .5s var(--ease-out)}
+.ts-opt{position:relative;z-index:1;flex:1;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);transition:color .5s var(--ease-out)}
+.ts-opt svg{display:block}
+html:not([data-theme="dark"]) .ts-opt.ts-sun{color:var(--accent)}
+html[data-theme="dark"] .ts-opt.ts-moon{color:var(--accent)}
+.ts-thumb{position:absolute;top:3px;left:3px;width:24px;height:22px;border-radius:999px;background:var(--card);box-shadow:var(--shadow-ambient),inset 0 1px 1px rgba(255,255,255,.35);transition:transform .5s var(--ease-out)}
+html[data-theme="dark"] .ts-thumb{transform:translateX(30px)}
+
 /* Tabular figures wherever numbers align in columns */
 table, .kpi .value, .fin-grid .item .v, .health .item .v {
   font-feature-settings: "tnum" 1;
