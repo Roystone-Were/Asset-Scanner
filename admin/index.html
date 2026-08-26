@@ -86,6 +86,8 @@
     .pill.st-processing{background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.3);color:var(--blue)}
     .pill.st-failed{background:rgba(220,38,38,.1);border-color:rgba(220,38,38,.3);color:var(--red)}
     .pill.st-done{background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.3);color:var(--accent)}
+  .sync-alert{display:none;align-items:center;gap:10px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);color:var(--red);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.85rem}
+  .sync-alert .n{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 8px;border-radius:999px;background:var(--red);color:#fff;font-weight:700;font-size:.85rem}
     tbody tr{transition:background-color .15s var(--ease-out)}
     tbody tr:hover{background:color-mix(in srgb,var(--accent) 3%,transparent)}
     /* slide-over sheet (matches the assets page pattern) */
@@ -171,6 +173,7 @@
 
     <!-- ================= SYNC HEALTH ================= -->
     <section id="pane-sync" style="display:none">
+      <div id="syncAlert" class="sync-alert" role="alert"></div>
       <div class="card">
         <h3>SharePoint mirror queue</h3>
         <p class="sub" style="margin-top:4px">Rows pending/failed = not yet mirrored to SharePoint. Failed rows stop retrying after 5 attempts.</p>
@@ -525,6 +528,14 @@ async function loadSync(){
     el.innerHTML=SKEL_ROWS(3);
     const d=await api("sync_health");
     const data=d.rows||[];
+    const alertEl=document.getElementById("syncAlert");
+    if(data.length){
+      const failed=data.filter(r=>r.status==="failed").length;
+      alertEl.style.display="flex";
+      alertEl.innerHTML="<span class='n'>"+data.length+"</span><span><b>"+data.length+" "+(data.length===1?"change":"changes")+" not mirrored to SharePoint</b> — "+failed+" failed · "+(data.length-failed)+" pending. Failed rows stop retrying after 5 attempts.</span>";
+    }else{
+      alertEl.style.display="none";alertEl.innerHTML="";
+    }
     if(!(data||[]).length){el.innerHTML='<div class="empty"><h3>Everything is mirrored</h3><p>Every change has reached the SharePoint mirror. Failed rows stop retrying after 5 attempts and would appear here.</p></div>';return;}
     el.innerHTML="<table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
       data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill st-"+esc(r.status)+"'>"+esc(r.status)+"</span></td><td class='num'>"+r.attempts+"</td><td class='num'>"+new Date(r.created_at).toLocaleString()+"</td><td class='err-cell'>"+esc(r.last_error||"")+"</td></tr>").join("")+
