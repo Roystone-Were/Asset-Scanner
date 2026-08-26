@@ -362,31 +362,23 @@ const DEP_COLORS = {
       parts = [];
     for (const [k, v] of e) { parts.push({ k, start: acc, end: acc + (v / total) * 360 }); acc += (v / total) * 360; }
 
-    // Build SVG donut with hoverable segments
-    const R = 80;       // outer radius
-    const r = 56;       // inner radius (donut hole)
-    const cx = 90, cy = 90; // center (svg is 180x180)
+    // Build SVG donut as stroked arcs (ring spans 56..80, matching the old
+    // wedges) so the rim can draw itself around the circle on load.
+    const RR = 68;          // ring centerline radius
+    const SW = 24;          // stroke width = ring thickness
+    const SWEEP_MS = 850;   // time budget for one full-circle sweep
     let svgPaths = "";
-    let angle = -90; // start at 12 o'clock
+    let cum = 0;            // cumulative share, for sequential draw timing
     for (const p of parts) {
-      const sweep = (p.end - p.start);
-      const largeArc = sweep > 180 ? 1 : 0;
-      const startRad = angle * Math.PI / 180;
-      const endRad = (angle + sweep) * Math.PI / 180;
-      const x1 = cx + R * Math.cos(startRad);
-      const y1 = cy + R * Math.sin(startRad);
-      const x2 = cx + R * Math.cos(endRad);
-      const y2 = cy + R * Math.sin(endRad);
-      const x3 = cx + r * Math.cos(endRad);
-      const y3 = cy + r * Math.sin(endRad);
-      const x4 = cx + r * Math.cos(startRad);
-      const y4 = cy + r * Math.sin(startRad);
-      const path = `M ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${r} ${r} 0 ${largeArc} 0 ${x4} ${y4} Z`;
-      const pct = total > 0 ? ((p.end - p.start) / 360 * 100).toFixed(1) : 0;
-      // stroke-dasharray draw-in: segments sweep from 12 o'clock on load
-      const arcLen = (Math.PI * (R + r) * sweep) / 180;
-      svgPaths += `<path class="donut-seg" d="${path}" fill="${statusColor(p.k)}" data-status="${esc(p.k)}" data-count="${Math.round((p.end - p.start) / 360 * total)}" data-pct="${pct}" style="--seg-len:${arcLen.toFixed(1)};--seg-delay:${(parts.indexOf(p) * 90)}ms"><title>${esc(p.k)}: ${pct}% (${Math.round((p.end - p.start) / 360 * total)} assets)</title></path>`;
-      angle += sweep;
+      const share = (p.end - p.start) / 360;
+      if (share <= 0) continue;
+      const len = share * 100; // pathLength=100 normalizes the circumference
+      const count = Math.round(share * total);
+      const pct = (share * 100).toFixed(1);
+      const delay = Math.round(150 + cum * SWEEP_MS);
+      const dur = Math.round(share * SWEEP_MS + 150);
+      svgPaths += `<circle class="donut-seg" cx="90" cy="90" r="${RR}" fill="none" stroke="${statusColor(p.k)}" stroke-width="${SW}" pathLength="100" stroke-dasharray="${len.toFixed(2)} 999" transform="rotate(${(p.start - 90).toFixed(3)} 90 90)" data-status="${esc(p.k)}" data-count="${count}" data-pct="${pct}" style="--seg-len:${len.toFixed(2)};--seg-delay:${delay}ms;--seg-dur:${dur}ms"><title>${esc(p.k)}: ${pct}% (${count} assets)</title></circle>`;
+      cum += share;
     }
 
     const legend = e
