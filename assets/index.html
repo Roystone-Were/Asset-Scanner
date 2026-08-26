@@ -233,7 +233,7 @@
     <label>Department *</label><select id="addDept"><option value="">— select —</option></select>
     <label>Condition</label><input type="text" id="addCondition" placeholder="New" />
     <label>Purchase Date</label><input type="date" id="addPDate" />
-    <label id="addPriceLabel">Purchase Price (KES)</label><input type="number" id="addPrice" placeholder="120000" />
+    <label id="addPriceLabel">Purchase Price (KES)</label><input type="number" id="addPrice" min="0" placeholder="120000" />
     <label class="chk"><input type="checkbox" id="addPriceEstimate" /> Price is an estimate (pending invoice)</label>
     <label>Warranty (months from purchase)</label><input type="number" id="addWarrantyMonths" min="0" placeholder="e.g. 12, 24, 36 — blank = none" />
     <label>Image</label>
@@ -823,7 +823,7 @@ function bundleRowHTML(idx){
     +'<input class="b-tag" placeholder="Tag *" style="width:45%" /></div>'
     +'<input class="b-serial" placeholder="Serial (optional)" style="margin-top:6px" />'
     +'<input class="b-model" placeholder="Model" style="margin-top:6px" />'
-    +'<input type="number" class="b-price" placeholder="Price (KES)" style="margin-top:6px" /></div>';
+    +'<input type="number" class="b-price" min="0" placeholder="Price (KES)" style="margin-top:6px" /></div>';
 }
 // suggested tags continue after the max XL-<n> seen in the register, the main tag, or other rows
 function nextBundleTags(){
@@ -946,6 +946,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(!serial) problems.push("Serial Number is required.");
   if(!dept) problems.push("Department is required.");
   if(pPrice===""&&!est) problems.push("Purchase Price is required — or tick \u201Cestimate pending\u201D.");
+  else if(parseFloat(pPrice)<0) problems.push("Purchase Price cannot be negative.");
   // Bundled setup: the main form describes the tower; every component row needs Tag, Type, Price.
   let components=null;
   if(bundleOn()){
@@ -960,6 +961,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
       if(!rtag) problems.push(label+": Tag is required.");
       if(!rtype) problems.push(label+": Type is required.");
       if(rprice===""||!isFinite(parseFloat(rprice))) problems.push(label+": Price is required.");
+      else if(parseFloat(rprice)<0) problems.push(label+": Price cannot be negative.");
       components.push({tag:rtag,serial:rserial,model:rmodel,type:rtype,price:rprice});
     });
     // the tower books the residual of the total after the component rows
