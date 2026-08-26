@@ -550,6 +550,45 @@ function showDetail(it){
     await loadEvents(current,evPanel);
     this.textContent="Hide events";
   });
+  // Image — add/change photo on the existing asset (uses same storage+merge as add-asset)
+  if(canWrite()){
+    const card=document.getElementById("assetCard");
+    const hintEl=card.querySelector(".hint");
+    const imgBar=document.createElement("div");
+    imgBar.style.cssText="margin:10px 0 2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+    imgBar.innerHTML='<input type="file" id="detailImageInput" accept="image/*" style="display:none"><button class="btn secondary" id="detailImageBtn" type="button">'+(it.imageUrl?"Change image":"Add image")+'</button><span id="detailImageStatus" style="font-size:.78rem;color:var(--muted)"></span>';
+    hintEl.after(imgBar);
+    document.getElementById("detailImageBtn").addEventListener("click",()=>document.getElementById("detailImageInput").click());
+    document.getElementById("detailImageInput").addEventListener("change", async e=>{
+      const f=e.target.files&&e.target.files[0]; if(!f) return;
+      const status=document.getElementById("detailImageStatus"); status.textContent="Uploading…";
+      try{
+        const dataUrl=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error("read failed")); r.readAsDataURL(f); });
+        const url=await XanaSupabase.uploadAssetImage(current.id, dataUrl, f.name);
+        if(!url) throw new Error("no URL");
+        await XanaSupabase.attachAssetImage(current.id, url);
+        current.imageUrl=url; it.imageUrl=url;
+        let heroEl=card.querySelector(".detail-hero");
+        if(heroEl){ heroEl.src=url; } else {
+          const nh=document.createElement("img"); nh.className="detail-hero"; nh.src=url; nh.alt=""; nh.loading="lazy";
+          card.insertBefore(nh, card.firstChild);
+          document.getElementById("detailImageBtn").textContent="Change image";
+        }
+        status.textContent="✓ Saved";
+        toast("Image updated",false);
+        // refresh in-memory list so list view also knows
+        const found=allItems.find(x=>String(x.id)===String(current.id));
+        if(found) found.imageUrl=url;
+        // ensure persist is visible on next full load
+        // small delay then reload in background
+        setTimeout(()=> load().catch(()=>{}), 800);
+      }catch(err){
+        status.textContent="";
+        toast("Image upload failed: "+(err.message||err), true);
+        console.warn(err);
+      }
+    });
+  }
   // Glide down to the card. A guarded corrective snap follows: if the
   // smooth pass was interrupted (background tabs throttle frames), it
   // finishes the trip; if the glide already arrived, it does nothing.
@@ -1053,7 +1092,8 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
       try{
         const url=await XanaSupabase.uploadAssetImage(created.id,pendingImage,pendingImageName||"asset.jpg");
         if(url) await XanaSupabase.attachAssetImage(created.id,url);
-      }catch(e){console.warn("image upload failed:",e);}
+        else throw new Error("no URL returned");
+      }catch(e){console.warn("image upload failed:",e); toast("Image upload failed: "+(e.message||e), true);}
     }
     if(list.length>1){
       msg.innerHTML='<div class="msg ok">Added '+list.length+' assets ✓: '+createdTags.map(t=>esc(t)).join(", ")+'</div>';
