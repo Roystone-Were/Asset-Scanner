@@ -164,11 +164,6 @@
       <div class="sub">Use your work email. Invite-only.</div>
 
       <div id="stepEmail">
-        <div class="tabrow">
-          <button type="button" id="tabOtp" class="tabbtn active">Email me a link</button>
-          <button type="button" id="tabPwd" class="tabbtn">Password</button>
-        </div>
-
         <div id="otpForm">
           <input type="email" id="email" placeholder="you@xanalife.com" autocomplete="email" />
           <button type="button" id="btnSend" class="cta">Email me a sign-in link</button>
@@ -178,6 +173,7 @@
           <input type="email" id="pwdEmail" placeholder="you@xanalife.com" autocomplete="email" />
           <input type="password" id="pwdPass" placeholder="Password" autocomplete="current-password" />
           <button type="button" id="btnPwdSignin" class="cta">Sign in</button>
+          <button type="button" class="linkish" id="btnBackToOtp">Email me a link instead</button>
         </div>
 
         <div id="msg" class="msg"></div>
@@ -190,7 +186,8 @@
           That button logs you in right here — nothing to type.
         </div>
         <button type="button" class="linkish" id="btnResend">Send again</button><br/>
-        <button type="button" class="linkish" id="btnBack">Use a different email</button>
+        <button type="button" class="linkish" id="btnBack">Use a different email</button><br/>
+        <button type="button" class="linkish" id="btnUsePwd">Didn't get it? Sign in with a password instead</button>
         <div id="msgCode" class="msg"></div>
       </div>
 
@@ -295,14 +292,19 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){retur
 const nextUrl=(()=>{const n=new URLSearchParams(location.search).get("next");return n&&n.startsWith("/")&&!n.startsWith("//")?n:null;})();
 function setTab(which){
   const otp=which==="otp";
-  document.getElementById("tabOtp").classList.toggle("active",otp);
-  document.getElementById("tabPwd").classList.toggle("active",!otp);
   show(document.getElementById("otpForm"),otp);
   show(document.getElementById("pwdForm"),!otp);
   msg("msg","");
 }
-document.getElementById("tabOtp")?.addEventListener("click",()=>setTab("otp"));
-document.getElementById("tabPwd")?.addEventListener("click",()=>setTab("pwd"));
+document.getElementById("btnBackToOtp")?.addEventListener("click",()=>setTab("otp"));
+document.getElementById("btnUsePwd")?.addEventListener("click",()=>{
+  // "Didn't get the email?" fallback from the waiting screen -> password form.
+  const typed=(document.getElementById("email").value||"").trim();
+  if(typed) document.getElementById("pwdEmail").value=typed;
+  show(document.getElementById("stepCode"),false);
+  show(document.getElementById("stepEmail"),true);
+  setTab("pwd");
+});
 
 async function send(){
   const email=(document.getElementById("email").value||"").trim();
@@ -328,6 +330,7 @@ document.getElementById("btnResend")?.addEventListener("click",send);
 document.getElementById("btnBack")?.addEventListener("click",()=>{
   show(document.getElementById("stepCode"),false);
   show(document.getElementById("stepEmail"),true);
+  setTab("otp");
 });
 
 async function pwdSignin(){

@@ -1,302 +1,250 @@
-# Xana Asset Lookup & SharePoint List Modernization — Handoff Notes
+# Xana Asset System — Handoff Notes
 
-> Purpose: give another AI agent (or engineer) full context to continue this work.
-> Last updated: August 2026 (session on the user's Windows machine `C:\Users\user`).
-> See `README.md` for setup/deploy docs; this file is the working history + open items.
+> Purpose: orient another AI agent (or engineer) picking this up, and give the
+> tenant-side (Entra/SharePoint) context needed before touching that half of
+> the system. For day-to-day operation, read `docs/IT_Manager_Handoff_2026-08-26.md`
+> first — it's the current, detailed runbook. This file is the narrative:
+> how we got here, and what's still open.
+>
+> Last reconciled: 2026-08-27. Previous version of this file described the
+> pre-migration (SharePoint + MSAL, browser talks to Graph directly)
+> architecture as current — it wasn't anymore; see §1.
 
-## 1. Status (current)
+## 0. Where to look for what
 
-- **Privacy fix (Aug 2026):** the data snapshots (`scanner-app/assets.csv`,
-  `assets.json`, `test/fixtures/assets.json`) contained employee names,
-  serials and locations and were being deployed to the PUBLIC Vercel URL.
-  `scanner-app/.vercelignore` now keeps them (and tests, and `.env*`) out of
-  every deployment. **Old deployments may still serve them at their immutable
-  `*.vercel.app` URLs — delete old deployments in the Vercel dashboard
-  (Deployments → … → Delete) or via `npx vercel ls` / `npx vercel remove`.**
-  GitHub Actions ignores `.vercelignore`, so CI tests still see the fixtures.
-- **Walk mode + USB scanner support:** the 🚶 Walk button starts a continuous
-  scanning session — hit/miss counters, green/red flash + beep + vibrate,
-  input auto-refocus after every scan. The camera STAYS open in walk mode and
-  fires continuously (checkout-counter style; repeats of the in-frame barcode
-  are deduped with a 1.5s cooldown, and the input is not refocused while the
-  camera runs so the on-screen keyboard doesn't cover the view) — the same
-  zero-tap flow as a USB wedge scanner. Normal mode keeps one-shot camera
-  behavior. Wedge scanners (keyboard mode) are detected globally via
-  keystroke timing (`classifyKeyBurst`: printable chars, all gaps ≤ 80ms,
-  Enter terminator) and routed to the active mode's lookup; a focused text
-  input still owns its own Enter, so no double lookups.
-- **Offline-first:** the last successful fetch is cached in localStorage
-  (`xana_data_cache_v1`, write-through on every lookup / full fallback fetch).
-  When Graph is unreachable (`isOfflineish`: offline, fetch TypeError, or a
-  token refresh redirect), `offlineLookup()` matches scans against the cache
-  and the card shows a "📴 Offline — saved data from …" banner. ALL writes
-  (verify stamps, Status/Location edits, barcode registration) go through
-  `writeFields()`: direct PATCH when online, otherwise a merged per-item
-  offline queue (`xana_write_queue_v1`, cap 50) that flushes on load and on
-  the `online` event (4xx entries are dropped — they'd never succeed). A
-  "⏳ N offline changes waiting to sync" badge shows queue depth.
-- **Verified By + item history:** every scan now also writes the signed-in
-  user to the new **`LastVerifiedBy`** column (added to the live list via
-  `Add-LastVerifiedByColumn.ps1`). The result card has a 🕘 History expander:
-  `GET /items/{id}/versions?$top=30` (fields come back INLINE, newest first,
-  each with `lastModifiedBy`) — verification-only versions render as one
-  "✓ Verification scan" line, real edits as `Field: old → new`. The monthly
-  health report's unverified table now has a "Verified by" column and checks
-  the column exists.
-- **Desktop tier (>=768px, one responsive UI — no fork):** wider column
-  (640px), result-card fields in two CSS-grid columns, taller history/register
-  panels, and keyboard shortcuts **W** (walk toggle), **/** (focus input),
-  **Esc** (exit walk). Shortcuts share the burst detector's "cold stream"
-  guard (no key within 400ms) so a wedge scanner bursting a code containing
-  `W`/`/` can't trigger them mid-scan.
-- **Field features (Aug 2026):** miss screen offers **🆕 add-asset** (minimal
-  form POSTs a new item; offline it queues a `new-*` create the flush POSTs);
-  **👥 People view** (offboarding: search employee → their assets → one-tap
-  "mark all returned" = Status Available + Employee cleared, queued offline);
-  camera **torch + zoom** chips shown only when the device supports them
-  (iOS gets none - by design, not a bug). Pure helpers in logic.js:
-  `groupEmployees`, `assetsOfEmployee` (36 tests).
-- **Health report v2:** leads with a **health score** (share of assets clean:
-  tagged + serial + verified + no dup keys) and month-over-month deltas.
-  `Health-Check.ps1 -OutMetrics` writes a snapshot; the workflow appends it
-  to a committed `health-history.json` (cap 24 entries, contents: write) and
-  passes it back as `-PrevMetrics` next run. Placeholder serials ("-") count
-  as missing. First run after this change has no baseline - deltas appear
-  from month 2. NOTE: live list grew to 61 assets (bulk-added in SharePoint);
-  score is 3% until tags/serials/verifications catch up.
-- **Scanner app is DEPLOYED and signing in.** Live at `https://xana-asset-lookup.vercel.app`
-  (Vercel, Hobby plan, automatic HTTPS). The Entra redirect URI was added and the
-  user confirmed sign-in works.
-- **Barcode column REMOVED (Aug 2026):** the barcode printed on an asset
-  label *is* the tag (or serial) — e.g. "METROCARE … — MICL0045" scans →
-  `cleanScanInput` → `MICL0045` → matches Title. A separate `Barcode` column
-  was redundant (it sat empty, 0/61) and register-on-scan is gone. The app now
-  matches **Title / Serial Number only**; a miss means the device isn't in
-  inventory → the miss screen offers **add-asset**. `Remove-BarcodeColumn.ps1`
-  was run (column deleted from the live list); `matchFields` /
-  `collectCandidates` / the `$filter` list / Health-Check / Index-LookupFields
-  all dropped Barcode, and a test pins that a stray stored Barcode value does
-  NOT match.
-- **Edit on scan:** the result card lets staff change **Status / Location** inline
-  (Choice-column dropdowns — only real choices offered; one PATCH per save;
-  permission errors surface inline).
-- **Source is on GitHub:** `https://github.com/Roystone-Were/Asset-Scanner` (private,
-  branch `main`). **CI auto-deploy works**: Vercel is connected (rootDirectory =
-  `scanner-app`); every push to `main` deploys itself. The `test` workflow runs
-  on every push.
-- **Tests:** 34 passing — unit tests for the pure logic (lookup matching,
-  offline cache merge, write-queue merging/cap, USB burst classification,
-  version diffing) plus **golden tests**
-  (`scanner-app/test/golden.test.js`) that pin real facts about the exported list
-  (`scanner-app/test/fixtures/assets.json`, regenerated by `Export-AssetsJson.ps1`):
-  MICL0045 → Asset #1, no duplicate tags/serials, "Laptop" never matches, clean
-  serials.
-- **Data health automation (needs 4 GitHub secrets — pending):**
-  `Health-Check.ps1` + `.github/workflows/data-health.yml` (monthly cron) file a
-  GitHub issue when the list has duplicate serials, missing tags/serials, or
-  assets unverified 90+ days; the issue @mentions the owner. The report is also
-  **optionally emailed** via SMTP (`Send-HealthEmail.ps1`, off by default — add
-  the `SMTP_*` secrets to enable). Unverified assets are listed in a **Markdown
-  table** (Asset / Tag / Model / Serial / Last verified) so the report reads
-  well for leadership — the next report is going to the **CEO and manager**.
-  Last local run: no dup serials, 33 untagged, 4 missing serials, 34 unverified.
-- **Hardening pass (session):** `matchFields` now trims stored values too
-  (trailing-space serial/barcode no longer silently misses); Graph calls retry
-  429/5xx with exponential backoff + jitter; MSAL falls back to sessionStorage
-  when localStorage is blocked (in-app browsers); the health report now also
-  flags **duplicate barcodes**, warns when the **client cert has < 90 days**
-  left, and validates **expected columns still exist**; the pfx password moved
-  to an optional `SP_CERT_PASS` secret instead of plaintext in the workflow.
-- **Scalability fixed:** the app now queries Graph with server-side `$filter`
-  and falls back to a **paged** full fetch (`@odata.nextLink`-aware, no
-  `$top=999` ceiling). The lookup columns **SerialNumber, Barcode and Title are
-  now indexed** (`Index-LookupFields.ps1`), so `$filter` works without the
-  `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly` workaround — that
-  header remains only as a safety net. Verified against the live list: `$filter`
-  on Title/SerialNumber returns correct results with no Prefer header.
+| Question | Read |
+|---|---|
+| How do I deploy / set up locally? | `README.md` |
+| What's the current live state (counts, env vars, runbooks)? | `docs/IT_Manager_Handoff_2026-08-26.md` |
+| What does the app do, for a non-technical reader? | `docs/APP_WHAT_IT_DOES.md`, `docs/CEO_Executive_Briefing_2026-08-26.md` |
+| Why is it built this way? | `docs/decisions/ADR-001..003` |
+| What happened, in order, during the migration? | `PROGRESS.md` |
+| Tenant/Entra/SharePoint specifics, history, this session's narrative | This file |
+| What should be built next (feature roadmap, not infra)? | `asset-management-how-we-achieve-this.md` |
 
-## 2. Goal
+## 1. Architecture — what changed since this file was last accurate
 
-1. Make the **Xana Asset Inventory** SharePoint list nicer: color-coded Status,
-   row highlighting (**DONE**).
-2. Staff scan a physical asset barcode → see that asset's metadata on their phone
-   (**DONE** — app deployed; **data gap remains**, see §9).
-3. Stable, non-interactive automation for the site (**DONE** via cert auth).
+The system was rebuilt in August 2026. **Supabase Postgres is now the source
+of truth; SharePoint is a read-only mirror.** This file previously described
+the *pre-migration* setup (browser MSAL → Graph direct) as current — that
+architecture is retired. See `docs/decisions/ADR-001-supabase-source-of-truth.md`
+for the full rationale; short version:
+
+```
+Apps (/assets /dashboard /admin /login) ──supabase-js──▶ Supabase Postgres
+                                              │ trigger → sharepoint_sync outbox
+                                              │ pg_net instant + pg_cron 5-min retry
+                                              ▼
+                         Vercel fn api/sharepoint-sync.js ──Graph API──▶ SharePoint list (mirror)
+```
+
+- Auth is Supabase email OTP/password (invite-only via `/admin`), roles
+  `super_admin · admin · scanner · asset_viewer · dashboard_viewer`, RLS
+  server-side. MSAL / browser Graph sign-in is **gone** — `api/summary.js`
+  (the old MSAL-backed dashboard API) has been deleted from `api/`.
+- The repo root is now `Asset-Scanner`, deployed as **one** Vercel project
+  (`asset-system-tau.vercel.app`) serving `/assets`, `/dashboard`, `/admin`,
+  `/login`. The old two-project split (`xana-asset-lookup` scanner +
+  `asset-scanner-iota` dashboard) is legacy — see README's note to archive
+  those once the unified URL is confirmed.
+- Live counts as of 2026-08-26 (see `docs/IT_Manager_Handoff_2026-08-26.md` §3):
+  **144 assets** in Supabase (not the 36-item SharePoint list this file used
+  to cite), 781 sync rows `done`, 0 pending/failed.
+
+**What SharePoint/Entra is still for:** the sync worker's write path
+(`api/sharepoint-sync.js`), the monthly `Health-Check.ps1` report, and the
+label/backfill PowerShell scripts. All of those still authenticate the same
+way described in §5 below — that part of the tenant setup **is** still
+accurate and worth reading before changing it.
+
+## 2. Goal (updated)
+
+1. ~~Make the SharePoint list nicer~~ — superseded; SharePoint is now a
+   generated mirror, not hand-maintained.
+2. Staff scan a physical asset barcode → see/edit that asset on their phone —
+   **DONE**, now against Supabase (offline-first, walk mode, USB wedge
+   scanners, People/offboarding view — all live).
+3. Stable, non-interactive automation for the SharePoint side — **DONE**,
+   unchanged: cert auth (§5/§6 below) still runs the sync worker and
+   PowerShell scripts.
+4. *(new)* Supabase as system of record, one-way mirror to SharePoint for
+   exec/Power-Apps compatibility — **DONE**, live since 2026-08-22
+   (`docs/decisions/ADR-001...md`).
 
 ## 3. Environment
 
 - Windows machine, PowerShell 7.6.4 (`pwsh`), Python 3.14 (`py`), Node v24.18.1.
-- Workspace: `C:\Users\user\Xana-SharePoint`.
+- **Workspace: `C:\Users\user\Asset-Scanner`** (this file used to say
+  `C:\Users\user\Xana-SharePoint` — that path is stale/retired).
 - `C:\Users\user\vcsu-monitor` is an UNRELATED device monitor — do not touch.
 - Screenshots: `C:\Users\user\OneDrive - Refrontier Group\Pictures\Screenshots`,
   read with `ocr.ps1`.
+- `gh` CLI is still **not installed** here — branch-protection and other
+  GitHub-UI-only steps (§9) can't be verified or set from the repo; do them
+  in the browser or via REST + a PAT.
 
-## 4. Tenant & List
+## 4. Tenant & List (SharePoint side — mirror only now)
 
 - Tenant **Refrontier Group** → `refrontiergroup.onmicrosoft.com`; admin
   `itadmin@refrontier.group` (Global Admin).
 - Site **Xana Tech & Data**: `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData`
   (private group, 7 members).
-- List **Xana Asset Inventory** — 36 items. Graph list Id: `7d3b5f47-8199-4cb9-b7c4-361dc70c4622`.
-- Visible columns: Asset Tag, Employee Name, Asset Type, Department, Model,
-  Serial Number, Status, Location, Region, Condition, Last Verified,
-  Last Verified By. (A `Barcode` column existed until Aug 2026 — removed; the
-  label barcode encodes the tag/serial.)
-- **Column internal names (verified via Get-PnPField):**
+- List **Xana Asset Inventory**, Graph list Id `7d3b5f47-8199-4cb9-b7c4-361dc70c4622`.
+  Row count now tracks Supabase via the sync worker (144 assets as of
+  2026-08-26) — the "36 items" and "61 items" figures previously in this file
+  were snapshots from before the Supabase migration and bulk imports; don't
+  treat either as current. Check live counts via `docs/IT_Manager_Handoff...md`
+  §3 or a fresh `Health-Check.ps1` run.
+- Idempotency: a `SupabaseId` text column (added manually — the sync app
+  lacks schema rights) fingerprints every mirrored row with `assets.item_id`.
+- Column internal names (verified via `Get-PnPField`, still accurate):
   - "Asset Tag" is NOT a real column — it's the list **Title** rendered as a
-    link (`LinkTitle`); the value lives in `Title`. Item 1: `Title = MICL0045`.
-  - "Asset Type" → internal name **`Asset`** (column was renamed at some point;
-    internal names never change). Values: Laptop, CPU, Monitor, Mouse, Keyboard.
+    link (`LinkTitle`); the value lives in `Title`.
+  - "Asset Type" → internal name **`Asset`** (renamed at some point; internal
+    names never change).
   - Serial Number → `SerialNumber`; Employee Name → `EmployeeName`;
     Location → `Location`; Region → `Region`; Condition → `Condition`;
     Last Verified → `LastVerified`; Last Verified By → `LastVerifiedBy`.
-- Status choices: `In Use, Available, Retired, Left With, Lost`; Location choices:
-  `Syokimau, Katani, Ruiru, Githurai, Lumumba Dr, TRM Dr`; Region: `Nairobi, Kiambu`.
-- Sample row (item 1): MICL0045 = Lenovo L13, serial `PW0MGGLA`,
-  Roystone Licha Were, In Use, Syokimau, Nairobi. Tags also on items 4
-  (`MICL0046`) and 6 (`MICL0047`).
+  - `Barcode` column: **removed** (Aug 2026) — the printed barcode encodes the
+    tag/serial, so a separate column was redundant.
+  - Status/Location columns were converted from Choice to plain text (done in
+    the SharePoint UI) so new `app_choices` values mirror freely without a
+    schema edit on the SharePoint side.
 
-## 5. Entra App Registration ("pnp") — the key infra
+## 5. Entra App Registration ("pnp") — sync worker + automation only
+
+Still the correct, current setup — nothing here changed with the migration,
+it's just no longer used by any browser code (see §1):
 
 - **ClientId:** `7caa51af-9f32-42d8-8264-da5b97c2f8eb`
 - **Certificate thumbprint:** `B4437765C89E84AE84B813194E6BD0D54EB3F430`
-  (self-signed, in CurrentUser\My; `.pfx`/`.cer` live beside the repo scripts and
-  are **NOT committed to git** — `.gitignore` excludes them).
-- **Permissions (admin-consented):** Graph `Sites.ReadWrite.All`
-  (Delegated + Application), `User.Read` (Delegated); SharePoint `AllSites.*`
-  (Delegated). The app requests `Sites.Read.All` at runtime.
-- **Redirect URIs (Authentication → Platforms → SPA):**
-  - `https://xana-asset-lookup.vercel.app` (production — added, works)
-  - `http://localhost:8100` (local dev)
-- The old client secret is legacy ACS and unusable — ignore.
+  (self-signed, in CurrentUser\My; `.pfx`/`.cer` live beside the repo scripts,
+  **not committed** — gitignored).
+- **Graph application permission:** `Sites.ReadWrite.All` (admin-consented) —
+  used by `api/sharepoint-sync.js` (client-credentials flow) and by the
+  PowerShell automation scripts.
+- Redirect URIs under Authentication → Platforms → SPA are vestigial now
+  (no browser code does interactive Entra sign-in any more) — safe to leave,
+  not worth cleaning up.
+- The old client secret (legacy ACS) is unusable — ignore it, or revoke it
+  as cleanup (§9).
 
-## 6. What WORKS (confirmed)
+## 6. What WORKS (confirmed, tenant/automation side)
 
-- **Silent PnP cert auth** (no browser):
+- **Silent PnP cert auth** (no browser) — used by `Health-Check.ps1`,
+  `Export-AssetLabels.ps1`, `Export-AssetsJson.ps1`, `Index-LookupFields.ps1`,
+  and the newer `Add-MonitorRows.ps1` / `Add-ScannerAccessList.ps1` /
+  `Import-ResultsToSharePoint.ps1` / `backfill/*.ps1`:
   ```powershell
   Connect-PnPOnline -Url "https://refrontiergroup.sharepoint.com/sites/xanalifeTechData" `
     -ClientId "7caa51af-9f32-42d8-8264-da5b97c2f8eb" `
     -Tenant "refrontiergroup.onmicrosoft.com" `
     -Thumbprint "B4437765C89E84AE84B813194E6BD0D54EB3F430"
   ```
-- `Export-AssetLabels.ps1` exports all items → `scanner-app/assets.csv` / `assets.json`
-  (includes AssetType + Location; `Get-FieldV` decodes `_x0020_` and falls back
-  `Asset Type` → internal `Asset`).
-- Scanner app deployed; MSAL sign-in works; live Graph lookup works.
-- **Graph `$filter` on list fields requires an index** (verified): returns
-  `400 invalidRequest "Field 'X' ... is not indexed"` on unindexed columns.
-  **Done:** `SerialNumber`, `Barcode` and `Title` are indexed via
-  `Index-LookupFields.ps1` (uses `Set-PnPField -Values @{ Indexed = $true }`,
-  verified to take effect — the old `vti_IndexableFieldXML` property-bag trick
-  does NOT work, don't use it). Run the script with `-Verify` to see the
-  current index state without changing anything; add any future lookup column
-  to the `$LookupFields` list in the script.
+- **Graph `$filter` on list fields requires an index** (verified):
+  `SerialNumber` and `Title` are indexed via `Index-LookupFields.ps1`
+  (`Set-PnPField -Values @{ Indexed = $true }` — the old
+  `vti_IndexableFieldXML` property-bag trick does **not** work). Run with
+  `-Verify` to check state without changing anything.
+- The Supabase→SharePoint sync worker uses the same cert-free
+  client-credentials Graph token internally (`api/sharepoint-sync.js`), plus
+  `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly` when it queries by
+  `SupabaseId` (that column isn't indexed — optional perf win, still open,
+  see §9).
 
-## 7. Files inventory
+## 7. Files inventory (current, root of `Asset-Scanner`)
 
-- `scanner-app/index.html` — single-file app (MSAL v2 + html5-qrcode vendored in
-  `lib/`). Lookup: server-side `$filter` on Title/SerialNumber/AssetTag
-  (columns are indexed; Prefer header kept as a safety net) → paged full-fetch
-  fallback → client-side `matchFields()`, with an offline cache fallback
-  (`xana_data_cache_v1`) and a synced write queue (`xana_write_queue_v1`).
-  Walk mode + USB wedge-scanner burst detection + item-history expander.
-  `fieldV()`/`normKey()` normalize `_x0020_` internal names.
-  `scanner-app/.vercelignore` keeps data snapshots/tests out of deployments.
-- `Export-AssetLabels.ps1` — cert-auth CSV/JSON export (now with AssetType+Location).
-- `Export-AssetsJson.ps1` — cert-auth export → `scanner-app/test/fixtures/assets.json`
-  for the golden test suite (commit the new fixture after bulk list changes).
-- `Health-Check.ps1` — monthly data-health report: duplicate serials, missing
-  tags/serials, unverified 90+ days (unverified assets in a Markdown table),
-  status summary. Fired by `.github/workflows/data-health.yml` (monthly cron).
-- `Send-HealthEmail.ps1` — optional SMTP delivery of the report (STARTTLS;
-  needs `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_TO` secrets; off by default).
-- `Index-LookupFields.ps1` — indexes the lookup columns `SerialNumber`/`Title`;
-  `-Verify` reports state without changing anything.
-- `Add-LastVerifiedColumn.ps1` — adds the `Last Verified` date column the app
-  writes on every scan (idempotent).
-- `Add-LastVerifiedByColumn.ps1` — adds the `Last Verified By` text column the
-  app writes with the signed-in user on every scan (idempotent; already run —
-  column exists on the live list).
-- `Xana-Asset-Format.ps1` — Status column + row formatting.
-- `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` — DEPRECATED: the
-  `Barcode` column was removed (Aug 2026, via Remove-BarcodeColumn.ps1);
-  label barcodes encode the tag/serial, no separate column needed.
-- `generate-cert.ps1` — created the client cert. `ocr.ps1` — Windows OCR helper.
-- `labels/` — deprecated QR label generator (backup only).
-- `README.md` — current setup/deploy docs. `HANDOFF.md` — this file.
+| Path | Purpose |
+|---|---|
+| `index.html` | Landing chooser (Assets / Dashboard / Admin). |
+| `assets/index.html` | The register: scan, edit, people/offboarding — this replaced the old standalone `scanner-app` page. |
+| `summary/` | Exec dashboard (`index.html` + `app.js`), now reading Supabase client-side. `summary/README.md` still describes the **old** MSAL-backed `api/summary.js` design — that file no longer exists in `api/`; treat `summary/README.md` as stale too, not just this file. |
+| `admin/index.html` | Users, `app_choices` lists, sync-health tab. |
+| `login/index.html` | Single sign-in for all apps. |
+| `js/supabase-client.js` | Shared `XanaSupabase` adapter (list/enrich/computeSummary/insert/update/delete/images/events/roles) used across `/assets`, `/dashboard`, `/admin`. |
+| `scanner-app/` | No longer a page — vendored libs (`lib/supabase.min.js`, `lib/html5-qrcode.min.js`), pure logic (`logic.js`) + its test suite, icons/logo. |
+| `api/sharepoint-sync.js` | Outbox drain worker: claim-based concurrency, 429/5xx backoff, Graph create/patch/delete. |
+| `api/admin-users.js` | Invite / set_roles / set_active / delete_user — verifies caller JWT + admin server-side. |
+| `supabase/migrations/0001..0022` | Schema, outbox, RBAC, `asset_history`, `asset_events`, `recycle_bin`, image storage, unique tag index. |
+| `scripts/` | `backfill.mjs`, `apply-migration.mjs`, `health-check-db.mjs`, several `e2e-*.mjs` and `debug-*.mjs` harnesses. |
+| `backfill/Backfill-PurchaseData.ps1`, `backfill/Export-MissingPurchase.ps1` | CSV-driven Purchase Date/Price backfill pass (export blanks → fill → re-import). |
+| `Add-MonitorRows.ps1` | One-off: splits monitor rows out of CPU host "Results" CSVs into separate assets. |
+| `Add-ScannerAccessList.ps1` | Creates the `Scanner Access` SharePoint allowlist (now mirrored by `allowed_scanners` in Supabase; admin-managed via `/admin`). |
+| `Import-ResultsToSharePoint.ps1` | One-off bulk import of desktops/POS from OneDrive `Results` CSVs. |
+| `Export-AssetLabels.ps1` / `Export-AssetsJson.ps1` | Cert-auth exports (labels CSV/JSON; golden-test fixture). |
+| `Xana-Asset-Format.ps1` | Status-column color + row formatting on the SharePoint mirror. |
+| `Index-LookupFields.ps1` | Indexes `SerialNumber`/`Title` for `$filter`. |
+| `Health-Check.ps1` + `.github/workflows/data-health.yml` | Monthly data-health report (cert auth) → GitHub issue, optional SMTP email. |
+| `Add-LastVerifiedColumn.ps1` / `Add-LastVerifiedByColumn.ps1` | Idempotent column-add scripts, already applied to the live list. |
+| `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED — `Barcode` column removed Aug 2026; kept for history. |
+| `generate-cert.ps1` | Created the client cert. `ocr.ps1` — Windows OCR helper for screenshots. |
+| `labels/` | Deprecated QR label generator (backup only). |
+| `docs/` | `APP_WHAT_IT_DOES.md`, `CEO_Executive_Briefing_2026-08-26.md`, `IT_Manager_Handoff_2026-08-26.md`, `decisions/ADR-001..003`. |
+| `references/session-aug25-2026-session2.md` | Prior session notes. |
+| `README.md` | Setup/deploy docs. `PROGRESS.md` | Migration log. `HANDOFF.md` | This file. |
 
 ## 8. Deployment
 
-- Vercel project `xana-asset-lookup` (scope `roystoneweres-projects`), linked in
-  `scanner-app/.vercel/` (not committed).
-- Manual deploy: `cd scanner-app && npx vercel deploy --prod --yes`.
-- GitHub → Vercel auto-deploy is wired (Project Settings → Git, rootDirectory
-  `scanner-app`): every push to `main` deploys itself (see §1).
-- Local dev: `py -m http.server 8100 --directory scanner-app`; for local
-  sign-in temporarily set `redirectUri` to `http://localhost:8100` in
-  `index.html` (restore before deploying).
+- One Vercel project, root of repo, domain `asset-system-tau.vercel.app`
+  (see `docs/IT_Manager_Handoff_2026-08-26.md` §7 for the routing table and
+  local-dev harness). No build step — static + `api/*.js` serverless
+  functions.
+- GitHub → Vercel auto-deploy: every push to `main` on
+  `github.com/Roystone-Were/Asset-Scanner` deploys. `test` workflow
+  (`.github/workflows/test.yml`) runs scanner unit tests + syntax-checks the
+  two `api/*.js` functions on every push/PR.
+- The **legacy two-project split** (`xana-asset-lookup.vercel.app` scanner,
+  `asset-scanner-iota.vercel.app` dashboard) predates the unified app —
+  archive both in the Vercel dashboard once nobody's bookmarked them, and
+  delete any old immutable deployments that still serve `assets.csv`/`.json`
+  publicly (privacy fix, see git history — `.vercelignore` now prevents new
+  ones but old deployment URLs are immutable).
 
-## 9. OPEN ITEMS (ranked)
+## 9. OPEN ITEMS (ranked, reconciled against `docs/IT_Manager_Handoff_2026-08-26.md` §12 and `PROGRESS.md`)
 
-1. **Actually scan the devices (the real blocker for staff).** Scan a vendor
-   barcode → it matches the tag/serial it encodes; if the device is missing
-   from the list entirely, the miss screen's **add-asset** form creates it on
-   the spot (works offline too). As of the last health run, 59 of 61 assets
-   have no tag yet and 7 have no serial. A one-time walk can seed most of it —
-   use **Walk mode** (phone camera stays open and fires continuously, or a
-   USB wedge scanner on a laptop: bursts are auto-detected, no taps needed
-   between scans).
-2. **CI deploy gate (2 min, GitHub UI).** Settings → Branches → Add rule → branch
-   `main` → enable **Require status checks to pass before merging** → select
-   `test` → enable **Do not allow bypassing the above settings** → Create. After
-   that a push whose tests fail is rejected, so Vercel only ever deploys green
-   commits. (`gh` CLI isn't installed here; the rule can also be set via REST
-   with a PAT.)
-3. **Monthly data-health scheduling needs 5 secrets** in GitHub (Settings →
-   Secrets and variables → Actions): `SP_TENANT`, `SP_CLIENT_ID`, `SP_CERT_B64`
-   (contents of the gitignored `sp-cert.b64`), `SP_THUMBPRINT`, and optional
-   `SP_CERT_PASS` (pfx password — unset falls back to the original so existing
-   setups keep working). The workflow is committed; it starts filing monthly
-   issue reports once the secrets exist. Optional direct email: `SMTP_HOST`,
-   `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_TO` (see the workflow header /
-   `Send-HealthEmail.ps1`).
-4. **Data hygiene (minor):** trailing spaces in some values (Condition has "New "
-   variants), empty serials on 14/33/37/38.
-5. Done since last update: register-on-scan + inline Status/Location editing,
-   fuzzy "did you mean", 24 unit + golden tests, Barcode column back, Last
-   Verified writeback, PWA install, CI auto-deploy, 24h scanned-history, site-id
-   caching, smart input. Nice-to-haves: Export button, cache-first offline lookup.
-6. **Report polish before the CEO/manager presentation (brainstorm, not built):**
-   lead the report with a headline health score + exec summary; add
-   month-over-month deltas (needs a committed `health-history.json` + `contents:
-   write` in the workflow); send the email as styled HTML instead of raw markdown.
+1. **Delete old Vercel deployments** that still serve `assets.csv`/`assets.json`
+   publicly at their immutable URLs (Deployments → … → Delete, or `npx vercel rm`).
+2. **Finance: clear the 100 `estimate_pending` assets** by 30 Sept 2026 —
+   biggest remaining data-quality gap; makes book-value totals trustworthy
+   (echoes §10 of `asset-management-how-we-achieve-this.md`).
+3. **Sweep the 19 assets unverified >90 days** — one Walk-mode pass covers it.
+4. **Index `SupabaseId` in SharePoint** (List settings → Columns → Indexed) —
+   pure perf win for the sync worker's duplicate-check query; not urgent
+   (worker already works around it with the `Prefer` header).
+5. **CI branch-protection gate** — status unverified this session (`gh` CLI
+   not installed, didn't check GitHub UI). Settings → Branches → require the
+   `test` check on `main`. Do before treating a green push as a deploy
+   guarantee.
+6. **Monthly data-health workflow secrets** (`SP_TENANT`, `SP_CLIENT_ID`,
+   `SP_CERT_B64`, `SP_THUMBPRINT`, optional `SP_CERT_PASS`) — status
+   unverified; confirm they're set in GitHub → Settings → Secrets and
+   variables → Actions, or the monthly cron silently has nothing to auth with.
+7. **Revoke the orphan legacy client secret** in the Entra app registration —
+   still just a dangling unused credential; low urgency, do during a tenant
+   cleanup pass.
+8. **Retire `api/summary.js` references** — the file itself is already gone
+   from `api/`, but `summary/README.md` and root `package.json`
+   (`@azure/msal-node` dependency) still describe/depend on the retired
+   MSAL-backed design. Worth a small doc/dependency cleanup pass so a future
+   reader doesn't chase a dead file.
+9. Longer-term roadmap (features, not infra): see
+   `asset-management-how-we-achieve-this.md` — §10 data quality and §1
+   lifecycle (`asset_events`) are the recommended next build targets.
 
 ## 10. Notes / gotchas
 
 - Re-export after list changes: `pwsh -NoProfile -File Export-AssetLabels.ps1`
   (labels) and `pwsh -NoProfile -File Export-AssetsJson.ps1` (golden-test
   fixture — commit the new `assets.json`).
-- `health-report.md` is gitignored — it's a generated artifact (regenerated by
-  `Health-Check.ps1`); the monthly report lives in a GitHub issue + optional
-  email, never in git.
-- Cert files + `.vercel/` + `.env.local` are gitignored; keep secrets out of git.
-- The app reads live from Graph — `assets.json/csv` are snapshots for labels only.
+- `health-report.md` is gitignored — regenerated by `Health-Check.ps1`; the
+  monthly report lives in a GitHub issue + optional email, never in git.
+- Cert files, `.vercel/`, and `.env.local` are gitignored — keep secrets out
+  of git. `.env.local` now holds Supabase keys too (see
+  `docs/IT_Manager_Handoff_2026-08-26.md` §4) — treat it as more sensitive
+  than it was pre-migration.
+- `SUPABASE_DB_URL`'s password contains `#` — always percent-encode
+  (`%23`) when using it outside `apply-migration.mjs` (which already does
+  `encodeURIComponent`).
 - git identity (repo-local): `Roystone-Were <patorankingquavo100@gmail.com>`.
-
-## 11. Manual hardening steps (GitHub UI / tenant — can't be done from the repo)
-
-- **CI deploy gate (2 min):** Settings → Branches → Add rule → branch `main` →
-  enable **Require status checks to pass before merging** → select `test` →
-  **Do not allow bypassing** → Create. Without it, a red push still deploys.
-- **Verify site sharing grants scanning staff edit rights.** The app requests
-  `Sites.ReadWrite.All` (delegated), but that can't exceed the user's own
-  SharePoint permission — a Read-only scanner gets loud 403s on register/edit
-  (lookup still works). Give scanning staff **Contribute** on the list if they
-  should register barcodes / edit Status & Location.
-- **Revoke the orphan client secret** (`MP8Q8…`, legacy ACS, unused) in the
-  Entra app registration — it's a credential that exists but is never used.
-- **Cron self-disable:** GitHub disables scheduled workflows after 60 days of
-  repo inactivity. The monthly report is the only thing on that cron — any push
-  resets the clock, but if the repo goes quiet, re-enable via Actions →
-  `data-health` → Enable, or trigger manually with **Run workflow**
-  (`workflow_dispatch` is wired).
+- The app now reads live from Supabase, not Graph — `assets.json`/`assets.csv`
+  are still just label-generator snapshots, same as before.

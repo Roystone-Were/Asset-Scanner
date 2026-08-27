@@ -13,8 +13,10 @@ console.log(JSON.stringify({
   uri_allow_list: c.uri_allow_list,
   external_email_enabled: c.external_email_enabled,
   mailer_autoconfirm: c.mailer_autoconfirm,
-  smtp_host: c.smtp?.smtp_host ?? null,
-  smtp_port: c.smtp?.smtp_port ?? null,
-  smtp_sender_name: c.smtp?.smtp_sender_name ?? null,
+  smtp_host: c.smtp_host ?? null,
+  smtp_port: c.smtp_port ?? null,
+  smtp_admin_email: c.smtp_admin_email ?? null,
+  smtp_sender_name: c.smtp_sender_name ?? null,
+  mailer_subjects_magic_link: c.mailer_subjects_magic_link ?? null,
   mailer_otp_exp: c.mailer_otp_exp,
 }, null, 1));
