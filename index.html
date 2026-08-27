@@ -78,8 +78,6 @@
 
     /* hero + sign-in: asymmetric split */
     .hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:48px;align-items:start;margin-bottom:56px}
-    .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:16px}
-    .eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-glow)}
     h1{font-size:clamp(2.1rem,4.5vw,3.3rem);font-weight:800;letter-spacing:-.03em;line-height:1.04;text-wrap:balance}
     h1 em{font-style:normal;color:var(--accent)}
     .hero p{margin-top:16px;font-size:.98rem;color:var(--muted);max-width:46ch;line-height:1.55;text-wrap:pretty}
@@ -176,7 +174,6 @@
 
   <section class="hero">
     <div>
-      <div class="eyebrow">Refrontier Group</div>
       <h1>Every asset.<br/>One <em>register.</em></h1>
       <p>Scan a barcode, update the asset on the spot, and the numbers report themselves.</p>
       <div class="meta">
