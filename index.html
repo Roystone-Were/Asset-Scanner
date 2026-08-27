@@ -14,6 +14,9 @@
       --bg:#0b0e11; --panel:#14171c; --line:#232830;
       --text:#f3f4f6; --muted:#9aa5b5;
       --accent:#34d399; --accent-ink:#06281c; --sky:#7dd3fc;
+      --accent-glow:rgba(52,211,153,.20); --focus-ring:rgba(52,211,153,.28);
+      --msg-info-bg:rgba(52,211,153,.10); --msg-info-ink:#a7f3d0;
+      --msg-err-bg:rgba(220,38,38,.14); --msg-err-ink:#fca5a5;
       --radius:20px;
       --hairline:rgba(255,255,255,.07);
       --shadow:0 24px 60px -24px rgba(0,0,0,.55);
@@ -23,28 +26,41 @@
       --bg:#f7f8fa; --panel:#ffffff; --line:#e6eaf0;
       --text:#0b1220; --muted:#5c6b80;
       --accent:#059669; --accent-ink:#ffffff; --sky:#0284c7;
+      --accent-glow:rgba(5,150,105,.14); --focus-ring:rgba(5,150,105,.20);
+      --msg-info-bg:rgba(5,150,105,.08); --msg-info-ink:#0a7350;
+      --msg-err-bg:rgba(220,38,38,.08); --msg-err-ink:#b91c1c;
       --hairline:rgba(11,18,32,.06);
       --shadow:0 24px 60px -28px rgba(11,18,32,.18);
     }
     html[data-theme="light"] body{
       background:
-        radial-gradient(1100px 500px at 85% -10%, rgba(5,150,105,.06), transparent 60%),
-        radial-gradient(900px 420px at 0% 110%, rgba(2,132,199,.05), transparent 55%),
+        radial-gradient(1100px 520px at 85% -10%, rgba(5,150,105,.09), transparent 60%),
+        radial-gradient(900px 460px at 0% 105%, rgba(2,132,199,.07), transparent 58%),
+        radial-gradient(700px 400px at 22% 60%, rgba(5,150,105,.045), transparent 62%),
         var(--bg);
     }
     html[data-theme="light"] input{background:#ffffff;color:var(--text)}
     html[data-theme="light"] input::placeholder{color:#8a94a6}
-    html[data-theme="light"] .tabbtn{color:var(--muted)}
     *{box-sizing:border-box;margin:0;padding:0}
+    html,body{background:var(--bg)}
     body{
       font-family:"Geist","Segoe UI",system-ui,sans-serif;
       background:
-        radial-gradient(1100px 500px at 85% -10%, rgba(52,211,153,.07), transparent 60%),
-        radial-gradient(900px 420px at 0% 110%, rgba(125,211,252,.05), transparent 55%),
+        radial-gradient(1100px 500px at 85% -10%, rgba(52,211,153,.09), transparent 60%),
+        radial-gradient(900px 420px at 0% 110%, rgba(125,211,252,.06), transparent 55%),
+        radial-gradient(700px 400px at 22% 55%, rgba(52,211,153,.04), transparent 62%),
         var(--bg);
       color:var(--text);min-height:100vh;display:flex;flex-direction:column;padding:40px 24px 28px;
+      position:relative;
     }
-    .wrap{width:100%;max-width:1020px;margin:auto;display:flex;flex-direction:column;flex:1}
+    /* subtle grain to keep flat surfaces from feeling sterile */
+    body::before{
+      content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;mix-blend-mode:overlay;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+    }
+    html[data-theme="light"] body::before{opacity:.22}
+    .wrap{width:100%;max-width:1020px;margin:auto;display:flex;flex-direction:column;flex:1;position:relative;z-index:1}
+    :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 
     /* header row */
     .top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:52px}
@@ -62,40 +78,46 @@
 
     /* hero + sign-in: asymmetric split */
     .hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:48px;align-items:start;margin-bottom:56px}
-    h1{font-size:clamp(2.1rem,4.5vw,3.3rem);font-weight:800;letter-spacing:-.03em;line-height:1.04}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:16px}
+    .eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-glow)}
+    h1{font-size:clamp(2.1rem,4.5vw,3.3rem);font-weight:800;letter-spacing:-.03em;line-height:1.04;text-wrap:balance}
     h1 em{font-style:normal;color:var(--accent)}
-    .hero p{margin-top:16px;font-size:.98rem;color:var(--muted);max-width:46ch;line-height:1.55}
-    .meta{display:flex;flex-direction:column;gap:14px;margin-top:34px;padding-bottom:6px}
+    .hero p{margin-top:16px;font-size:.98rem;color:var(--muted);max-width:46ch;line-height:1.55;text-wrap:pretty}
+    .meta{display:flex;flex-direction:column;gap:13px;margin-top:36px;padding-top:28px;padding-bottom:6px;border-top:1px solid var(--hairline);max-width:40ch}
+    .meta-item{display:flex;align-items:center;gap:11px;font-size:.85rem;color:var(--muted)}
+    .meta-item .dot{width:5px;height:5px;flex:none;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
     @media(max-width:880px){
       .hero{grid-template-columns:1fr;gap:36px;margin-bottom:44px}.top{margin-bottom:36px}
-      .meta{margin-top:0}
+      .meta{margin-top:26px}
     }
 
     /* sign-in card (right column) */
     .signin{
-      background:var(--panel);border:1px solid var(--hairline);border-radius:var(--radius);
-      padding:26px 24px;box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.05);
+      position:relative;background:var(--panel);border:1px solid var(--hairline);border-radius:var(--radius);
+      padding:28px 26px;
+      box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.05), 0 30px 70px -42px var(--accent-glow);
       animation:rise .6s var(--ease) backwards;animation-delay:.1s;
+    }
+    .signin::before{
+      content:"";position:absolute;top:0;left:26px;right:26px;height:2px;border-radius:2px;
+      background:linear-gradient(90deg, transparent, var(--accent), transparent);opacity:.55;
     }
     .signin h2{font-size:1.15rem;font-weight:700;letter-spacing:-.01em;margin-bottom:4px}
     .signin .sub{color:var(--muted);font-size:.83rem;margin-bottom:18px}
-    .tabrow{display:flex;gap:6px;margin-bottom:14px}
-    .tabbtn{flex:1;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:.84rem;font-weight:500;cursor:pointer;width:auto;transition:border-color .2s var(--ease), color .2s var(--ease)}
-    .tabbtn:hover{color:var(--text)}
-    .tabbtn.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
-    input{width:100%;padding:12px;border-radius:11px;border:1px solid var(--line);background:#0d1014;color:var(--text);font-size:.95rem;margin-bottom:10px;font-family:inherit;transition:border-color .2s var(--ease)}
+    input{width:100%;padding:12px;border-radius:11px;border:1px solid var(--line);background:#0d1014;color:var(--text);font-size:.95rem;margin-bottom:10px;font-family:inherit;transition:border-color .2s var(--ease), box-shadow .2s var(--ease)}
     input::placeholder{color:#5b6572}
     input:focus{outline:none;border-color:var(--accent)}
+    input:focus-visible{box-shadow:0 0 0 3px var(--focus-ring)}
     button.cta{width:100%;padding:12px;border-radius:11px;border:1px solid transparent;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:.92rem;cursor:pointer;font-family:inherit;transition:filter .2s var(--ease), transform .15s var(--ease)}
     button.cta:hover{filter:brightness(1.08)}
     button.cta:active{transform:scale(.98)}
     button.cta:disabled{opacity:.55;cursor:default}
-    button.linkish{width:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.78rem;text-decoration:underline;text-underline-offset:3px;padding:0;margin-top:10px;font-family:inherit}
+    button.linkish{width:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.78rem;text-decoration:underline;text-underline-offset:3px;padding:0;margin-top:10px;font-family:inherit;transition:color .2s var(--ease)}
     button.linkish:hover{color:var(--text)}
     .msg{margin-top:12px;padding:10px;border-radius:10px;font-size:.85rem;display:none}
     .msg.show{display:block}
-    .msg.err{background:rgba(220,38,38,.14);color:#fca5a5}
-    .msg.info{background:rgba(52,211,153,.10);color:#a7f3d0}
+    .msg.err{background:var(--msg-err-bg);color:var(--msg-err-ink)}
+    .msg.info{background:var(--msg-info-bg);color:var(--msg-info-ink)}
     @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
     /* tiles */
@@ -154,8 +176,14 @@
 
   <section class="hero">
     <div>
+      <div class="eyebrow">Refrontier Group</div>
       <h1>Every asset.<br/>One <em>register.</em></h1>
       <p>Scan a barcode, update the asset on the spot, and the numbers report themselves.</p>
+      <div class="meta">
+        <div class="meta-item"><span class="dot"></span>Scan-to-update, right from the barcode</div>
+        <div class="meta-item"><span class="dot"></span>Mirrors one-way into SharePoint automatically</div>
+        <div class="meta-item"><span class="dot"></span>Role-gated — admin, scanner, viewer access</div>
+      </div>
     </div>
 
     <!-- sign-in card lives here for signed-out users -->
