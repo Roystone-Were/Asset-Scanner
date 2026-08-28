@@ -146,6 +146,7 @@
       <div class="tab" data-tab="lists" role="tab">Lists</div>
       <div class="tab" data-tab="sync" role="tab">Sync health</div>
       <div class="tab" data-tab="bin" role="tab">Recycle bin</div>
+      <div class="tab" data-tab="docs" role="tab">Documents</div>
     </div>
 
     <!-- ================= USERS ================= -->
@@ -193,6 +194,19 @@
         <h3>Recycle bin</h3>
         <p class="sub" style="margin-top:4px">Deleted assets live here. Restore puts them back on the register; purge removes them permanently (mirrored as deleted to SharePoint).</p>
         <div id="binList"><div class="msg info show">Loading…</div></div>
+      </div>
+    </section>
+    <!-- ================= DOCUMENTS ================= -->
+    <section id="pane-docs" style="display:none">
+      <div class="card">
+        <div class="cardhead">
+          <h3>IT documents</h3>
+          <button type="button" id="btnUploadDoc">+ Upload</button>
+          <input type="file" id="docUpload" style="display:none" />
+        </div>
+        <p class="sub" style="margin-top:4px">Reference forms — audit checklist, issuance/return forms. Anyone with the link can view; only admins can add or remove.</p>
+        <div id="docsList"><div class="msg info show">Loading…</div></div>
+        <div id="docsMsg" class="msg"></div>
       </div>
     </section>
 
@@ -258,9 +272,10 @@ async function api(action,payload){
 // ---------- tabs ----------
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
-  ["users","lists","sync","bin"].forEach(n=>{document.getElementById("pane-"+n).style.display=t.dataset.tab===n?"block":"none";});
+  ["users","lists","sync","bin","docs"].forEach(n=>{document.getElementById("pane-"+n).style.display=t.dataset.tab===n?"block":"none";});
   if(t.dataset.tab==="sync") loadSync();
   if(t.dataset.tab==="bin") loadBin();
+  if(t.dataset.tab==="docs") loadDocs();
 }));
 
 // ---------- invite sheet ----------
@@ -307,6 +322,50 @@ document.getElementById("binList").addEventListener("click",async(e)=>{
       onConfirm:async()=>{await XanaSupabase.purgeAsset(pg.dataset.purge);await loadBin();return {message:"Asset purged"};}
     });
   }
+});
+
+// ---------- documents ----------
+function fmtBytes(n){
+  if(!n&&n!==0)return"—";
+  if(n<1024)return n+" B";
+  if(n<1024*1024)return(n/1024).toFixed(1)+" KB";
+  return(n/1024/1024).toFixed(1)+" MB";
+}
+async function loadDocs(){
+  const el=document.getElementById("docsList");
+  try{
+    el.innerHTML=SKEL_ROWS(3);
+    const docs=await XanaSupabase.listItDocuments();
+    if(!docs.length){
+      el.innerHTML='<div class="empty"><h3>No documents yet</h3><p>Upload reference forms — audit checklists, issuance/return forms — so they\'re here whenever IT needs them.</p></div>';
+      return;
+    }
+    el.innerHTML="<table><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>"+
+      docs.map(d=>"<tr><td><a href='"+esc(d.publicUrl)+"' target='_blank' rel='noopener'>"+esc(d.name.replace(/^\d+_/,""))+"</a></td><td class='num'>"+fmtBytes(d.size)+"</td><td class='num'>"+(d.updatedAt?new Date(d.updatedAt).toLocaleString():"—")+"</td>"+
+        "<td style='white-space:nowrap'><button class='small danger' data-delete-doc='"+esc(d.name)+"'>Delete</button></td></tr>").join("")+
+      "</tbody></table>";
+  }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
+}
+document.getElementById("docUpload")?.addEventListener("change",async(e)=>{
+  const file=e.target.files&&e.target.files[0];
+  e.target.value="";   // allow re-selecting the same file later
+  if(!file)return;
+  try{
+    await XanaSupabase.uploadItDocument(file);
+    toast("Uploaded "+file.name,false);
+    await loadDocs();
+  }catch(err){toast(err.message,true);}
+});
+document.getElementById("btnUploadDoc")?.addEventListener("click",()=>document.getElementById("docUpload").click());
+document.getElementById("docsList").addEventListener("click",(e)=>{
+  const del=e.target.closest("[data-delete-doc]");
+  if(!del)return;
+  const name=del.dataset.deleteDoc;
+  showDialog({title:"Delete document",
+    body:"Remove <b>"+esc(name.replace(/^\d+_/,""))+"</b>? This cannot be undone.",
+    confirmText:"Delete",danger:true,
+    onConfirm:async()=>{await XanaSupabase.deleteItDocument(name);await loadDocs();return{message:"Document deleted"};}
+  });
 });
 
 // ---------- users ----------

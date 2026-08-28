@@ -500,6 +500,32 @@
     const pub = client().storage.from("asset-images").getPublicUrl(path);
     return pub && pub.data ? pub.data.publicUrl : null;
   }
+  // ---------- IT documents (Supabase Storage, admin-only write) ----------
+  // Flat bucket, no per-item subfolders (unlike asset-images) -- these are
+  // general reference forms, not tied to one asset. Write is gated by
+  // is_admin() at the RLS level (0025_it_documents_storage.sql); read is
+  // public same as asset-images (ADR-002 convention).
+  async function listItDocuments() {
+    const { data, error } = await client().storage.from("it-documents").list("", { sortBy: { column: "created_at", order: "desc" } });
+    if (error) throw new Error(error.message);
+    return (data || []).filter((f) => f.id).map((f) => ({
+      name: f.name,
+      size: f.metadata && f.metadata.size,
+      updatedAt: f.updated_at,
+      publicUrl: client().storage.from("it-documents").getPublicUrl(f.name).data.publicUrl,
+    }));
+  }
+  async function uploadItDocument(file) {
+    const path = Date.now() + "_" + file.name.replace(/[^\w.\-]+/g, "_");
+    const up = await client().storage.from("it-documents").upload(path, file, { contentType: file.type || "application/octet-stream" });
+    if (up.error) throw new Error(up.error.message);
+    return path;
+  }
+  async function deleteItDocument(path) {
+    const del = await client().storage.from("it-documents").remove([path]);
+    if (del.error) throw new Error(del.error.message);
+  }
+
   // Persist an image URL onto the asset's extra jsonb so the detail card can
   // show it without re-uploading. Server side: asset_extra_merge keeps the
   // rest of the blob untouched (migration 0010).
@@ -594,6 +620,9 @@
     completePasswordChange,
     uploadAssetImage,
     attachAssetImage,
+    listItDocuments,
+    uploadItDocument,
+    deleteItDocument,
     listAssetEvents,
     addAssetEvent,
     setEventResolved,
