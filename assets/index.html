@@ -78,9 +78,11 @@
   .tbl-scroll{overflow:auto;max-height:520px;border:1px solid var(--hairline);border-radius:14px;scroll-behavior:smooth;background:var(--card);box-shadow:var(--shadow-ambient), var(--inner-highlight);overscroll-behavior:auto}   /* chain to the page at top/bottom */
   thead th{position:relative;white-space:nowrap}
   th .fwrap{display:inline-flex;align-items:center;margin-left:4px}
-  button.funnel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.62rem;padding:2px;line-height:1;opacity:.7}
+  button.funnel{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;line-height:1;opacity:.7;display:inline-flex;align-items:center;gap:3px}
   button.funnel:hover{color:var(--text);opacity:1}
   button.funnel.active{color:var(--accent);opacity:1}
+  button.funnel svg{display:block}
+  button.funnel .fcount{font-size:.62rem;font-weight:700}
   .fpop{position:absolute;z-index:60;background:var(--card);border:1px solid var(--hairline);border-radius:14px;padding:12px;box-shadow:var(--shadow-lifted), var(--inner-highlight);min-width:180px;max-height:260px;overflow:auto;text-align:left}
   .fpop .ftitle{font-weight:600;font-size:.72rem;margin-bottom:6px;text-transform:capitalize;color:var(--muted)}
   .fpop label{display:flex;gap:7px;align-items:center;font-size:.8rem;padding:4px 2px;cursor:pointer}
@@ -445,9 +447,10 @@ function renderTable(){
   const start=currentPage*PAGE_SIZE, end=Math.min(start+PAGE_SIZE, filtered.length);
   const slice=filtered.slice(start,end);
   const COLS=[["Tag","tag"],["Type","type"],["Model","model"],["Serial","serial"],["Employee","employee"],["Department","department"],["Location","location"],["Status","status"],["Purchase","purchase"],["Condition","condition"]];
+  const FUNNEL_ICON='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>';
   const head=COLS.map(([label,key])=>{
     const fkey=FILTERABLE[label];
-    const funnel=fkey?'<span class="fwrap"><button type="button" class="funnel'+(colFilters[fkey].size?" active":"")+'" data-funnel="'+fkey+'" title="Filter '+label.toLowerCase()+'">'+(colFilters[fkey].size?"⏷ "+colFilters[fkey].size:"⏷")+'</button></span>':"";
+    const funnel=fkey?'<span class="fwrap"><button type="button" class="funnel'+(colFilters[fkey].size?" active":"")+'" data-funnel="'+fkey+'" title="Filter '+label.toLowerCase()+'">'+FUNNEL_ICON+(colFilters[fkey].size?'<span class="fcount">'+colFilters[fkey].size+'</span>':'')+'</button></span>':"";
     const arrow=(sortKey===key)?(sortDir===1?" ▲":" ▼"):"";
     return '<th data-sort="'+key+'"><span class="sortlabel" data-sort="'+key+'">'+label+arrow+"</span>"+funnel+"</th>";
   }).join("");
@@ -708,7 +711,7 @@ function renderEventForm(histPanel,current){
 let _choices=null;
 async function getChoices(){
   if(_choices) return _choices;
-  _choices={status:["In Use","Available","Retired","Left With","Lost"],location:["Syokimau","Katani","Ruiru","Githurai","Lumumba Dr","TRM Dr"],type:["Laptop","CPU","Monitor","Desktop","Printer","Scanner","Mouse","Keyboard","Phone","POS","Cash Drawer","Scale","Speaker/Mic","Router","Switch","UNVR","TV"]};
+  _choices={status:["In Use","Available","Retired","Left With","Lost"],location:["Syokimau","Katani","Ruiru","Githurai","Lumumba Dr","TRM Dr"],type:["Laptop","CPU","Monitor","Desktop","Printer","Scanner","Mouse","Keyboard","Phone","POS","Cash Drawer","Scale","Speaker/Mic","Router","Switch","UNVR","TV"],department:[]};
   try{
     const {data,error}=await XanaSupabase.client().from("app_choices").select("category,value");
     if(error) throw error;
@@ -716,6 +719,7 @@ async function getChoices(){
       if(r.category==="status"&&!_choices.status.includes(r.value))_choices.status.push(r.value);
       if(r.category==="location"&&!_choices.location.includes(r.value))_choices.location.push(r.value);
       if(r.category==="asset_type"&&!_choices.type.includes(r.value))_choices.type.push(r.value);
+      if(r.category==="department"&&!_choices.department.includes(r.value))_choices.department.push(r.value);
     }
   }catch(e){/* offline or table empty — fallbacks hold */}
   return _choices;
@@ -788,8 +792,9 @@ async function beginEdit(cell,current){
   const hasValue=orig&&orig!=="—";
   const editVal=hasValue?orig:"";
   let control;
-  if(name==="Status"||name==="Location"){
-    const opts=(name==="Status"?_choices.status:_choices.location).filter(Boolean);
+  if(name==="Status"||name==="Location"||name==="Department"){
+    const optsByName={Status:_choices.status,Location:_choices.location,Department:_choices.department};
+    const opts=(optsByName[name]||[]).filter(Boolean);
     // preselect the stored value case-insensitively; keep it even when absent from the list
     const hit=hasValue?opts.find(o=>o.toLowerCase()===orig.toLowerCase()):null;
     const options=['<option value="">— none —</option>']
