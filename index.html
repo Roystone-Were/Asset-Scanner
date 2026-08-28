@@ -81,12 +81,8 @@
     h1{font-size:clamp(2.1rem,4.5vw,3.3rem);font-weight:800;letter-spacing:-.03em;line-height:1.04;text-wrap:balance}
     h1 em{font-style:normal;color:var(--accent)}
     .hero p{margin-top:16px;font-size:.98rem;color:var(--muted);max-width:46ch;line-height:1.55;text-wrap:pretty}
-    .meta{display:flex;flex-direction:column;gap:13px;margin-top:36px;padding-top:28px;padding-bottom:6px;border-top:1px solid var(--hairline);max-width:40ch}
-    .meta-item{display:flex;align-items:center;gap:11px;font-size:.85rem;color:var(--muted)}
-    .meta-item .dot{width:5px;height:5px;flex:none;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
     @media(max-width:880px){
       .hero{grid-template-columns:1fr;gap:36px;margin-bottom:44px}.top{margin-bottom:36px}
-      .meta{margin-top:26px}
     }
 
     /* sign-in card (right column) */
@@ -176,11 +172,6 @@
     <div>
       <h1>Every asset.<br/>One <em>register.</em></h1>
       <p>Scan a barcode, update the asset on the spot, and the numbers report themselves.</p>
-      <div class="meta">
-        <div class="meta-item"><span class="dot"></span>Scan-to-update, right from the barcode</div>
-        <div class="meta-item"><span class="dot"></span>Mirrors one-way into SharePoint automatically</div>
-        <div class="meta-item"><span class="dot"></span>Role-gated — admin, scanner, viewer access</div>
-      </div>
     </div>
 
     <!-- sign-in card lives here for signed-out users -->
