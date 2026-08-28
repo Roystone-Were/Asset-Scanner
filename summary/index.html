@@ -95,12 +95,17 @@
   .panel h2 { font-size:.95rem; font-weight:600; letter-spacing:-.01em; margin-bottom:16px; color:var(--text); }
   .sub-h { font-size:.78rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:0 0 10px; }
   .bars { display:flex; flex-direction:column; gap:12px; }
-  .bars-more { display:flex; flex-direction:column; gap:12px; }
-  .bars-more summary { cursor:pointer; font-size:.78rem; font-weight:600; color:var(--muted); list-style:none; transition:color .2s var(--ease-out); }
-  .bars-more summary::-webkit-details-marker { display:none; }
-  .bars-more summary::marker { content:""; }
-  .bars-more summary:hover { color:var(--text); }
-  .bars-more[open] summary { color:var(--text); }
+  .bars-more-btn { align-self:flex-start; padding:5px 12px; font-size:.76rem; }
+  dialog#moreDialog {
+    border:1px solid var(--hairline); border-radius:var(--radius); padding:22px;
+    background:var(--panel); color:var(--text); box-shadow:var(--shadow-lifted);
+    width:min(420px, 90vw); max-height:min(70vh, 600px);
+  }
+  dialog#moreDialog::backdrop { background:rgba(0,0,0,.45); backdrop-filter:blur(2px); }
+  dialog#moreDialog[open] { display:flex; flex-direction:column; gap:16px; }
+  .more-dialog-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .more-dialog-head h2 { font-size:.95rem; font-weight:600; letter-spacing:-.01em; }
+  #moreDialogBody { overflow:auto; }
   .bar-row .bar-top { display:flex; justify-content:space-between; font-size:.82rem; margin-bottom:5px; }
   .bar-row .bar-top .lbl { color:var(--muted); font-weight:500; }
   .bar-track { height:7px; background:var(--panel2); border-radius:4px; overflow:hidden; }
@@ -256,12 +261,24 @@
 
   <footer>Xana Tech &amp; Data — auto-generated from live data · straight-line depreciation · data refreshes on every open</footer>
 </div></div>
+
+<dialog id="moreDialog">
+  <div class="more-dialog-head">
+    <h2 id="moreDialogTitle">All</h2>
+    <button type="button" class="btn-ghost" id="moreDialogClose" aria-label="Close">Close</button>
+  </div>
+  <div id="moreDialogBody"></div>
+</dialog>
+
 <script>
   const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
   menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
   overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
+  const moreDialog=document.getElementById("moreDialog");
+  document.getElementById("moreDialogClose")?.addEventListener("click",()=>moreDialog.close());
+  moreDialog?.addEventListener("click",(e)=>{ if(e.target===moreDialog) moreDialog.close(); }); // backdrop click
 </script>
-  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=7"></script>
+  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=8"></script>
 </body>
 </html>
 

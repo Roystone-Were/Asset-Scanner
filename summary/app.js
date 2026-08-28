@@ -212,7 +212,7 @@ const DEP_COLORS = {
       </div>
       <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
-      `<div class="grid">${panel(statusBars(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
+      `<div class="grid">${panel(statusBars(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byType, "#0d9488", 6, "type"), "By Type")}${panel(bars(d.byLocation, "#3b82f6", 6, "location"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6", 6, "department"), "By Department")}</div>` +
       healthStrip(h) +
       `<div class="panel" id="warrantyPanel"><h2>Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="btn-quiet" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="btn-quiet" id="nextBtn" onclick="changePage(1)">Next</button><button class="btn-outline" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="btn-outline" id="exportCsv">Export CSV</button></div></div>`;
@@ -389,24 +389,42 @@ const DEP_COLORS = {
       "</div>"
     );
   }
-  function bars(obj, color, visibleCount) {
+  const _barsData = {}; // key -> {entries, color, max} for the "+N more" dialog
+  const MORE_TITLES = { type: "By Type", location: "By Location", department: "By Department" };
+  function barRowHtml(k, v, max, color) {
+    return '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + v + "</span></div>" +
+      '<div class="bar-track"><div class="bar-fill" data-w="' + ((v / max) * 100) + '" style="width:0;background:' + color + '"></div></div></div>';
+  }
+  function bars(obj, color, visibleCount, key) {
     // Cap at 6 visible rows by default -- with up to 10 distinct types/
     // locations/departments, these panels were driving the whole grid row's
-    // height (and stretching their shorter row-mate along with them). The
-    // rest collapse behind a native <details> toggle: no data lost, default
-    // view stays short.
+    // height (and stretching their shorter row-mate along with them, since
+    // CSS Grid rows share height regardless of align-items). Rest go behind
+    // a "+N more" button that opens a <dialog> instead of expanding inline
+    // -- panel height never changes, so no row-height coupling, ever.
     visibleCount = visibleCount || 6;
-    const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 20),
-      max = Math.max(1, ...e.map((x) => x[1]));
-    const row = ([k, v]) =>
-      '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + v + "</span></div>" +
-      '<div class="bar-track"><div class="bar-fill" data-w="' + ((v / max) * 100) + '" style="width:0;background:' + color + '"></div></div></div>';
-    const rest = e.slice(visibleCount);
-    const tail = rest.length
-      ? '<details class="bars-more"><summary>+' + rest.length + ' more</summary>' + rest.map(row).join("") + '</details>'
+    const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(1, ...e.map((x) => x[1]));
+    const restCount = Math.max(0, e.length - visibleCount);
+    if (key) _barsData[key] = { entries: e, color, max };
+    const more = restCount
+      ? '<button type="button" class="btn-quiet bars-more-btn" onclick="showMoreBars(\'' + key + '\')">+' + restCount + " more</button>"
       : "";
-    return '<div class="bars">' + e.slice(0, visibleCount).map(row).join("") + tail + "</div>";
+    return '<div class="bars">' + e.slice(0, visibleCount).map(([k, v]) => barRowHtml(k, v, max, color)).join("") + more + "</div>";
   }
+  window.showMoreBars = function (key) {
+    const d = _barsData[key];
+    const dlg = document.getElementById("moreDialog");
+    if (!d || !dlg) return;
+    document.getElementById("moreDialogTitle").textContent = MORE_TITLES[key] || "All";
+    document.getElementById("moreDialogBody").innerHTML =
+      '<div class="bars">' + d.entries.map(([k, v]) => barRowHtml(k, v, d.max, d.color)).join("") + "</div>";
+    dlg.showModal();
+    // dialog rows start at width:0 like the live panels -- animate them in too
+    requestAnimationFrame(() => {
+      dlg.querySelectorAll(".bar-fill").forEach((el) => { el.style.width = (el.getAttribute("data-w") || "0") + "%"; });
+    });
+  };
   function verificationBars(v) {
     // Fixed four-bucket freshness view; per-row colors unlike bars().
     const rows = [
