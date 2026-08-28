@@ -35,6 +35,13 @@
   border-color:color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .navbar_right{display:flex;align-items:center;gap:8px}
+/* Higher specificity than a bare page-local `.menu-button{...}` so this
+   file stays the single source of truth for its visibility, regardless
+   of what a page's own <style> block (which loads after this file)
+   declares. */
+.navbar_right .menu-button{display:none}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:44}
+.overlay.open{display:block}
 .theme-toggle{
   background:transparent;border:1px solid var(--line);min-width:34px;width:auto;height:34px;padding:0 12px;
   display:inline-flex;align-items:center;justify-content:center;
@@ -53,6 +60,6 @@
   }
   .navbar_menu.open{display:flex}
   .navbar_menu a{padding:11px 14px;border-radius:10px}
-  .menu-button{display:inline-flex}
+  .navbar_right .menu-button{display:inline-flex}
   .overlay.open + .main .navbar_menu{display:flex}   /* legacy safety */
 }

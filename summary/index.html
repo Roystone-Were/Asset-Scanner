@@ -55,6 +55,16 @@
   .meta { font-size:.8rem; color:var(--muted); text-align:right; }
   button { background:var(--accent); color:#fff; border:0; border-radius:9px; padding:9px 14px; font-size:.85rem; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
+  /* Button hierarchy — plain `button` above is the primary/solid style.
+     Everything that isn't the main call to action on its panel should
+     use one of these instead of falling back to solid-accent-for-everything. */
+  button.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.75rem;width:auto}
+  button.btn-ghost:hover{background:var(--panel2)}
+  button.btn-quiet{background:var(--panel2);color:var(--muted);border:1px solid var(--hairline)}
+  button.btn-quiet:hover{color:var(--text);border-color:var(--line)}
+  button.btn-outline{background:transparent;color:var(--text);border:1px solid var(--line)}
+  button.btn-outline:hover{background:var(--panel2);border-color:var(--muted)}
+  button.btn-book{background:var(--book);color:#fff}
   .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin:22px 0; }
   .kpi {
     background:var(--panel); border:1px solid var(--hairline); border-radius:var(--radius);
@@ -233,10 +243,10 @@
       <span id="userInfo" style="display:none;align-items:center;gap:8px;">
         <span id="userName" style="font-size:.82rem;"></span>
         <span id="roleBadge" class="pill" style="font-size:.65rem;"></span>
-        <button type="button" id="signOutBtn" style="background:transparent;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.75rem;cursor:pointer;width:auto;">Sign out</button>
+        <button type="button" class="btn-ghost" id="signOutBtn">Sign out</button>
       </span>
       <div class="meta" id="meta">Last fetched: —</div>
-      <button type="button" id="execBtn" style="display:none;background:var(--book);">Exec report</button>
+      <button type="button" class="btn-book" id="execBtn" style="display:none">Exec report</button>
     </div>
   </header>
 

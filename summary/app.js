@@ -215,7 +215,7 @@ const DEP_COLORS = {
       `<div class="grid">${panel(donut(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
       healthStrip(h) +
       `<div class="panel" id="warrantyPanel"><h2>Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
-      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="editbtn" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="editbtn" id="nextBtn" onclick="changePage(1)">Next</button><button class="editbtn" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="editbtn" id="exportCsv">Export CSV</button></div></div>`;
+      `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="btn-quiet" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="btn-quiet" id="nextBtn" onclick="changePage(1)">Next</button><button class="btn-outline" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="btn-outline" id="exportCsv">Export CSV</button></div></div>`;
 
     // Now populate the table after the DOM elements exist
     renderTable();

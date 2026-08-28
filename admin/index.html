@@ -37,6 +37,9 @@
     button:hover{filter:brightness(1.08)}
     button.secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
     button.secondary:hover{border-color:var(--muted);filter:none}
+    /* visibility governed by /css/nav.css; this is layout only */
+    .menu-button{align-items:center;gap:6px;padding:8px 12px;font-size:.82rem}
+    .menu-button .icon{font-size:1rem}
     button.danger{background:#dc2626;color:#fff}
     button.danger:hover{background:#b91c1c;filter:none}
     button.small{padding:4px 10px;font-size:.7rem;border-radius:999px;font-weight:500}
@@ -110,13 +113,17 @@
   </style>
 </head>
 <body>
+<div class="overlay" id="overlay"></div>
 <nav class="navbar">
   <div class="navbar_container">
     <a class="navbar_logo" href="/"><img src="/scanner-app/xana-logo.png" alt="Xana"/> Xana</a>
-    <div class="navbar_menu">
+    <div class="navbar_menu" id="navMenu">
       <a href="/">Home</a><a href="/assets">Assets</a><a href="/dashboard">Dashboard</a><a class="active" href="/admin">Admin</a>
     </div>
-    <button type="button" class="theme-switch" id="themeToggle" role="switch" aria-checked="false" aria-label="Toggle dark mode" title="Toggle dark mode"><span class="ts-opt ts-sun" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/></svg></span><span class="ts-opt ts-moon" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 14.2A8.6 8.6 0 0 1 9.8 3.4a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span><span class="ts-thumb" aria-hidden="true"></span></button>
+    <div class="navbar_right">
+      <button type="button" class="theme-switch" id="themeToggle" role="switch" aria-checked="false" aria-label="Toggle dark mode" title="Toggle dark mode"><span class="ts-opt ts-sun" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/></svg></span><span class="ts-opt ts-moon" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 14.2A8.6 8.6 0 0 1 9.8 3.4a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span><span class="ts-thumb" aria-hidden="true"></span></button>
+      <button type="button" class="menu-button secondary" id="menuBtn" aria-label="Open menu"><span>Menu</span><span class="icon">☰</span></button>
+    </div>
   </div>
 </nav>
 
@@ -563,6 +570,10 @@ async function loadSync(){
   if(boot){boot.style.opacity="0";setTimeout(()=>boot.remove(),260);}
   await Promise.all([loadUsers(),loadChoices()]);
 })();
+
+const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");
+menuBtn?.addEventListener("click",()=>{navMenu.classList.toggle("open");overlay.classList.toggle("open");});
+overlay?.addEventListener("click",()=>{navMenu.classList.remove("open");overlay.classList.remove("open");});
 </script>
 </body>
 </html>
