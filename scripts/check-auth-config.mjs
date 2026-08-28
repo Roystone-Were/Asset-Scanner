@@ -18,5 +18,6 @@ console.log(JSON.stringify({
   smtp_admin_email: c.smtp_admin_email ?? null,
   smtp_sender_name: c.smtp_sender_name ?? null,
   mailer_subjects_magic_link: c.mailer_subjects_magic_link ?? null,
+  mailer_subjects_invite: c.mailer_subjects_invite ?? null,
   mailer_otp_exp: c.mailer_otp_exp,
 }, null, 1));

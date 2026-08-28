@@ -1,5 +1,6 @@
-// Configures custom SMTP (Mailgun) + the branded Magic Link email template via
-// the Supabase Management API. Same pattern as apply-migration.mjs / check-auth-config.mjs.
+// Configures custom SMTP (Mailgun) + the branded Magic Link and Invite email
+// templates via the Supabase Management API. Same pattern as
+// apply-migration.mjs / check-auth-config.mjs.
 //
 // Requires these in .env.local (in addition to the existing SUPABASE_* vars):
 //   MAILGUN_SMTP_USER=postmaster@mg.xanalife.com   (Mailgun > Sending > Domains > <domain> > SMTP credentials)
@@ -27,8 +28,8 @@ if (missing.length) {
   process.exit(1);
 }
 
-const templatePath = 'scripts/email-templates/magic-link.html';
-const magicLinkHtml = fs.readFileSync(templatePath, 'utf8');
+const magicLinkHtml = fs.readFileSync('scripts/email-templates/magic-link.html', 'utf8');
+const inviteHtml = fs.readFileSync('scripts/email-templates/invite.html', 'utf8');
 
 const body = {
   external_email_enabled: true,
@@ -43,6 +44,9 @@ const body = {
 
   mailer_subjects_magic_link: 'Sign in to Xana Asset System',
   mailer_templates_magic_link_content: magicLinkHtml,
+
+  mailer_subjects_invite: "You're invited to Xana Asset System",
+  mailer_templates_invite_content: inviteHtml,
 };
 
 const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
@@ -55,5 +59,5 @@ console.log('HTTP', res.status);
 console.log(responseText.slice(0, 2000));
 if (!res.ok) process.exit(1);
 
-console.log('\nSMTP + magic-link template pushed. Verify with: node scripts/check-auth-config.mjs');
-console.log('Then send yourself a test magic link from /login and confirm it arrives via Mailgun (From: ' + env.MAILGUN_SENDER_NAME + ' <' + env.MAILGUN_SENDER_EMAIL + '>).');
+console.log('\nSMTP + magic-link + invite templates pushed. Verify with: node scripts/check-auth-config.mjs');
+console.log('Then send yourself a test magic link from /login, and a test invite from /admin, and confirm both arrive via Mailgun (From: ' + env.MAILGUN_SENDER_NAME + ' <' + env.MAILGUN_SENDER_EMAIL + '>).');

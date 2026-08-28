@@ -1,7 +1,11 @@
 <!--
-  Supabase "Magic Link" email template — Xana Asset System branding.
+  Supabase "Invite user" email template — Xana Asset System branding.
+  Sent by api/admin-users.js's "invite" action (POST /auth/v1/invite),
+  triggered when IT invites someone from /admin. Tapping the button lands
+  them signed in directly at /login — no password step at this stage
+  (that's a separate flow: create_with_password / must_change_password).
   Variables available: {{ .ConfirmationURL }} {{ .SiteURL }} {{ .Email }} {{ .Token }} {{ .TokenHash }}
-  Pasted into Supabase Dashboard > Authentication > Email Templates > Magic Link
+  Pasted into Supabase Dashboard > Authentication > Email Templates > Invite user
   (or pushed via scripts/set-smtp-and-template.mjs).
 -->
 <!DOCTYPE html>
@@ -9,7 +13,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sign in to Xana Asset System</title>
+<title>You're invited to Xana Asset System</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f2f4f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f2f4f7;padding:32px 16px;">
@@ -29,11 +33,11 @@
           <tr>
             <td align="center" style="padding:0 32px;">
               <h1 style="margin:0 0 8px;font-size:20px;line-height:1.3;color:#0b1220;font-weight:700;">
-                Sign in to Xana Asset System
+                You've been invited to Xana Asset System
               </h1>
               <p style="margin:0 0 28px;font-size:14px;line-height:1.5;color:#5c6b80;">
-                Tap the button below to sign in as <strong style="color:#0b1220;">{{ .Email }}</strong>.
-                This link works once and expires shortly.
+                An admin added <strong style="color:#0b1220;">{{ .Email }}</strong> as an invite-only user.
+                Tap the button below to activate your account — you'll land signed in, nothing to set up first.
               </p>
             </td>
           </tr>
@@ -45,7 +49,7 @@
                  style="display:inline-block;width:100%;max-width:320px;box-sizing:border-box;padding:14px 24px;
                         background-color:#059669;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;
                         border-radius:11px;">
-                Sign in to Xana
+                Accept invite &amp; sign in
               </a>
             </td>
           </tr>
@@ -65,7 +69,8 @@
             <td style="padding:28px 32px 32px;">
               <hr style="border:none;border-top:1px solid #e6eaf0;margin:0 0 16px;" />
               <p style="margin:0;font-size:11px;line-height:1.6;color:#9aa5b5;text-align:center;">
-                Didn't request this? You can safely ignore this email — no account changes were made.<br />
+                Wasn't expecting this? You can ignore this email — no account was activated.
+                Questions? Contact IT Admin at it@xanalife.com.<br />
                 Xana Asset System
               </p>
             </td>
