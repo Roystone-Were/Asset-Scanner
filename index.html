@@ -75,6 +75,19 @@
     #who b{color:var(--text);font-weight:600}
     #who button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.78rem;text-decoration:underline;text-underline-offset:3px}
     #who button:hover{color:var(--text)}
+    @media(max-width:560px){
+      /* Unlike /assets, /admin, /dashboard (shared css/nav.css pill navbar
+         with its own mobile collapse), this landing page's header is
+         bespoke and had no narrow-viewport handling at all -- brand text,
+         "Signed in as <email>", and "Sign out" all fought for one row and
+         overflowed/wrapped badly. Trim to the essentials instead of adding
+         a hamburger for what's normally just 2-3 items. */
+      .top{gap:8px;flex-wrap:wrap}  /* wrap is just a safety net for an unusually long email */
+      .brand-rest{display:none}     /* "Xana" only, logo already carries the rest */
+      .topright{gap:8px}
+      #who{gap:6px}
+      .who-label{display:none}      /* keep just the email + Sign out */
+    }
 
     /* hero + sign-in: asymmetric split */
     .hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:48px;align-items:start;margin-bottom:56px}
@@ -161,7 +174,7 @@
 
 <div class="wrap">
   <div class="top">
-    <div class="brand"><img src="/scanner-app/xana-logo.png" alt="" /><span>Xana Asset System</span></div>
+    <div class="brand"><img src="/scanner-app/xana-logo.png" alt="" /><span>Xana<span class="brand-rest"> Asset System</span></span></div>
     <div class="topright">
       <button type="button" class="theme-switch" id="themeToggle" role="switch" aria-checked="true" aria-label="Toggle dark mode" title="Toggle dark mode"><span class="ts-opt ts-sun" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/></svg></span><span class="ts-opt ts-moon" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 14.2A8.6 8.6 0 0 1 9.8 3.4a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span><span class="ts-thumb" aria-hidden="true"></span></button>
       <div id="who"></div>
@@ -280,7 +293,7 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){retur
   XanaSupabase.applyRoleNav(roles);
 
   who.classList.add("show");
-  who.innerHTML = '<span>Signed in as</span> <b>' + esc(email) + '</b>' +
+  who.innerHTML = '<span class="who-label">Signed in as</span> <b>' + esc(email) + '</b>' +
     '<button id="so">Sign out</button>';
   document.getElementById("so").addEventListener("click", async function () {
     await XanaSupabase.signOut();
