@@ -389,20 +389,23 @@ const DEP_COLORS = {
       "</div>"
     );
   }
-  function bars(obj, color) {
-    const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10),
+  function bars(obj, color, visibleCount) {
+    // Cap at 6 visible rows by default -- with up to 10 distinct types/
+    // locations/departments, these panels were driving the whole grid row's
+    // height (and stretching their shorter row-mate along with them). The
+    // rest collapse behind a native <details> toggle: no data lost, default
+    // view stays short.
+    visibleCount = visibleCount || 6;
+    const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 20),
       max = Math.max(1, ...e.map((x) => x[1]));
-    return (
-      '<div class="bars">' +
-      e
-        .map(
-          ([k, v]) =>
-            '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + v + "</span></div>" +
-            '<div class="bar-track"><div class="bar-fill" data-w="' + ((v / max) * 100) + '" style="width:0;background:' + color + '"></div></div></div>',
-        )
-        .join("") +
-      "</div>"
-    );
+    const row = ([k, v]) =>
+      '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + v + "</span></div>" +
+      '<div class="bar-track"><div class="bar-fill" data-w="' + ((v / max) * 100) + '" style="width:0;background:' + color + '"></div></div></div>';
+    const rest = e.slice(visibleCount);
+    const tail = rest.length
+      ? '<details class="bars-more"><summary>+' + rest.length + ' more</summary>' + rest.map(row).join("") + '</details>'
+      : "";
+    return '<div class="bars">' + e.slice(0, visibleCount).map(row).join("") + tail + "</div>";
   }
   function verificationBars(v) {
     // Fixed four-bucket freshness view; per-row colors unlike bars().
