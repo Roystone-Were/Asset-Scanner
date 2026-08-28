@@ -46,6 +46,12 @@ const body = {
   smtp_admin_email: env.OFFICE365_SMTP_USER, // Office 365 requires From == the authenticated mailbox
   smtp_sender_name: env.OFFICE365_SENDER_NAME,
   smtp_max_frequency: 1, // min seconds between emails -- 60 was a leftover default that blocked back-to-back invites
+  // A SEPARATE, independent cap from smtp_max_frequency above -- this is a
+  // rolling-window total (not tied to which mailer you use), left at
+  // Supabase's low free-tier default (2) even after custom SMTP was
+  // configured. 100 comfortably covers real usage while still bounding a
+  // runaway bug; Office 365 itself supports far higher real throughput.
+  rate_limit_email_sent: 100,
 
   mailer_subjects_magic_link: 'Sign in to Xana Asset System',
   mailer_templates_magic_link_content: magicLinkHtml,
