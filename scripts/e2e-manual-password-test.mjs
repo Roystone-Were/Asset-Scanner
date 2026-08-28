@@ -18,7 +18,7 @@ const base = env.SUPABASE_URL;
 const email = `pwd-test+${Date.now()}@xanalife.com`;
 
 // 1) endpoint rejects anonymous
-const r1 = await fetch('https://asset-system-tau.vercel.app/api/admin-users', {
+const r1 = await fetch('https://xana-assets.vercel.app/api/admin-users', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ action: 'create_with_password', email, password: 'testpass123', roles: ['scanner'] }),
 });

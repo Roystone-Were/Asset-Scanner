@@ -35,7 +35,7 @@ Apps ──▶ Supabase Postgres (source of truth)
 - Entra tenant: `refrontiergroup.onmicrosoft.com`, app `7caa51af-9f32-42d8-8264-da5b97c2f8eb`
 - SP site id: `refrontiergroup.sharepoint.com,6e2871c3-cf14-4bbe-8d97-8da58f8b6e10,629c5972-9b75-4a1d-bb25-8179a335cc71`
 - SP list "Xana Asset Inventory" id: `7d3b5f47-8199-4cb9-b7c4-361dc70c4622`
-- Vercel project domain: `asset-system-tau.vercel.app` (`/scan`, `/assets`, `/dashboard`, `/api/*`)
+- Vercel project domain: `xana-assets.vercel.app` (`/scan`, `/assets`, `/dashboard`, `/api/*`)
 - Local test harness dir: `%LOCALAPPDATA%\Temp\opencode\supabase-setup\`
 
 ## Completed ✅
@@ -73,7 +73,7 @@ Worker deployed (commit `b7bb243`), env vars set on Vercel (`SUPABASE_URL`, `SUP
 Real chain verified with zero manual steps:
 
 ```
-DB insert → outbox → pg_net → https://asset-system-tau.vercel.app/api/sharepoint-sync → SP #128 created (t+5s)
+DB insert → outbox → pg_net → https://xana-assets.vercel.app/api/sharepoint-sync → SP #128 created (t+5s)
 DB delete → delete op → SP #128 removed (t+5s)
 ```
 

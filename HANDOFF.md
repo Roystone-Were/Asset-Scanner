@@ -43,7 +43,7 @@ Apps (/assets /dashboard /admin /login) ──supabase-js──▶ Supabase Post
   server-side. MSAL / browser Graph sign-in is **gone** — `api/summary.js`
   (the old MSAL-backed dashboard API) has been deleted from `api/`.
 - The repo root is now `Asset-Scanner`, deployed as **one** Vercel project
-  (`asset-system-tau.vercel.app`) serving `/assets`, `/dashboard`, `/admin`,
+  (`xana-assets.vercel.app`) serving `/assets`, `/dashboard`, `/admin`,
   `/login`. The old two-project split (`xana-asset-lookup` scanner +
   `asset-scanner-iota` dashboard) is legacy — see README's note to archive
   those once the unified URL is confirmed.
@@ -185,7 +185,7 @@ it's just no longer used by any browser code (see §1):
 
 ## 8. Deployment
 
-- One Vercel project, root of repo, domain `asset-system-tau.vercel.app`
+- One Vercel project, root of repo, domain `xana-assets.vercel.app`
   (see `docs/IT_Manager_Handoff_2026-08-26.md` §7 for the routing table and
   local-dev harness). No build step — static + `api/*.js` serverless
   functions.

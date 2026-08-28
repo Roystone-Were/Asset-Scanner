@@ -1,6 +1,6 @@
 # Xana Asset System — What This App Does
 
-**Version:** Live `asset-system-tau.vercel.app` — 2026-08-26  
+**Version:** Live `xana-assets.vercel.app` — 2026-08-26  
 **For:** CEO (page 1–2) + IT Manager (page 3–7) — one document, two depths  
 **One line:** One app that registers, verifies, tracks, and reports every company asset — live from Supabase, mirrored to the SharePoint list you already open.
 
@@ -91,7 +91,7 @@ Existing asset photo: detail card **Add image / Change image** (scanner/admin) �
 
 * **Supabase** `irqrnyixizzorvfmtvag` — `assets`, `asset_history`, `asset_events`, `sharepoint_sync`, `app_choices`, `user_roles`, `profiles`, `allowed_scanners`, storage `asset-images`.
 * **Triggers:** `assets_to_outbox_*` → `sharepoint_sync` pending; `assets_audit_trigger` (`tracked = title,asset_tag,asset_type,model,serial,employee,status,location,extra`); `asset_extra_merge` RPC merges `extra` without wipe.
-* **Sync:** `pg_net` immediate `POST` to `https://asset-system-tau.vercel.app/api/sharepoint-sync` (header `SYNC_ACCESS_KEY`) + `pg_cron sharepoint-sync-retry` `*/5`. Worker claims `processing`, stale reset, 429/5xx backoff, `SupabaseId` indexed `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly`.
+* **Sync:** `pg_net` immediate `POST` to `https://xana-assets.vercel.app/api/sharepoint-sync` (header `SYNC_ACCESS_KEY`) + `pg_cron sharepoint-sync-retry` `*/5`. Worker claims `processing`, stale reset, 429/5xx backoff, `SupabaseId` indexed `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly`.
 * **Auth:** `supabase-js` `persistSession`, `detectSessionInUrl`, `sanitizeAuthHash` for `#error`, `myRoles()`, `landingFor()`, `applyRoleNav()`.
 
 ### 8. Offline, PWA-ish

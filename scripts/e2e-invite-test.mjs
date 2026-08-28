@@ -19,7 +19,7 @@ const base = env.SUPABASE_URL;
 const email = `e2e-test+${Date.now()}@xanalife.com`;
 
 // 1) Endpoint must reject unauthenticated calls
-const r1 = await fetch('https://asset-system-tau.vercel.app/api/admin-users', {
+const r1 = await fetch('https://xana-assets.vercel.app/api/admin-users', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ action: 'list' }),
 });

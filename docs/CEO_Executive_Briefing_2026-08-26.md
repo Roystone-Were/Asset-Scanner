@@ -3,7 +3,7 @@
 **For:** CEO, Refrontier Group  
 **From:** IT / Asset Systems  
 **Date:** 2026-08-26  
-**Version:** Live on `asset-system-tau.vercel.app`  
+**Version:** Live on `xana-assets.vercel.app`  
 **Classification:** Internal
 
 > One page: where we are, what it costs, what changed today, what you need to decide.
@@ -38,7 +38,7 @@ The Xana Asset System is now the single source of truth for all company assets. 
 
 | Issue you saw | What it was | Fix deployed |
 |---------------|-------------|--------------|
-| **Page stuck on black spinner** (`asset-system-tau.vercel.app`) | Cold-start auth race + Vercel cache | Auth hash sanitiser + cache-buster; hard-reload resolves |
+| **Page stuck on black spinner** (`xana-assets.vercel.app`) | Cold-start auth race + Vercel cache | Auth hash sanitiser + cache-buster; hard-reload resolves |
 | **History showed `Details: [object Object] → [object Object]`** | Audit trigger stores `extra` as JSON blob; old UI stringified the whole object | Now diffs the blob and lists only changed fields: `Purchase Date`, `Department`… verification-only edits show `✓ Verified by Roystone` |
 | **`undefined` text below history card** | `detail.innerHTML = html + addEventListener(...)` — `addEventListener` returns `undefined`, concatenated into HTML | Terminated string with `;` — `undefined` removed |
 | **`purchase_price`, `purchase_date` snake_case** | Raw JSON keys shown verbatim | Mapped to `Purchase Price`, `Purchase Date` via `EXTRA_FRIENDLY` |
@@ -74,7 +74,7 @@ All 4 commits pushed to `main` — Vercel auto-deployed. Verify with hard-reload
 ## 6. Costs (current)
 
 * **Supabase** (eu-west-1, project `irqrnyixizzorvfmtvag`): Free tier + pooler — no egress surprise (all reads via `getSession` + RLS).
-* **Vercel** (`asset-system-tau.vercel.app`): Hobby — `api/sharepoint-sync.js` is a serverless function, <1s per outbox drain.
+* **Vercel** (`xana-assets.vercel.app`): Hobby — `api/sharepoint-sync.js` is a serverless function, <1s per outbox drain.
 * **Storage** (`asset-images`): Public bucket — a 400 KB photo × 144 assets ≈ 58 MB — within free limits.
 
 No new licenses.
@@ -92,7 +92,7 @@ No new licenses.
 
 ## 8. How to use (CEO)
 
-* **Dashboard:** `asset-system-tau.vercel.app/dashboard` → KPIs, fully-depreciated list, idle stock, lost assets.
+* **Dashboard:** `xana-assets.vercel.app/dashboard` → KPIs, fully-depreciated list, idle stock, lost assets.
 * **Register:** `/assets` → search, tap row for detail, History, Log event, Add image.
 * **Admin:** `/admin` (admin/super_admin only) → invite staff, set roles, manage dropdowns (Type/Department/Status/Location), view Sync health.
 

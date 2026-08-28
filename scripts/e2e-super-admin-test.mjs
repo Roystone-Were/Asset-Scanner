@@ -48,7 +48,7 @@ const r = await fetch(base + '/rest/v1/assets?item_id=eq.SA-TEST', {
 console.log('super_admin asset edit:', r.status, r.ok ? 'PASS' : 'FAIL');
 
 // super admin hits admin API (is_admin() includes super_admin)
-const api = await fetch('https://asset-system-tau.vercel.app/api/admin-users', {
+const api = await fetch('https://xana-assets.vercel.app/api/admin-users', {
   method: 'POST', headers: { ...U }, body: JSON.stringify({ action: 'list' }),
 });
 console.log('super_admin /api/admin-users list:', api.status, api.status === 200 ? 'PASS' : 'FAIL');
