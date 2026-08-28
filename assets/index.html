@@ -118,7 +118,7 @@
   .row span:last-child{font-weight:600;text-align:right;word-break:break-word;letter-spacing:-.01em}
   .hidden{display:none}
   /* --- add form sheet --- */
-  .sheet{position:fixed;inset:0;z-index:40;display:none}
+  .sheet{position:fixed;inset:0;z-index:70;display:none}   /* must clear .navbar's z-index:46 (css/nav.css) -- same value admin/index.html already uses for its own sheet */
   .sheet.open{display:block}
   .sheet-backdrop{position:absolute;inset:0;background:rgba(8,10,14,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;transition:opacity var(--duration-base) var(--ease-out)}
   .sheet.open .sheet-backdrop{opacity:1}

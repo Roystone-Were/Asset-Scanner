@@ -2,11 +2,18 @@
    Floating glass pill nav: brand left, links center, actions right. */
 
 .navbar{
-  position:sticky;top:0;z-index:40;
+  position:sticky;top:0;z-index:46;
   padding-top:14px;
   background:transparent;border-bottom:none;
   pointer-events:none;             /* container passes clicks through */
 }
+/* .navbar must outrank .overlay (z-index:44 below). .navbar_container has
+   backdrop-filter, which creates its own stacking context -- so
+   .navbar_menu's local z-index:45 only ranks it within THAT context; it
+   can never escape above a sibling of .navbar like .overlay. What actually
+   decides "menu vs overlay" is this outer .navbar value against .overlay's.
+   Get this backwards and the open mobile menu renders under the overlay --
+   links become unclickable, taps just close the menu instead of navigating. */
 .navbar_container{
   pointer-events:auto;
   max-width:1180px;margin:0 auto;
