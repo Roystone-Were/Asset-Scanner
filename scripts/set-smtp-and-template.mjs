@@ -45,7 +45,7 @@ const body = {
   smtp_pass: env.OFFICE365_SMTP_PASS,
   smtp_admin_email: env.OFFICE365_SMTP_USER, // Office 365 requires From == the authenticated mailbox
   smtp_sender_name: env.OFFICE365_SENDER_NAME,
-  smtp_max_frequency: 60,
+  smtp_max_frequency: 1, // min seconds between emails -- 60 was a leftover default that blocked back-to-back invites
 
   mailer_subjects_magic_link: 'Sign in to Xana Asset System',
   mailer_templates_magic_link_content: magicLinkHtml,
