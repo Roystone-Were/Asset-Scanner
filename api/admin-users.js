@@ -56,14 +56,29 @@ async function callerIsAdmin(req) {
   }
 }
 
+// All auth users -> { id: last_sign_in_at }. Paginated same as
+// findUserIdByEmail below; small team, almost always a single page.
+async function authLastSeenMap() {
+  const map = {};
+  for (let page = 1; page <= 10; page++) {
+    const data = await authAdmin("admin/users?per_page=200&page=" + page);
+    const users = data.users || [];
+    if (!users.length) break;
+    for (const u of users) map[u.id] = u.last_sign_in_at || null;
+    if (users.length < 200) break;
+  }
+  return map;
+}
+
 async function stitchUsers() {
-  const [profiles, roles] = await Promise.all([
+  const [profiles, roles, lastSeen] = await Promise.all([
     sb("profiles?select=id,email,full_name,active,invited_by,created_at&order=created_at.asc"),
     sb("user_roles?select=user_id,role"),
+    authLastSeenMap(),
   ]);
   const byUser = {};
   for (const r of roles || []) (byUser[r.user_id] = byUser[r.user_id] || []).push(r.role);
-  return (profiles || []).map((p) => ({ ...p, roles: byUser[p.id] || [] }));
+  return (profiles || []).map((p) => ({ ...p, roles: byUser[p.id] || [], lastSignInAt: lastSeen[p.id] ?? null }));
 }
 
 // Exact-match lookup across all pages - never trusts server-side ?email=

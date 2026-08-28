@@ -82,6 +82,7 @@
     .uavatar{flex:0 0 auto;width:32px;height:32px;border-radius:10px;background:color-mix(in srgb,var(--accent) 14%,var(--card2));color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem}
     .ucell b{display:block;font-size:.86rem;font-weight:600;letter-spacing:-.01em}
     .uname{display:block;font-size:.74rem;color:var(--muted)}
+    .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
     .uactions{white-space:nowrap;text-align:right}
     td.num{font-variant-numeric:tabular-nums}
     td.err-cell{color:var(--red);font-size:.75rem;max-width:280px;white-space:normal}
@@ -369,6 +370,21 @@ document.getElementById("docsList").addEventListener("click",(e)=>{
 });
 
 // ---------- users ----------
+// Last SIGN-IN time, not live presence -- a session can sit open and idle
+// for hours and still show "recent". The dot is a cheap proxy (signed in
+// within the last 30 min), not a real online/offline signal.
+function fmtLastSeen(iso){
+  if(!iso)return{text:"Never signed in",recent:false};
+  const mins=(Date.now()-new Date(iso).getTime())/60000;
+  const recent=mins<=30;
+  let text;
+  if(mins<1)text="Just now";
+  else if(mins<60)text=Math.round(mins)+"m ago";
+  else if(mins<60*24)text=Math.round(mins/60)+"h ago";
+  else if(mins<60*24*30)text=Math.round(mins/60/24)+"d ago";
+  else text=new Date(iso).toLocaleDateString();
+  return{text,recent};
+}
 async function loadUsers(){
   const el=document.getElementById("usersList");
   try{
@@ -381,12 +397,14 @@ async function loadUsers(){
       document.getElementById("emptyInvite")?.addEventListener("click",openInvite);
       return;
     }
-    el.innerHTML='<table><thead><tr><th>User</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
+    el.innerHTML='<table><thead><tr><th>User</th><th>Last seen</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
       users.map(u=>{
         const initial=esc((u.full_name||u.email||"?").trim().charAt(0).toUpperCase());
         const boxes=ROLES.map(([val,label])=>'<label class="chk"><input type="checkbox" data-role="'+val+'" data-user="'+u.id+'" '+(u.roles.includes(val)?"checked":"")+"/> "+label+"</label>").join("");
+        const seen=fmtLastSeen(u.lastSignInAt);
         return "<tr>"+
           "<td><div class='ucell'><span class='uavatar'>"+initial+"</span><div><b>"+esc(u.email)+"</b><span class='uname'>"+esc(u.full_name||"—")+"</span></div></div></td>"+
+          "<td><span class='dot' style='background:"+(seen.recent?"var(--accent)":"var(--muted)")+"' title='Last sign-in — not live presence'></span> "+esc(seen.text)+"</td>"+
           "<td>"+boxes+"</td>"+
           "<td><label class='chk'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+"/> Active</label></td>"+
           "<td class='uactions'><button class='small secondary' data-resetpw='"+u.id+"'>Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
