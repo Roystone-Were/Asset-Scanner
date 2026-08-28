@@ -729,18 +729,35 @@ function flash(el,kind,text){
   el.insertAdjacentHTML("beforeend",'<div class="msg '+kind+'">'+(kind==="err"?esc(text):text)+'</div>');
 }
 // ---------- in-page dialog + toast (same pattern as admin) ----------
-function toast(text,isErr){
+function toast(text,isErr,action){
+  // action (optional): {label, onClick} -- renders a small inline button,
+  // e.g. the scan-miss "+ Add it" offer. Existing 2-arg calls are unaffected.
   const t=document.createElement("div");
   const above=document.querySelectorAll(".app-toast").length;   // stack newest under older ones
   t.className="app-toast";
-  t.style.cssText="position:fixed;left:50%;bottom:"+(26+above*46)+"px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"var(--text)")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out)";
-  t.textContent=text;
+  // Fixed colors, not theme vars -- var(--text) flips near-black/near-white
+  // per theme while this toast's text stays a hardcoded #fff, so the
+  // success case went invisible (white on white) in dark theme.
+  t.style.cssText="position:fixed;left:50%;bottom:"+(26+above*46)+"px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"#1f2937")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:0 20px 44px -18px rgba(11,18,32,.16);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out);display:flex;align-items:center;gap:4px;white-space:nowrap";
+  const span=document.createElement("span");
+  span.textContent=text;
+  t.appendChild(span);
+  let dur=3200;
+  if(action){
+    dur=6000;   // more time to notice and click the action
+    const btn=document.createElement("button");
+    btn.type="button";
+    btn.textContent=action.label;
+    btn.style.cssText="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:999px;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap";
+    btn.addEventListener("click",()=>{action.onClick();t.style.opacity="0";setTimeout(()=>t.remove(),250);});
+    t.appendChild(btn);
+  }
   document.body.appendChild(t);
   requestAnimationFrame(()=>{t.style.opacity="1";t.style.transform="translateX(-50%) translateY(-4px)";});
   setTimeout(()=>{                     // per-toast timer — every toast removes itself
     t.style.opacity="0";
     setTimeout(()=>t.remove(),250);
-  },3200);
+  },dur);
 }
 // One live editor across the whole card, tracked here.
 let _openEditor=null;   // {cell, input, name, orig, id}
@@ -881,6 +898,24 @@ function openAdd(){addSheet.classList.add("open");}
 function closeAdd(){addSheet.classList.remove("open");setTimeout(()=>{if(!addSheet.classList.contains("open")){document.getElementById("addMsg").innerHTML="";}},320);}
 document.getElementById("btnAdd")?.addEventListener("click",openAdd);
 document.getElementById("addClose")?.addEventListener("click",closeAdd);
+
+// ---------- Add from a scan miss ----------
+// Vendor barcodes almost always encode the device's own serial number, not
+// our internal XL-N tag scheme -- so the scanned code goes in Serial, and
+// Tag gets the same "next free XL-N" suggestion cloning already uses.
+function openAddWithScannedCode(code){
+  openAdd();
+  const tagInput=document.getElementById("addTag");
+  tagInput.removeAttribute("readonly");
+  let next=0;
+  for(const x of allItems){const m=/^XL-(\d+)$/.exec((x.tag||"").trim());if(m)next=Math.max(next,parseInt(m[1],10));}
+  tagInput.value="XL-"+(next+1);
+  const serialInput=document.getElementById("addSerial");
+  if(serialInput)serialInput.value=code;
+  closeDetail();
+  setTimeout(()=>{tagInput&&tagInput.focus();tagInput&&tagInput.select();},350);
+  flash(document.getElementById("addMsg"),"ok","No match for “"+code+"” — fill in the rest and save to register it.");
+}
 document.getElementById("addBackdrop")?.addEventListener("click",closeAdd);
 document.getElementById("addCancel")?.addEventListener("click",closeAdd);
 document.getElementById("addImage")?.addEventListener("change",e=>{
@@ -1293,7 +1328,11 @@ async function verifyAsset(it){
 }
 function handleScanHit(raw){
   const it=Xana.findAssetByCode(allItems,raw);
-  if(!it){toast("No asset matches \u201C"+Xana.cleanScanInput(raw)+"\u201D",true);return;}
+  if(!it){
+    const code=Xana.cleanScanInput(raw);
+    toast("No asset matches \u201C"+code+"\u201D",true,{label:"+ Add it",onClick:()=>openAddWithScannedCode(code)});
+    return;
+  }
   showDetail(it);
   toast("Opened "+(it.tag||"asset #"+it.id),false);
   // a physical scan IS the verification — stamp it automatically

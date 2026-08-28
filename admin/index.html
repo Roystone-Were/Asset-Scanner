@@ -501,7 +501,10 @@ function showDialog({title,body,confirmText="Confirm",danger=false,onConfirm}){
 let _toastT=null;
 function toast(text,isErr){
   const t=document.createElement("div");
-  t.style.cssText="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"var(--text)")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:var(--shadow-lifted);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out)";
+  // Fixed colors, not theme vars -- var(--text) flips near-black/near-white
+  // per theme while this toast's text stays a hardcoded #fff, so the
+  // success case went invisible (white on white) in dark theme.
+  t.style.cssText="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;background:"+(isErr?"#dc2626":"#1f2937")+";color:#fff;padding:10px 18px;border-radius:999px;font-size:.82rem;font-weight:600;box-shadow:var(--shadow-lifted);opacity:0;transition:opacity .2s ease, transform .2s var(--ease-out)";
   t.textContent=text;
   document.body.appendChild(t);
   requestAnimationFrame(()=>{t.style.opacity="1";t.style.transform="translateX(-50%) translateY(-4px)";});
