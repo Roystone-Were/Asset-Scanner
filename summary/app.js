@@ -173,16 +173,23 @@ const DEP_COLORS = {
     panel.className = "panel";
     panel.style.marginTop = "14px";
     let html = "<h2>Field activity</h2>";
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
-      '<div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Open issues (' + issues.length + ')</h3>' +
-      (issues.length
-        ? issues.map(i => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[i.item_id] || "#" + i.item_id) + "</b> — " + esc(i.description) + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(i.event_date).toLocaleDateString() + " · " + esc(i.created_by || "—") + '</span></div>').join("")
-        : '<div style="font-size:.8rem;color:var(--muted)">None open</div>') +
-      '</div><div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Recent repairs &amp; maintenance</h3>' +
-      (repairs.length
-        ? repairs.map(r => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[r.item_id] || "#" + r.item_id) + "</b> — " + esc(r.description) + (r.cost ? ' <b>KES ' + Number(r.cost).toLocaleString() + "</b>" : "") + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(r.event_date).toLocaleDateString() + '</span></div>').join("")
-        : '<div style="font-size:.8rem;color:var(--muted)">Nothing logged yet</div>') +
-      "</div></div>";
+    if (!issues.length && !repairs.length) {
+      // Nothing on either side yet -- a full two-column grid with two "nothing
+      // here" messages is pure vertical weight for zero information. Collapse
+      // to one line, and point at how to actually populate it.
+      html += '<div style="font-size:.82rem;color:var(--muted)">No open issues or repairs logged yet — use "Log event" on any asset to start tracking.</div>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+        '<div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Open issues (' + issues.length + ')</h3>' +
+        (issues.length
+          ? issues.map(i => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[i.item_id] || "#" + i.item_id) + "</b> — " + esc(i.description) + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(i.event_date).toLocaleDateString() + " · " + esc(i.created_by || "—") + '</span></div>').join("")
+          : '<div style="font-size:.8rem;color:var(--muted)">None open</div>') +
+        '</div><div><h3 style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Recent repairs &amp; maintenance</h3>' +
+        (repairs.length
+          ? repairs.map(r => '<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line)"><b>' + esc(tagFor[r.item_id] || "#" + r.item_id) + "</b> — " + esc(r.description) + (r.cost ? ' <b>KES ' + Number(r.cost).toLocaleString() + "</b>" : "") + '<br/><span style="font-size:.7rem;color:var(--muted)">' + new Date(r.event_date).toLocaleDateString() + '</span></div>').join("")
+          : '<div style="font-size:.8rem;color:var(--muted)">Nothing logged yet</div>') +
+        "</div></div>";
+    }
     panel.innerHTML = html;
     main.appendChild(panel);
   }
