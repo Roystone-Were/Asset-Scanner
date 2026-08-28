@@ -1,15 +1,20 @@
-// Configures custom SMTP (Mailgun) + the branded Magic Link and Invite email
-// templates via the Supabase Management API. Same pattern as
+// Configures custom SMTP (Office 365) + the branded Magic Link and Invite
+// email templates via the Supabase Management API. Same pattern as
 // apply-migration.mjs / check-auth-config.mjs.
 //
 // Requires these in .env.local (in addition to the existing SUPABASE_* vars):
-//   MAILGUN_SMTP_USER=postmaster@mg.xanalife.com   (Mailgun > Sending > Domains > <domain> > SMTP credentials)
-//   MAILGUN_SMTP_PASS=<smtp password from that same page — NOT your Mailgun API key>
-//   MAILGUN_SENDER_EMAIL=noreply@xanalife.com      (must be a verified sender/domain in Mailgun)
-//   MAILGUN_SENDER_NAME=Xana Asset System
-// Optional:
-//   MAILGUN_SMTP_HOST=smtp.mailgun.org             (use smtp.eu.mailgun.org for an EU-region domain)
-//   MAILGUN_SMTP_PORT=587
+//   OFFICE365_SMTP_USER=noreply@xanalife.com   (the mailbox's own address — also the login)
+//   OFFICE365_SMTP_PASS=<mailbox password, or an app password if MFA is on>
+//   OFFICE365_SENDER_NAME=Xana Asset System
+//
+// IMPORTANT — this will fail with an auth error even with a correct password
+// unless SMTP AUTH is explicitly enabled for THIS mailbox. Microsoft disables
+// basic SMTP AUTH tenant-wide by default (since ~2022); the password alone
+// isn't enough. Ask IT to run, for this mailbox specifically:
+//   Set-CASMailbox -Identity noreply@xanalife.com -SmtpClientAuthenticationDisabled $false
+// (Exchange admin center: that mailbox > Manage email apps > enable
+// "Authenticated SMTP".) If it's tenant-wide disabled, check
+// Set-TransportConfig -SmtpClientAuthenticationDisabled first too.
 //
 // Usage: node scripts/set-smtp-and-template.mjs
 import fs from 'fs';
@@ -21,8 +26,8 @@ for (const line of fs.readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
 }
 
 const projectRef = env.SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
-const required = ['SUPABASE_ACCESS_TOKEN', 'MAILGUN_SMTP_USER', 'MAILGUN_SMTP_PASS', 'MAILGUN_SENDER_EMAIL', 'MAILGUN_SENDER_NAME'];
-const missing = required.filter((k) => !env[k]) .concat(projectRef ? [] : ['SUPABASE_URL (unparseable)']);
+const required = ['SUPABASE_ACCESS_TOKEN', 'OFFICE365_SMTP_USER', 'OFFICE365_SMTP_PASS', 'OFFICE365_SENDER_NAME'];
+const missing = required.filter((k) => !env[k]).concat(projectRef ? [] : ['SUPABASE_URL (unparseable)']);
 if (missing.length) {
   console.error('Missing in .env.local:', missing.join(', '));
   process.exit(1);
@@ -34,12 +39,12 @@ const inviteHtml = fs.readFileSync('scripts/email-templates/invite.html', 'utf8'
 const body = {
   external_email_enabled: true,
 
-  smtp_host: env.MAILGUN_SMTP_HOST || 'smtp.mailgun.org',
-  smtp_port: env.MAILGUN_SMTP_PORT || '587',
-  smtp_user: env.MAILGUN_SMTP_USER,
-  smtp_pass: env.MAILGUN_SMTP_PASS,
-  smtp_admin_email: env.MAILGUN_SENDER_EMAIL,
-  smtp_sender_name: env.MAILGUN_SENDER_NAME,
+  smtp_host: 'smtp.office365.com',
+  smtp_port: '587',
+  smtp_user: env.OFFICE365_SMTP_USER,
+  smtp_pass: env.OFFICE365_SMTP_PASS,
+  smtp_admin_email: env.OFFICE365_SMTP_USER, // Office 365 requires From == the authenticated mailbox
+  smtp_sender_name: env.OFFICE365_SENDER_NAME,
   smtp_max_frequency: 60,
 
   mailer_subjects_magic_link: 'Sign in to Xana Asset System',
@@ -60,4 +65,5 @@ console.log(responseText.slice(0, 2000));
 if (!res.ok) process.exit(1);
 
 console.log('\nSMTP + magic-link + invite templates pushed. Verify with: node scripts/check-auth-config.mjs');
-console.log('Then send yourself a test magic link from /login, and a test invite from /admin, and confirm both arrive via Mailgun (From: ' + env.MAILGUN_SENDER_NAME + ' <' + env.MAILGUN_SENDER_EMAIL + '>).');
+console.log('Then send yourself a test magic link from /login, and a test invite from /admin, and confirm both arrive via Office 365 (From: ' + env.OFFICE365_SENDER_NAME + ' <' + env.OFFICE365_SMTP_USER + '>).');
+console.log('If it fails with an auth error, the most likely cause is SMTP AUTH not being enabled for this mailbox — see the note at the top of this file.');
