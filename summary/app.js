@@ -212,7 +212,7 @@ const DEP_COLORS = {
       </div>
       <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
-      `<div class="grid">${panel(donut(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
+      `<div class="grid">${panel(statusBars(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byType, "#0d9488"), "By Type")}${panel(bars(d.byLocation, "#3b82f6"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6"), "By Department")}</div>` +
       healthStrip(h) +
       `<div class="panel" id="warrantyPanel"><h2>Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="btn-quiet" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="btn-quiet" id="nextBtn" onclick="changePage(1)">Next</button><button class="btn-outline" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="btn-outline" id="exportCsv">Export CSV</button></div></div>`;
@@ -354,45 +354,6 @@ const DEP_COLORS = {
     return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
   function panel(i, t) { return '<div class="panel"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
-  function donut(byStatus) {
-    // Derive statuses dynamically from API data instead of hardcoded list
-    const e = Object.entries(byStatus || {}).sort((a, b) => b[1] - a[1]),
-      total = e.reduce((s, x) => s + x[1], 0) || 1;
-    let acc = 0,
-      parts = [];
-    for (const [k, v] of e) { parts.push({ k, start: acc, end: acc + (v / total) * 360 }); acc += (v / total) * 360; }
-
-    // Build SVG donut as stroked arcs (ring spans 56..80, matching the old
-    // wedges) so the rim can draw itself around the circle on load.
-    const RR = 68;          // ring centerline radius
-    const SW = 24;          // stroke width = ring thickness
-    const SWEEP_MS = 850;   // time budget for one full-circle sweep
-    let svgPaths = "";
-    let cum = 0;            // cumulative share, for sequential draw timing
-    for (const p of parts) {
-      const share = (p.end - p.start) / 360;
-      if (share <= 0) continue;
-      const len = share * 100; // pathLength=100 normalizes the circumference
-      const count = Math.round(share * total);
-      const pct = (share * 100).toFixed(1);
-      const delay = Math.round(150 + cum * SWEEP_MS);
-      const dur = Math.round(share * SWEEP_MS + 150);
-      svgPaths += `<circle class="donut-seg" cx="90" cy="90" r="${RR}" fill="none" stroke="${statusColor(p.k)}" stroke-width="${SW}" pathLength="100" stroke-dasharray="${len.toFixed(2)} 999" transform="rotate(${(p.start - 90).toFixed(3)} 90 90)" data-status="${esc(p.k)}" data-count="${count}" data-pct="${pct}" style="--seg-len:${len.toFixed(2)};--seg-delay:${delay}ms;--seg-dur:${dur}ms"><title>${esc(p.k)}: ${pct}% (${count} assets)</title></circle>`;
-      cum += share;
-    }
-
-    const legend = e
-      .map(
-        ([k, v]) =>
-          '<div class="row"><span class="swatch" style="background:' + (v === 0 ? "var(--line)" : statusColor(k)) + '"></span><span>' + esc(k) + '</span><span class="count">' + v + (v > 0 ? " · " + (v / total * 100).toFixed(1) + "%" : "") + "</span></div>",
-      )
-      .join("");
-
-    return (
-      '<div class="flex"><div class="donut-wrap" style="width:150px;height:150px;"><svg viewBox="0 0 180 180" style="width:100%;height:100%;transform:rotate(-90deg);">' +
-      svgPaths +
-      '</svg><div class="donut-center"><div class="n">' + total + '</div><div class="t">assets</div></div></div><div class="legend">' + legend + "</div></div>");
-  }
   // Bucket assets by lastVerified age: fresh <=30d, recent <=90d, overdue >90d,
   // never when missing/unparseable. Mirrors the unverified-90d rule in supabase-client.js.
   function verificationBreakdown(items) {
@@ -406,6 +367,27 @@ const DEP_COLORS = {
       else b.overdue++;
     }
     return b;
+  }
+  function statusBars(byStatus) {
+    // Same bar-list pattern as bars()/verificationBars(), but colored per-row
+    // via statusColor() since status carries real semantic meaning (unlike
+    // Type/Location/Department, which are one flat color each). Replaces the
+    // old donut here — with a heavily skewed split like 147/2/1, a donut's
+    // minority slices are too thin to read; a bar list stays legible at any
+    // skew, and matches the other three panels in this row.
+    const rows = Object.entries(byStatus || {}).sort((a, b) => b[1] - a[1]);
+    const total = Math.max(1, rows.reduce((s, [, v]) => s + v, 0));
+    return (
+      '<div class="bars">' +
+      rows
+        .map(
+          ([k, v]) =>
+            '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(k) + '</span><span>' + v + " · " + ((v / total) * 100).toFixed(1) + "%</span></div>" +
+            '<div class="bar-track"><div class="bar-fill" data-w="' + ((v / total) * 100) + '" style="width:0;background:' + statusColor(k) + '"></div></div></div>',
+        )
+        .join("") +
+      "</div>"
+    );
   }
   function bars(obj, color) {
     const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10),
@@ -428,7 +410,7 @@ const DEP_COLORS = {
       ["Verified \u226430d", v.fresh, "#16a34a"],
       ["31\u201390d", v.recent, "#d97706"],
       ["Overdue 90d+", v.overdue, "#dc2626"],
-      ["Never verified", v.never, "#64748b"],
+      ["Never verified", v.never, "#991b1b"],
     ];
     const total = Math.max(1, v.fresh + v.recent + v.overdue + v.never);
     return (

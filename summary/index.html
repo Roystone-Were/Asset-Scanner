@@ -93,29 +93,6 @@
     padding:22px; box-shadow:var(--shadow-ambient), var(--inner-highlight);
   }
   .panel h2 { font-size:.95rem; font-weight:600; letter-spacing:-.01em; margin-bottom:16px; color:var(--text); }
-  .flex { display:flex; gap:24px; align-items:center; }
-  .donut-wrap { position:relative; width:150px; height:150px; flex:0 0 auto; }
-  /* Donut outer fill: each segment is a stroked arc that draws around the rim,
-     sequenced so one pen sweeps the full circle. (Dash-draw needs stroked arcs —
-     on filled wedge paths it only traces the outline.) */
-  .donut-seg {
-    stroke-dasharray: var(--seg-len) 999;
-    stroke-dashoffset: 0;
-    animation: donut-draw var(--seg-dur, .9s) cubic-bezier(0.32,0.72,0,1) backwards;
-    animation-delay: var(--seg-delay);
-  }
-  @keyframes donut-draw {
-    from { stroke-dashoffset: var(--seg-len); }
-    to   { stroke-dashoffset: 0; }
-  }
-  @media (prefers-reduced-motion: reduce) { .donut-seg { animation:none; } }
-  .donut-center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; }
-  .donut-center .n { font-size:1.5rem; font-weight:700; }
-  .donut-center .t { font-size:.7rem; color:var(--muted); }
-  .legend { flex:1; display:flex; flex-direction:column; gap:8px; }
-  .legend .row { display:flex; align-items:center; gap:8px; font-size:.85rem; }
-  .legend .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
-  .legend .count { margin-left:auto; color:var(--muted); }
   .sub-h { font-size:.78rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:0 0 10px; }
   .bars { display:flex; flex-direction:column; gap:12px; }
   .bar-row .bar-top { display:flex; justify-content:space-between; font-size:.82rem; margin-bottom:5px; }
