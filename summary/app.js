@@ -219,7 +219,12 @@ const DEP_COLORS = {
       </div>
       <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
-      `<div class="grid">${panel(statusBars(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byType, "#0d9488", 6, "type"), "By Type")}${panel(bars(d.byLocation, "#3b82f6", 6, "location"), "By Location")}${panel(bars(d.byDepartment, "#8b5cf6", 6, "department"), "By Department")}</div>` +
+      // Two independent stacked columns rather than a strict 2x2 grid --
+      // CSS Grid rows share height across the row no matter what
+      // align-items says, so a tall Status panel forced By Type's row to
+      // stay tall even once By Type's own card was short. Each .gcol flows
+      // on its own content height, so no more row-height coupling.
+      `<div class="grid"><div class="gcol">${panel(statusBars(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byLocation, "#3b82f6", 6, "location"), "By Location")}</div><div class="gcol">${panel(bars(d.byType, "#0d9488", 6, "type"), "By Type")}${panel(bars(d.byDepartment, "#8b5cf6", 6, "department"), "By Department")}</div></div>` +
       healthStrip(h) +
       `<div class="panel" id="warrantyPanel"><h2>Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="btn-quiet" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="btn-quiet" id="nextBtn" onclick="changePage(1)">Next</button><button class="btn-outline" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="btn-outline" id="exportCsv">Export CSV</button></div></div>`;
