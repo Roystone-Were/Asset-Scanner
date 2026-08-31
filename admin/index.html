@@ -112,6 +112,13 @@
        z-index is required, not decorative: table cells paint in DOM order,
        so without it the columns scrolling underneath would paint over the
        "stuck" cell instead of being occluded by it. */
+    /* border-collapse:collapse (set globally above) breaks position:sticky
+       on a cell -- collapsed cells share border-boxes, so browsers can
+       render the sticky cell's hit-box wider than its actual column,
+       swallowing clicks on checkboxes/buttons that have scrolled underneath
+       it. Only the Users table has a sticky column, so scope the fix here
+       instead of changing every table's border rendering. */
+    #usersList .tbl-scroll table{border-collapse:separate;border-spacing:0}
     #usersList .tbl-scroll th:first-child,
     #usersList .tbl-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--card);border-right:1px solid var(--hairline)}
     #usersList .tbl-scroll tbody tr:hover td:first-child{background:color-mix(in srgb,var(--accent) 3%,var(--card))}
