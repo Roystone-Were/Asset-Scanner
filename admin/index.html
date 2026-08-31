@@ -105,6 +105,16 @@
   .sync-alert .n{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 8px;border-radius:999px;background:var(--red);color:#fff;font-weight:700;font-size:.85rem}
     tbody tr{transition:background-color .15s var(--ease-out)}
     tbody tr:hover{background:color-mix(in srgb,var(--accent) 3%,transparent)}
+    /* Users table is the widest (identity + 4 role checkboxes + active +
+       2 action buttons), so on a phone it's the one you actually scroll.
+       Pin the identity column so you never lose track of *which* user
+       you're toggling roles on or about to remove while scrolled right.
+       z-index is required, not decorative: table cells paint in DOM order,
+       so without it the columns scrolling underneath would paint over the
+       "stuck" cell instead of being occluded by it. */
+    #usersList .tbl-scroll th:first-child,
+    #usersList .tbl-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--card);border-right:1px solid var(--hairline)}
+    #usersList .tbl-scroll tbody tr:hover td:first-child{background:color-mix(in srgb,var(--accent) 3%,var(--card))}
     /* slide-over sheet (matches the assets page pattern) */
     .sheet{position:fixed;inset:0;z-index:70;display:none}
     .sheet.open{display:block}
