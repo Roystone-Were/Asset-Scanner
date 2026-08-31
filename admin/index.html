@@ -52,7 +52,13 @@
     .err{background:rgba(209,52,56,.12);color:#dc2626}
     .ok{background:rgba(34,197,94,.12);color:#16a34a}
     .info{background:rgba(37,99,235,.10);color:var(--blue)}
-    table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:10px}
+    /* wraps every dynamically-rendered <table> (users/bin/docs/sync) so a
+       wide table scrolls within its own box on mobile instead of blowing
+       out the page width -- same pattern as .tbl-scroll on /assets and
+       /summary; admin just never got tables wide enough to notice until
+       the users table's 4 inline role checkboxes did. */
+    .tbl-scroll{overflow:auto;max-height:480px;margin-top:10px;border:1px solid var(--hairline);border-radius:14px;background:var(--card)}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
     th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--hairline);vertical-align:middle}
     th{color:var(--muted);font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
     .pill{padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--border);font-size:.7rem}
@@ -62,14 +68,19 @@
     .choice-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;border:1px solid var(--hairline);border-radius:10px;margin-top:6px;background:var(--card)}
     .lists-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .lists-grid .card{margin-top:0}
+    @media(max-width:640px){.lists-grid{grid-template-columns:1fr}}
     /* --- premium pass: grain, focus, segmented tabs, sheets, skeletons, user rows --- */
     body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.04;
       background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
     :focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 65%,transparent);outline-offset:2px}
     .tab{flex:0 0 auto;text-align:center;padding:8px 18px;border-radius:999px;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:.84rem;cursor:pointer;box-shadow:none;transition:color .3s var(--ease-out),background-color .3s var(--ease-out),box-shadow .3s var(--ease-out)}
-    .seg{display:inline-flex;background:var(--card2);border:1px solid var(--hairline);border-radius:999px;padding:3px;gap:2px;margin-top:16px}
+    /* 5 tabs ("Sync health"/"Recycle bin" are long) don't fit a narrow
+       phone at once -- max-width+overflow-x lets the pill bar scroll
+       horizontally in place instead of stretching .main wider than the
+       viewport and giving the whole page a horizontal scrollbar. */
+    .seg{display:inline-flex;max-width:100%;overflow-x:auto;background:var(--card2);border:1px solid var(--hairline);border-radius:999px;padding:3px;gap:2px;margin-top:16px}
     .tab.active{color:var(--text);background:var(--card);border-color:transparent;box-shadow:var(--shadow-ambient)}
-    .cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
     .cardhead h3{margin-bottom:0}
     .countchip{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;margin-left:8px;border-radius:999px;background:var(--card2);border:1px solid var(--hairline);font-size:.72rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;vertical-align:2px}
     .skel{border-radius:10px;background:linear-gradient(100deg,var(--card2) 40%,color-mix(in srgb,var(--card2) 35%,var(--card)) 50%,var(--card2) 60%);background-size:200% 100%;animation:shimmer 1.4s var(--ease-out) infinite}
@@ -106,6 +117,7 @@
     .flabel .opt{text-transform:none;letter-spacing:0;font-weight:500}
     .sheet input[type=text],.sheet input[type=email]{width:100%}
     .rolegrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+    @media(max-width:420px){.rolegrid{grid-template-columns:1fr}}
     .sheet .msg{margin-top:14px}
     .card, .sheet-panel { animation: rise .48s var(--ease-out) backwards; }
     @keyframes rise { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
@@ -299,10 +311,10 @@ async function loadBin(){
       el.innerHTML='<div class="empty"><h3>Recycle bin is empty</h3><p>Deleted assets rest here before they are gone for good. Nothing to restore right now.</p></div>';
       return;
     }
-    el.innerHTML="<table><thead><tr><th>Tag</th><th>Type</th><th>Model</th><th>Serial</th><th>Deleted</th><th></th></tr></thead><tbody>"+
+    el.innerHTML="<div class='tbl-scroll'><table><thead><tr><th>Tag</th><th>Type</th><th>Model</th><th>Serial</th><th>Deleted</th><th></th></tr></thead><tbody>"+
       rows.map(r=>"<tr><td><b>"+esc(r.tag||("#"+r.id))+"</b></td><td>"+esc(r.type||"")+"</td><td>"+esc(r.model||"")+"</td><td>"+esc(r.serial||"—")+"</td><td class='num'>"+new Date(r.deletedAt).toLocaleString()+"</td>"+
         "<td style='white-space:nowrap'><button class='small secondary' data-restore='"+r.id+"'>Restore</button> <button class='small danger' data-purge='"+r.id+"' data-tag='"+esc(r.tag||("#"+r.id))+"'>Purge</button></td></tr>").join("")+
-      "</tbody></table>";
+      "</tbody></table></div>";
   }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
 }
 document.getElementById("binList").addEventListener("click",async(e)=>{
@@ -341,10 +353,10 @@ async function loadDocs(){
       el.innerHTML='<div class="empty"><h3>No documents yet</h3><p>Upload reference forms — audit checklists, issuance/return forms — so they\'re here whenever IT needs them.</p></div>';
       return;
     }
-    el.innerHTML="<table><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>"+
+    el.innerHTML="<div class='tbl-scroll'><table><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>"+
       docs.map(d=>"<tr><td><a href='"+esc(d.publicUrl)+"' target='_blank' rel='noopener'>"+esc(d.name.replace(/^\d+_/,""))+"</a></td><td class='num'>"+fmtBytes(d.size)+"</td><td class='num'>"+(d.updatedAt?new Date(d.updatedAt).toLocaleString():"—")+"</td>"+
         "<td style='white-space:nowrap'><button class='small danger' data-delete-doc='"+esc(d.name)+"'>Delete</button></td></tr>").join("")+
-      "</tbody></table>";
+      "</tbody></table></div>";
   }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
 }
 document.getElementById("docUpload")?.addEventListener("change",async(e)=>{
@@ -397,7 +409,7 @@ async function loadUsers(){
       document.getElementById("emptyInvite")?.addEventListener("click",openInvite);
       return;
     }
-    el.innerHTML='<table><thead><tr><th>User</th><th>Last seen</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
+    el.innerHTML='<div class="tbl-scroll"><table><thead><tr><th>User</th><th>Last seen</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
       users.map(u=>{
         const initial=esc((u.full_name||u.email||"?").trim().charAt(0).toUpperCase());
         const boxes=ROLES.map(([val,label])=>'<label class="chk"><input type="checkbox" data-role="'+val+'" data-user="'+u.id+'" '+(u.roles.includes(val)?"checked":"")+"/> "+label+"</label>").join("");
@@ -408,7 +420,7 @@ async function loadUsers(){
           "<td>"+boxes+"</td>"+
           "<td><label class='chk'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+"/> Active</label></td>"+
           "<td class='uactions'><button class='small secondary' data-resetpw='"+u.id+"'>Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
-      }).join("")+"</tbody></table>";
+      }).join("")+"</tbody></table></div>";
   }catch(e){el.innerHTML='<div class="msg err show">'+esc(e.message)+"</div>";}
 }
 document.getElementById("btnInvite").addEventListener("click",async()=>{
@@ -624,9 +636,9 @@ async function loadSync(){
       alertEl.style.display="none";alertEl.innerHTML="";
     }
     if(!(data||[]).length){el.innerHTML='<div class="empty"><h3>Everything is mirrored</h3><p>Every change has reached the SharePoint mirror. Failed rows stop retrying after 5 attempts and would appear here.</p></div>';return;}
-    el.innerHTML="<table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
+    el.innerHTML="<div class='tbl-scroll'><table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
       data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill st-"+esc(r.status)+"'>"+esc(r.status)+"</span></td><td class='num'>"+r.attempts+"</td><td class='num'>"+new Date(r.created_at).toLocaleString()+"</td><td class='err-cell'>"+esc(r.last_error||"")+"</td></tr>").join("")+
-      "</tbody></table>";
+      "</tbody></table></div>";
   }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
 }
 
