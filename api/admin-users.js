@@ -324,8 +324,20 @@ module.exports = async function handler(req, res) {
     }
     res.status(400).json({ error: "Unknown action" });
   } catch (e) {
+    // Never echo internal error text to the client: helper errors (sb/authAdmin)
+    // embed raw Supabase/Auth HTTP responses, which can leak internals.
+    // Full detail goes to server logs only. User-fixable validation problems
+    // (thrown as plain messages below) are safe to surface as 400s.
     console.error("[admin-users]", e);
-    res.status(500).json({ error: e.message || "Internal error" });
+    const msg = e && e.message ? String(e.message) : "";
+    const isInternal = /^(Supabase \d|Auth \d|Auth invite \d)/.test(msg);
+    if (isInternal) {
+      res.status(502).json({ error: "Upstream service error — please retry. If it persists, contact an admin." });
+    } else if (msg && !/internal/i.test(msg)) {
+      res.status(400).json({ error: msg }); // validation / client-fixable
+    } else {
+      res.status(500).json({ error: "Internal error" });
+    }
   }
 };
 

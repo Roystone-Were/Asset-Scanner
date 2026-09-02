@@ -371,8 +371,10 @@ module.exports = async function handler(req, res) {
     console.log("[sync] drained", ok, "ok,", failed, "failed");
     res.status(200).json({ drained: ok + failed, ok, failed, results });
   } catch (e) {
+    // Log full detail server-side; never echo internal error text (can embed
+    // Graph/Supabase responses) to the caller, even though it must authenticate.
     console.error("[sync] fatal:", e);
-    res.status(500).json({ error: e.message || "Internal error" });
+    res.status(500).json({ error: "Internal sync error" });
   }
 };
 
