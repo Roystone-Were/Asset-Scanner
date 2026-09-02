@@ -7,6 +7,7 @@
 *.cer
 *.b64
 pnp-cert-thumb.txt
+pnp-cert-pass.txt
 health-report.md
 
 # Tooling

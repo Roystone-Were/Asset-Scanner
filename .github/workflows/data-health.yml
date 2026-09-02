@@ -8,10 +8,11 @@
 #   SP_TENANT      - e.g. refrontiergroup.onmicrosoft.com
 #   SP_CLIENT_ID   - the app registration client id (7caa51af-...)
 #   SP_CERT_B64    - base64 of pnp-cert.pfx (the private key, never committed)
-#   SP_THUMBPRINT  - B4437765C89E84AE84B813194E6BD0D54EB3F430
-#   SP_CERT_PASS   - OPTIONAL: the pfx password. If unset, the original
-#                    password is assumed (see the Restore step below) so
-#                    existing setups keep working; set it when rotating.
+#   SP_THUMBPRINT  - the certificate thumbprint (rotates with the cert)
+#   SP_CERT_PASS   - REQUIRED: the pfx password. generate-cert.ps1 creates a
+#                    random one per run (no default exists) and saves it locally
+#                    to pnp-cert-pass.txt; copy that value here. The workflow
+#                    fails fast with a clear error if this secret is unset.
 # Generate the base64 locally with:
 #   [Convert]::ToBase64String([IO.File]::ReadAllBytes("pnp-cert.pfx"))
 #
@@ -50,12 +51,15 @@ jobs:
         run: |
           # Trim in case the secret was pasted with a trailing newline.
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\sp.pfx", [Convert]::FromBase64String($env:SP_CERT_B64.Trim()))
-          # SP_CERT_PASS rotates the pfx password; without it we fall back to
-          # the original one (pnp123, from generate-cert.ps1) so existing
-          # setups keep working unchanged. The password alone is useless
-          # without the pfx, which only ever exists as this secret in CI.
-          $pass = if ($env:SP_CERT_PASS) { $env:SP_CERT_PASS } else { "pnp123" }
-          Import-PfxCertificate -FilePath "$env:RUNNER_TEMP\sp.pfx" -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $pass -AsPlainText -Force) | Out-Null
+          # The pfx password comes ONLY from the SP_CERT_PASS secret — there is
+          # no default (previously the workflow fell back to a hardcoded
+          # password; that fallback was removed when the cert was rotated).
+          # Fail fast with a clear message rather than a cryptic import error.
+          if (-not $env:SP_CERT_PASS) {
+            Write-Error "SP_CERT_PASS secret is not set. Set it to the pfx password created by generate-cert.ps1 (saved locally in pnp-cert-pass.txt)."
+            exit 1
+          }
+          Import-PfxCertificate -FilePath "$env:RUNNER_TEMP\sp.pfx" -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:SP_CERT_PASS.Trim() -AsPlainText -Force) | Out-Null
 
       - name: Install PnP.PowerShell
         shell: pwsh

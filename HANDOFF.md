@@ -120,6 +120,14 @@ it's just no longer used by any browser code (see §1):
 - **Certificate thumbprint:** `B4437765C89E84AE84B813194E6BD0D54EB3F430`
   (self-signed, in CurrentUser\My; `.pfx`/`.cer` live beside the repo scripts,
   **not committed** — gitignored).
+  **Rotating:** run `generate-cert.ps1` — it creates a new cert with a
+  **random pfx password** (saved locally to `pnp-cert-pass.txt`, gitignored;
+  there is no default password since the 2026-09 rotation), prints the
+  thumbprint, and lists the follow-ups: upload the `.cer` to the Entra app
+  registration, update GitHub secrets `SP_CERT_B64` / `SP_CERT_PASS` /
+  `SP_THUMBPRINT`, run the data-health workflow manually to verify, then
+  delete the old cert from Entra. Update the thumbprint default in the PS
+  scripts and the references in this file + `README.md`.
 - **Graph application permission:** `Sites.ReadWrite.All` (admin-consented) —
   used by `api/sharepoint-sync.js` (client-credentials flow) and by the
   PowerShell automation scripts.

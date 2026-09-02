@@ -22,7 +22,7 @@ One unified system — the **register** (scan, edit, offboard) + **Dashboard** f
 | `Health-Check.ps1` + `.github/workflows/data-health.yml` | Monthly data-health report (duplicate serials, missing tags/serials, unverified 90+ days) filed as a GitHub issue; unverified assets listed in a table. Optional SMTP email via `Send-HealthEmail.ps1`. |
 | `Export-AssetsJson.ps1` | Cert-auth export → `scanner-app/test/fixtures/assets.json` for the golden test suite (commit after bulk list changes). |
 | `Index-LookupFields.ps1` | Indexes the lookup columns (`SerialNumber`, `Title`); `-Verify` mode just reports state. |
-| `generate-cert.ps1` | Created the self-signed client certificate used for PowerShell automation. |
+| `generate-cert.ps1` | Creates the self-signed client certificate for PowerShell automation — random pfx password per run, prints the full rotation runbook. |
 | `ocr.ps1` | Windows OCR helper for reading screenshots. |
 | `labels/` | Deprecated QR label generator (backup only — staff scan existing vendor barcodes, not QRs). |
 | `HANDOFF.md` | Full context/history — read it before modifying the tenant-side setup. |
@@ -117,8 +117,9 @@ default — needs the `SMTP_*` secrets).
 - **CI deploy gate:** GitHub → Settings → Branches → require the `test` status
   check on `main` so failing tests can't reach production.
 - **Secrets for the data-health workflow:** `SP_TENANT`, `SP_CLIENT_ID`,
-  `SP_CERT_B64` (base64 of `pnp-cert.pfx`), `SP_THUMBPRINT`, and optionally
-  `SP_CERT_PASS` (the pfx password — unset falls back to the original).
+  `SP_CERT_B64` (base64 of `pnp-cert.pfx`), `SP_THUMBPRINT`, and `SP_CERT_PASS`
+  (the pfx password — **required**, created randomly by `generate-cert.ps1` and
+  saved locally to `pnp-cert-pass.txt`; there is no default password).
 - **Site sharing:** give scanning staff **Contribute** on the list so
   register-on-scan and Status/Location edits work (the app requests
   `Sites.ReadWrite.All` delegated, but that can't exceed each user's own
