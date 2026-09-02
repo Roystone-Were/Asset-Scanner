@@ -9,9 +9,12 @@
 $ErrorActionPreference = 'Stop'
 
 # Cryptographically random password (not stored anywhere in this repo).
-Add-Type -AssemblyName System.Security
+# Works on both Windows PowerShell 5.1 and pwsh 7+ — RandomNumberGenerator.Fill
+# is .NET Core-only, so use RNGCryptoServiceProvider (or .Create()) instead.
 $bytes = New-Object byte[] 24
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$rng.Dispose()
 $certPassword = [Convert]::ToBase64String($bytes)
 
 $outDir      = "C:\Users\user\Xana-SharePoint"
