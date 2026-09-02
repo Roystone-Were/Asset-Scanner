@@ -286,6 +286,11 @@ module.exports = async function handler(req, res) {
     if (body.action === "set_active") {
       const userId = String(body.userId || "");
       if (!userId) throw new Error("userId required");
+      // Same guard as the other mutating actions: stop an admin from
+      // deactivating themselves (self-lockout) or another admin's account
+      // without super_admin rights. callerIsAdmin() below re-admits a
+      // deactivated admin only if their profile.active is still true.
+      await assertTargetManageable(admin, userId);
       await sb("profiles?id=eq." + userId, {
         method: "PATCH",
         body: JSON.stringify({ active: !!body.active }),
