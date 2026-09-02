@@ -100,7 +100,7 @@ No new licenses.
 
 ## Appendix — Where to read more
 
-* **IT Handoff:** `docs/IT_Manager_Handoff_2026-08-26.md` — architecture, runbooks, credentials, RLS, sync pipeline, troubleshooting.
+* **IT Handoff:** `docs/IT_Manager_Handoff.md` — architecture, runbooks, credentials, RLS, sync pipeline, troubleshooting.
 * **Live docs:** `README.md` (quick start), `HANDOFF.md` (full history), `PROGRESS.md` (migration log), `docs/decisions/ADR-*.md`.
 * **Support:** `it@xanalife.com` (admin), `roystone@xanalife.com` (super_admin) — both have all roles.
 

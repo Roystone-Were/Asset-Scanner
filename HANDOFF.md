@@ -2,7 +2,7 @@
 
 > Purpose: orient another AI agent (or engineer) picking this up, and give the
 > tenant-side (Entra/SharePoint) context needed before touching that half of
-> the system. For day-to-day operation, read `docs/IT_Manager_Handoff_2026-08-26.md`
+> the system. For day-to-day operation, read `docs/IT_Manager_Handoff.md`
 > first — it's the current, detailed runbook. This file is the narrative:
 > how we got here, and what's still open.
 >
@@ -15,7 +15,7 @@
 | Question | Read |
 |---|---|
 | How do I deploy / set up locally? | `README.md` |
-| What's the current live state (counts, env vars, runbooks)? | `docs/IT_Manager_Handoff_2026-08-26.md` |
+| What's the current live state (counts, env vars, runbooks)? | `docs/IT_Manager_Handoff.md` |
 | What does the app do, for a non-technical reader? | `docs/APP_WHAT_IT_DOES.md`, `docs/CEO_Executive_Briefing_2026-08-26.md` |
 | Why is it built this way? | `docs/decisions/ADR-001..003` |
 | What happened, in order, during the migration? | `PROGRESS.md` |
@@ -47,7 +47,7 @@ Apps (/assets /dashboard /admin /login) ──supabase-js──▶ Supabase Post
   `/login`. The old two-project split (`xana-asset-lookup` scanner +
   `asset-scanner-iota` dashboard) is legacy — see README's note to archive
   those once the unified URL is confirmed.
-- Live counts as of 2026-08-26 (see `docs/IT_Manager_Handoff_2026-08-26.md` §3):
+- Live counts as of 2026-08-26 (see `docs/IT_Manager_Handoff.md` §3):
   **144 assets** in Supabase (not the 36-item SharePoint list this file used
   to cite), 781 sync rows `done`, 0 pending/failed.
 
@@ -93,7 +93,7 @@ accurate and worth reading before changing it.
   Row count now tracks Supabase via the sync worker (144 assets as of
   2026-08-26) — the "36 items" and "61 items" figures previously in this file
   were snapshots from before the Supabase migration and bulk imports; don't
-  treat either as current. Check live counts via `docs/IT_Manager_Handoff...md`
+  treat either as current. Check live counts via `docs/IT_Manager_Handoff.md`
   §3 or a fresh `Health-Check.ps1` run.
 - Idempotency: a `SupabaseId` text column (added manually — the sync app
   lacks schema rights) fingerprints every mirrored row with `assets.item_id`.
@@ -187,14 +187,14 @@ it's just no longer used by any browser code (see §1):
 | `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED — `Barcode` column removed Aug 2026; kept for history. |
 | `generate-cert.ps1` | Created the client cert. `ocr.ps1` — Windows OCR helper for screenshots. |
 | `labels/` | Deprecated QR label generator (backup only). |
-| `docs/` | `APP_WHAT_IT_DOES.md`, `CEO_Executive_Briefing_2026-08-26.md`, `IT_Manager_Handoff_2026-08-26.md`, `decisions/ADR-001..003`. |
+| `docs/` | `APP_WHAT_IT_DOES.md`, `CEO_Executive_Briefing_2026-08-26.md`, `IT_Manager_Handoff.md`, `decisions/ADR-001..003`. |
 | `references/session-aug25-2026-session2.md` | Prior session notes. |
 | `README.md` | Setup/deploy docs. `PROGRESS.md` | Migration log. `HANDOFF.md` | This file. |
 
 ## 8. Deployment
 
 - One Vercel project, root of repo, domain `xana-assets.vercel.app`
-  (see `docs/IT_Manager_Handoff_2026-08-26.md` §7 for the routing table and
+  (see `docs/IT_Manager_Handoff.md` §7 for the routing table and
   local-dev harness). No build step — static + `api/*.js` serverless
   functions.
 - GitHub → Vercel auto-deploy: every push to `main` on
@@ -208,7 +208,7 @@ it's just no longer used by any browser code (see §1):
   publicly (privacy fix, see git history — `.vercelignore` now prevents new
   ones but old deployment URLs are immutable).
 
-## 9. OPEN ITEMS (ranked, reconciled against `docs/IT_Manager_Handoff_2026-08-26.md` §12 and `PROGRESS.md`)
+## 9. OPEN ITEMS (ranked, reconciled against `docs/IT_Manager_Handoff.md` §12 and `PROGRESS.md`)
 
 1. **Delete old Vercel deployments** that still serve `assets.csv`/`assets.json`
    publicly at their immutable URLs (Deployments → … → Delete, or `npx vercel rm`).
@@ -248,7 +248,7 @@ it's just no longer used by any browser code (see §1):
   monthly report lives in a GitHub issue + optional email, never in git.
 - Cert files, `.vercel/`, and `.env.local` are gitignored — keep secrets out
   of git. `.env.local` now holds Supabase keys too (see
-  `docs/IT_Manager_Handoff_2026-08-26.md` §4) — treat it as more sensitive
+  `docs/IT_Manager_Handoff.md` §4) — treat it as more sensitive
   than it was pre-migration.
 - `SUPABASE_DB_URL`'s password contains `#` — always percent-encode
   (`%23`) when using it outside `apply-migration.mjs` (which already does

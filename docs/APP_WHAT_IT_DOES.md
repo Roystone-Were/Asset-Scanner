@@ -107,4 +107,4 @@ Existing asset photo: detail card **Add image / Change image** (scanner/admin) â
 
 ---
 
-*This document describes functionality, not issues. For issues fixed 2026-08-26 see `docs/decisions/ADR-003*` and for CEO/IT handoff see `CEO_Executive_Briefing_2026-08-26.md` / `IT_Manager_Handoff_2026-08-26.md`.*
+*This document describes functionality, not issues. For issues fixed 2026-08-26 see `docs/decisions/ADR-003*` and for CEO/IT handoff see `CEO_Executive_Briefing_2026-08-26.md` / `IT_Manager_Handoff.md`.*
