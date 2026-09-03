@@ -485,26 +485,32 @@ function showDetail(it){
   const c=statusColor(it.status);
   const detail=document.getElementById("detail");
   const hero=it.imageUrl?'<img class="detail-hero" src="'+esc(it.imageUrl)+'" alt="" loading="lazy" />':'';
+  // Read-only roles (asset_viewer only — e.g. finance) get the identical card
+  // minus every write affordance: no edit hover/tap, no Scan again, no Clone,
+  // no Verify, no image upload. RLS blocks those writes anyway; hiding them
+  // keeps the page honest instead of offering buttons that fail.
+  const w=canWrite();
+  const erow=w?"row editrow":"row";
   detail.innerHTML='<div class="card" id="assetCard">'+hero+
     '<h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>'+
-    '<div class="hint">Tap any value to change it. Edits save to the register and mirror to SharePoint.</div>'+
+    '<div class="hint">'+(w?"Tap any value to change it. Edits save to the register and mirror to SharePoint.":"View only. You can open and read every asset; contact IT to change any of these values.")+'</div>'+
     '<div class="detail-grid">'+
-    '<div class="row editrow"><span>Serial No.</span><span data-edit="SerialNumber">'+(esc(it.serial||"")||"—")+'</span></div>'+
-    '<div class="row editrow"><span>Asset Type</span><span data-edit="Asset">'+esc(it.type||"")+'</span></div>'+
-    '<div class="row editrow"><span>Model</span><span data-edit="Model">'+esc(it.model||"")+'</span></div>'+
-    '<div class="row editrow"><span>Department</span><span data-edit="Department">'+(esc(it.department||"")||"—")+'</span></div>'+
-    '<div class="row editrow"><span>Employee</span><span data-edit="EmployeeName">'+(esc(it.employee||"")||"—")+'</span></div>'+
-    '<div class="row editrow"><span>Location</span><span data-edit="Location">'+(esc(it.location||"")||"—")+'</span></div>'+
-    '<div class="row editrow"><span>Status</span><span data-edit="Status">'+esc(it.status||"")+'</span></div>'+
-    '<div class="row editrow"><span>Condition</span><span data-edit="Condition">'+(esc(it.condition||"")||"—")+'</span></div>'+
-    '<div class="row editrow"><span>Purchase Date</span><span data-edit="PurchaseDate">'+(esc(it.purchaseDate||"")||"—")+'</span></div>'+
-    '<div class="row editrow"><span>Purchase Price</span><span data-edit="PurchasePrice">'+(it.purchasePrice?money(it.purchasePrice):(it.estimatePending?"estimate pending":"—"))+'</span></div>'+
+    '<div class="'+erow+'"><span>Serial No.</span><span data-edit="SerialNumber">'+(esc(it.serial||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>Asset Type</span><span data-edit="Asset">'+esc(it.type||"")+'</span></div>'+
+    '<div class="'+erow+'"><span>Model</span><span data-edit="Model">'+esc(it.model||"")+'</span></div>'+
+    '<div class="'+erow+'"><span>Department</span><span data-edit="Department">'+(esc(it.department||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>Employee</span><span data-edit="EmployeeName">'+(esc(it.employee||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>Location</span><span data-edit="Location">'+(esc(it.location||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>Status</span><span data-edit="Status">'+esc(it.status||"")+'</span></div>'+
+    '<div class="'+erow+'"><span>Condition</span><span data-edit="Condition">'+(esc(it.condition||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>Purchase Date</span><span data-edit="PurchaseDate">'+(esc(it.purchaseDate||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>Purchase Price</span><span data-edit="PurchasePrice">'+(it.purchasePrice?money(it.purchasePrice):(it.estimatePending?"estimate pending":"—"))+'</span></div>'+
     '<div class="row"><span>Book Value</span><span style="color:var(--book)"><b>'+money(it.bookValue)+'</b></span></div>'+
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
     '<div class="row"><span>Last Verified</span><span id="lastVerifiedVal">'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions"><button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button>'+(canWrite()?'<button class="btn secondary" id="verifyBtn">✓ Verify</button>':'')+'<span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Log event</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
+    '</div><div id="editBar"></div><div class="detail-actions">'+(w?'<button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button><button class="btn secondary" id="verifyBtn">✓ Verify</button>':'')+'<span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">'+(w?"Log event":"Events")+'</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
@@ -521,15 +527,18 @@ function showDetail(it){
   });
   // Delete — admin/super_admin only, confirm dialog, moves to recycle bin
   document.getElementById("delBtn")?.addEventListener("click",()=>showDeleteDialog(it));
-  // inline editing — tap a value to change it
+  // inline editing — tap a value to change it (writers only; read-only roles
+  // render without .editrow, so nothing is bound and nothing looks tappable)
   let current=it;
   const bar=document.getElementById("editBar");
   bar.innerHTML="";
-  detail.querySelectorAll(".editrow").forEach(row=>{
-    row.addEventListener("click",()=>{
-      beginEdit(row.querySelector("[data-edit]"),current);
+  if(w){
+    detail.querySelectorAll(".editrow").forEach(row=>{
+      row.addEventListener("click",()=>{
+        beginEdit(row.querySelector("[data-edit]"),current);
+      });
     });
-  });
+  }
   // History panel — who changed what, when (from asset_history audit trail)
   const histPanel=document.getElementById("histPanel");
   document.getElementById("histToggle")?.addEventListener("click",async function(){
@@ -670,7 +679,8 @@ async function loadEvents(current,histPanel){
   try{
     const rows=await XanaSupabase.listAssetEvents(current.id);
     if(!rows.length){
-      histPanel.innerHTML='<div class="hint" style="margin-top:10px">No events logged yet. Use “Log event” to record repairs, issues or moves.</div>';
+      // read-only roles have no "Log event" button to point them at
+      histPanel.innerHTML='<div class="hint" style="margin-top:10px">No events logged yet.'+(canWrite()?" Use “Log event” to record repairs, issues or moves.":"")+'</div>';
       return;
     }
     histPanel.innerHTML='<div class="hint" style="margin-top:10px">Event log (latest first)</div>'+rows.map(r=>{
@@ -900,7 +910,10 @@ function closeDetail(){
 // Add form logic
 let pendingImage=null, pendingImageName="";
 const addSheet=document.getElementById("addSheet");
-function openAdd(){addSheet.classList.add("open");}
+// Single choke point for the add sheet — the toolbar button, Clone and the
+// scan-miss "+ Add it" toast all come through here, so one guard covers a
+// read-only role no matter how it is reached.
+function openAdd(){if(!canWrite())return;addSheet.classList.add("open");}
 function closeAdd(){addSheet.classList.remove("open");setTimeout(()=>{if(!addSheet.classList.contains("open")){document.getElementById("addMsg").innerHTML="";}},320);}
 document.getElementById("btnAdd")?.addEventListener("click",openAdd);
 document.getElementById("addClose")?.addEventListener("click",closeAdd);
@@ -1351,6 +1364,7 @@ function handleScanHit(raw){
 let _keyBuf=[];
 document.addEventListener("keydown",(e)=>{
   if(_scanning)return;
+  if(!canWrite())return;   // read-only roles: a wedge scanner is inert too, not just the camera
   const t=e.target;
   if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.tagName==="SELECT"||t.isContentEditable)){
     _keyBuf=[];   // a focused field owns its own keystrokes (incl. Enter)
@@ -1386,7 +1400,16 @@ async function startApp(){
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").classList.remove("hidden");
   document.getElementById("search").addEventListener("input",applyFilters);
-  document.getElementById("btnScan").addEventListener("click",startScan);
+  // View-only roles (asset_viewer with no scanner/admin) get the register,
+  // search, filters, People, history and events — and nothing that writes.
+  // Inline styles, not a class: .btn sets its own display.
+  if(canWrite()){
+    document.getElementById("btnScan").addEventListener("click",startScan);
+  }else{
+    document.getElementById("btnScan").style.display="none";
+    document.getElementById("btnAdd").style.display="none";
+    state.insertAdjacentHTML("beforeend",' <span class="pill" style="background:var(--muted);margin-left:6px" title="Your role can read the register but not change it">View only</span>');
+  }
   // kick off data load + choices fetch in parallel; don't block the UI on choices
   const choicesP=(async()=>{
     try{

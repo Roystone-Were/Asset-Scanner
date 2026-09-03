@@ -255,12 +255,16 @@
     <label class="flabel">Full name <span class="opt">(optional)</span></label>
     <input type="text" id="invName" placeholder="e.g. Ada Kim" autocomplete="off" />
     <label class="flabel">Roles</label>
+    <!-- View-only is the default: a new account can read the register and
+         nothing else until someone deliberately grants Scanner or Admin.
+         Asset viewer on its own hides every write control on /assets. -->
     <div id="invRoles" class="rolegrid">
-      <label class="chk"><input type="checkbox" value="scanner" checked /> Scanner</label>
-      <label class="chk"><input type="checkbox" value="asset_viewer" /> Asset viewer</label>
+      <label class="chk"><input type="checkbox" value="asset_viewer" checked /> Asset viewer <span class="opt">(view only)</span></label>
+      <label class="chk"><input type="checkbox" value="scanner" /> Scanner <span class="opt">(scan + edit)</span></label>
       <label class="chk"><input type="checkbox" value="dashboard_viewer" /> Dashboard viewer</label>
       <label class="chk"><input type="checkbox" value="admin" /> Admin</label>
     </div>
+    <p class="hint" style="font-size:.75rem;color:var(--muted);margin:6px 0 0;line-height:1.5">Asset viewer alone is read-only: search, filter, open any asset, see history. No scanning, adding, editing or deleting. Add Scanner for staff who do field work.</p>
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
       <button id="btnInvite">Send invite</button>
       <button id="btnManual" class="secondary">Create with password instead…</button>
@@ -310,7 +314,13 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
 }));
 
 // ---------- invite sheet ----------
-function openInvite(){document.getElementById("inviteSheet").classList.add("open");setTimeout(()=>document.getElementById("invEmail").focus(),350);}
+// Roles reset to view-only every time the sheet opens. Without this the
+// boxes keep the last invite's ticks, so an admin+scanner grant would ride
+// along silently onto the next person invited.
+function resetInviteRoles(){
+  document.querySelectorAll("#invRoles input[type=checkbox]").forEach(c=>{c.checked=(c.value==="asset_viewer");});
+}
+function openInvite(){resetInviteRoles();document.getElementById("inviteSheet").classList.add("open");setTimeout(()=>document.getElementById("invEmail").focus(),350);}
 function closeInvite(){document.getElementById("inviteSheet").classList.remove("open");}
 document.getElementById("btnOpenInvite").addEventListener("click",openInvite);
 document.getElementById("invClose").addEventListener("click",closeInvite);
