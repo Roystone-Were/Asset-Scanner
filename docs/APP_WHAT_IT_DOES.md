@@ -1,110 +1,172 @@
-# Xana Asset System — What This App Does
+# Xana Asset System: what this app does
 
-**Version:** Live `xana-assets.vercel.app` — 2026-08-26  
-**For:** CEO (page 1–2) + IT Manager (page 3–7) — one document, two depths  
-**One line:** One app that registers, verifies, tracks, and reports every company asset — live from Supabase, mirrored to the SharePoint list you already open.
+**Live:** https://xana-assets.vercel.app
+**Reviewed:** 2026-09-04
+**One line:** one app that registers, verifies, tracks and reports every
+company asset, live from Supabase and mirrored to the SharePoint list.
+
+Figures in this document are a snapshot from the review date. The app is the
+authority; treat numbers here as illustrative.
 
 ---
 
-## For the CEO — in plain language
+## For the exec reader
 
 ### Why it exists
-Every laptop, printer, POS, monitor, and cash drawer the company owns has a tag, a serial, an owner, a location, and a value that drops over time. Before, that lived in a SharePoint list that was slow on the floor, had no check-in proof, and no audit trail. This app fixes that without asking staff to learn a new list — SharePoint stays as a read-only view, the app is the master.
+
+Every laptop, printer, POS terminal, monitor, camera and cash drawer has a tag,
+a serial, an owner, a location and a value that falls over time. That used to
+live in a SharePoint list which was slow on the floor, had no proof anyone had
+actually seen the asset, and no audit trail. This app is the master record.
+SharePoint stays as a familiar read-only view.
 
 ### Who uses it
 
-| Person | What they do in the app | Example |
-|--------|------------------------|---------|
-| **Floor / Store staff (Scanner)** | Scan a barcode, see the asset, change Status/Location/Employee, stamp **✓ Verify**, add a photo | Ruiru stock-take: scan `MICL0045` → card shows Lenovo L13, Serial `PW0M…`, `In Use` → `✓ Verify` |
-| **IT / Admin** | Everything Scanner does + invite users, set roles, edit dropdowns (Type, Department…), delete/restore, see sync health | Invite `ada@xanalife.com` as `asset_viewer` → she can view but not edit |
-| **Viewer (asset_viewer)** | Search and open any asset, see history, cannot edit | Finance checks `Purchase Price` without risking edits |
-| **Exec (dashboard_viewer)** | Opens `/dashboard` — KPIs, book value, replacement due — no register access needed | CEO opens Dashboard → sees 144 assets, KES 2.18M purchase value, 19 unverified |
-| **System (offline)** | Works without signal — last fetch is cached, edits queue and sync when online | Syokimau floor with no Wi-Fi: scans still work, `⏳ N offline changes` badge shows |
+| Person | What they do | Example |
+|---|---|---|
+| **IT** | Register kit, scan and verify, edit, offboard leavers, run admin | Ruiru stock take: scan `XL-207`, card opens, tap Verify |
+| **Finance and similar** | Search, open any asset, read prices and book value, see history. Cannot change anything | Checking what the Syokimau cameras are worth today |
+| **Execs** | Open the dashboard only: portfolio value, depreciation, warranty, idle stock | Monthly review of asset value and replacement due |
 
-### What you can do — the 6 jobs the app handles
+Scanning is an IT activity. It is not something wider staff are asked to do.
 
-1. **Register** — The full inventory. Search by tag/serial/model/employee, filter by Type/Location/Status (funnel), sort any column (natural sort: `XL-2 < XL-10 < XL-100`), page 30 at a time. Tap a row for the detail card.
-2. **Detail card** — The truth for one asset: Tag, Type, Model, Serial, Department, Employee, Location, Status, Condition, Purchase Date/Price, Book Value, Dep Status, Useful Life, Warranty, Last Verified. Tap any value to edit it (saves instantly and mirrors to SharePoint). Hero photo at top when present.
-3. **People** — Offboarding. Search an employee → see all their assets → **Mark all returned** (Status → `Available`, Employee cleared — one tap).
-4. **Scan** — Built into `/assets`. Phone camera (torch/zoom when supported) or USB wedge scanner. **Walk mode** (`W`) — continuous, 1.5s dedup, green/red flash + beep + vibrate + counters (like a checkout counter). Scans that match Tag or Serial open the card and stamp `Last Verified / By`.
-5. **Dashboard** — Exec view from the same live data: total assets, purchase value, book value, fully depreciated, pending invoices, replacement due, idle stock, lost assets, by Status/Type/Location/Department, health and finance grids. No separate export — data is live.
-6. **Admin** — Invite users (email OTP or password), set 4 roles, activate/deactivate, manage dropdown choices (so `Add Asset → Type` never has stale options), and see **Sync health** (how many rows still mirroring to SharePoint).
+### The six jobs it handles
 
-All of it works on phone and on desktop (≥768 px wider card, two-column fields, `W` / `/` / `Esc` shortcuts). No separate barcode column — the printed label encodes Tag or Serial, both are matched.
+1. **Register.** Every asset in one searchable table. Search by tag, serial,
+   model or employee; filter by type, status, location or department; sort any
+   column with natural ordering, so `XL-2` comes before `XL-10`.
+2. **Detail card.** The truth for one asset: identity, assignment, condition,
+   purchase date and price, book value, depreciation status, useful life,
+   warranty and when it was last verified. IT can tap any value to change it.
+3. **Scanning.** Phone camera, walk mode for stock takes, or a USB barcode
+   scanner. A scan opens the asset and records that someone laid eyes on it.
+4. **People and offboarding.** Search a person, see everything assigned to
+   them, mark it all returned in one action when they leave.
+5. **Dashboard.** Portfolio value, book value, what is fully depreciated, what
+   is due for replacement, idle stock, lost assets, and breakdowns by status,
+   type, location and department. Plus a depreciation schedule as CSV.
+6. **Admin.** Invite users and set roles, manage the dropdown vocabulary and
+   the depreciation life behind each asset type, watch the SharePoint mirror,
+   restore deleted assets, keep IT documents.
 
----
+### What it protects against
 
-## For the IT Manager — functional detail
-
-### 1. App map
-
-| Route | File | Who can open | What it does |
-|-------|------|--------------|--------------|
-| `/` | `index.html` | anyone signed in | Chooser: **Assets** vs **Dashboard** vs **Admin** (role-filtered). |
-| `/assets` | `assets/index.html` | `asset_viewer`, `scanner`, `admin`, `super_admin` | Register (table + filters + pagination), detail card, people view, scan sheet, add sheet (single + bundled). |
-| `/dashboard` | `summary/index.html` | `dashboard_viewer`, `admin`, `super_admin` | KPIs, depreciation, health, by-* breakdowns — computed client-side from `listAssetsDetailed()`. |
-| `/admin` | `admin/index.html` | `admin`, `super_admin` | Users, `app_choices`, `sharepoint_sync` health. |
-| `/login` | `login/index.html` | public | Single sign-in (OTP + password), `must_change_password` flow, `landingFor()` redirect. |
-| `/scan` | `vercel.json` 301 | — | Redirects to `/assets`. |
-
-`vercel.json` routes those four, plus `lib/` vendored libs.
-
-### 2. Register — how it works
-
-* **Load:** `XanaSupabase.listAssetsDetailed()` → `SELECT item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra WHERE deleted_at IS NULL` → `enrichAsset(row)` — computes `bookValue`, `depStatus`, `usefulLife`, `ageYears`, `warrantyMonths` from `extra.purchase_date/price/estimate_pending/warranty_months`. `extra.image_url` → `it.imageUrl` → hero `<img class=detail-hero>` when present.
-* **Filter/sort:** `q` (lower-cased hay `tag+serial+model+employee+type`), `colFilters{type,status}` via funnel popovers (`distinctValues`), `sortKey/sortDir` with `localeCompare(...,{numeric:true})` for natural sort, `currentPage*PAGE_SIZE` slice.
-* **Detail card (`showDetail(it)`):** hero if `imageUrl`, grid of `editrow` (each `data-edit="SerialNumber|Asset|Model|Department|EmployeeName|Location|Status|Condition|PurchaseDate|PurchasePrice|WarrantyMonths"`), `Book Value` (teal), `Dep Status`, `Warranty` (`warrantyInfo` → expiry vs today), `Last Verified` (`fmtWhen`). Actions: **Scan again**, **Clone** (prefills add form with next free `XL-N`), **✓ Verify** (scanner/admin only → `verifyAsset` → `LastVerified/By` + `refreshVerifiedRow`), **History**, **Log event**, **Close**, **Delete** (admin only → `deleteAsset` soft-delete). Inline edit: tap `editrow` → `beginEdit` → `updateAsset(id,{Field:val})`.
-* **Clone:** `cloneIntoForm(it)` — copies shared `Status,Location,Employee,Department,Condition` etc., leaves `Tag`/`Serial` blank, suggests next `XL-N`.
-* **Pagination:** 30/page, `Prev/Next`, `Showing 1–30 of N`.
-* **People view:** `Xana.groupPeopleEnriched(allItems)` → `search` filter → `Mark all returned` loops `updateAsset(id,{Status:"Available",EmployeeName:""})` + `logTransfer`.
-
-### 3. Add asset — single + bundled
-
-* **Sheet:** `addSheet` (`#addTag, #addSerial*, #addModel, #addType, #addStatus, #addLocation, #addEmployee, #addDept*, #addCondition, #addPDate, #addPrice(*), #addPriceEstimate, #addWarrantyMonths`, Image drop, Bundled toggle).
-* **Required:** `Tag` (unique, checked `allItems.some(tag.toLowerCase)` + DB `unique_asset_tag`), `Serial`, `Department`, `Price` or `estimate pending`. `Tag` is user-entered, never auto-generated.
-* **Image:** `addImage` file input → `FileReader.readAsDataURL` → `pendingImage` (dataUrl), `pendingImageName`, `imgPreview`/`imgName`. On `Save` after `insertAsset` loop: `uploadAssetImage(created.id, pendingImage, name)` → `storage.from('asset-images').upload(path, blob, {upsert:true})` → `getPublicUrl` → `attachAssetImage(created.id, url)` → `asset_extra_merge({image_url:url})`.
-* **Bundled:** `addBundle` checkbox → `bundleRows` (`BUNDLE_ROW_BP {Monitor:2300,Keyboard:400,Mouse:300}` + `TOWER_BP 7000` of total) → `bundleRowHTML` (Type/Tag/Serial/Model/Price), `nextBundleTags` (max `XL-N` + taken), `allocateBundlePrices` (non-dirty rows renormalise over pool, dirty rows untouched), `updateBundleSum` (allocated vs total, over/under). Save builds `components` array, tower books residual `total - rowSum`, shared fields (`Status,Location,Employee,Department,Condition,PurchaseDate,EstimatePending,WarrantyMonths`) applied to each.
-* **Post-save:** `pendingImage=null`, clear form, `resetBundle`, `closeAdd`, `load()`.
-
-Existing asset photo: detail card **Add image / Change image** (scanner/admin) → same `upload+attach` → hero insert/replace, `found.imageUrl=url`, `load()` in 800 ms.
-
-### 4. Scan
-
-* **Camera:** `html5-qrcode` (`html5-qrcode.min.js`), `torch`/`zoom` chips if `track.getCapabilities` reports them (iOS none).
-* **Walk mode:** `Walk` button → `isWalk=true`, counters `hit/miss`, stay-open camera, `1.5s` dedup of in-frame barcode, no input refocus while camera runs (keyboard doesn't cover view). Normal = one-shot.
-* **Wedge (USB):** global `keydown` burst detector `classifyKeyBurst` (printable, gaps ≤80 ms, `Enter` terminator) → `handleScanHit(text)` → same lookup as camera. Focused input owns its `Enter` (no double).
-* **Lookup:** `hay = tag+" "+serial+" "+model+" "+employee+" "+type` lower-cased, cleaned barcode → `offlineLookup` on `xana_data_cache_v1` if `isOfflineish` (offline / TypeError / token redirect) → banner `📴 Offline`, else live `listAssetsDetailed` filter. Hit → `writeFields({LastVerified:now, LastVerifiedBy:email})` + green flash/beep/vibrate; miss → red + `Add-asset` offer.
-* **History/write queue:** `writeFields` → direct `PATCH` when online else merged per-item `xana_write_queue_v1` (50 cap) flushed on `load` + `online` (4xx dropped). Badge `⏳ N`.
-* **Shortcuts:** `W` (walk), `/` (focus), `Esc` (exit walk) — cold-stream guard 400 ms so `W` inside a wedge burst doesn't fire.
-
-### 5. Dashboard (`/dashboard` / `summary/`)
-
-* No server `api/summary.js` anymore — `XanaSupabase.computeSummary(enriched)` ports it client-side. KPIs: total, purchase value (sum `purchasePrice`), book value (sum `bookValue`), fully depreciated, pending, expensed this year (`purchasePrice/usefulLife`), replacement due (`fully_dep OR age+1 >= usefulLife`), idle stock (`Available` or no employee), lost, byStatus/byType/byLocation/byDepartment. Donut `donut-seg` stroke-dash draw, bars `bar-fill` transition, `rise` stagger. Dark/light via `xana_theme`.
-
-### 6. Admin
-
-* **Users:** `api/admin-users.js` (`list/invite/set_roles/set_active/delete`) — verifies caller JWT + `is_admin()` server-side; `invite` creates user with `must_change_password`. Roles: `super_admin` > `admin` > `scanner` > `asset_viewer`/`dashboard_viewer`.
-* **Lists:** `app_choices` (`category,value,sort_order`) — seeded `asset_type, status, location, region, department`. Fills `addType/addDept/addStatus/addLocation`.
-* **Sync health:** `sharepoint_sync` table (`op,payload,status,attempts,last_error,graph_item_id`) — shows `pending/failed`, `Requeue` via `requeue_failed_sync_rows()`.
-
-### 7. Data & sync
-
-* **Supabase** `irqrnyixizzorvfmtvag` — `assets`, `asset_history`, `asset_events`, `sharepoint_sync`, `app_choices`, `user_roles`, `profiles`, `allowed_scanners`, storage `asset-images`.
-* **Triggers:** `assets_to_outbox_*` → `sharepoint_sync` pending; `assets_audit_trigger` (`tracked = title,asset_tag,asset_type,model,serial,employee,status,location,extra`); `asset_extra_merge` RPC merges `extra` without wipe.
-* **Sync:** `pg_net` immediate `POST` to `https://xana-assets.vercel.app/api/sharepoint-sync` (header `SYNC_ACCESS_KEY`) + `pg_cron sharepoint-sync-retry` `*/5`. Worker claims `processing`, stale reset, 429/5xx backoff, `SupabaseId` indexed `Prefer: HonorNonIndexedQueriesWarningMayFailRandomly`.
-* **Auth:** `supabase-js` `persistSession`, `detectSessionInUrl`, `sanitizeAuthHash` for `#error`, `myRoles()`, `landingFor()`, `applyRoleNav()`.
-
-### 8. Offline, PWA-ish
-
-* `localStorage` `xana_data_cache_v1` (last successful `listAssetsDetailed`), `xana_write_queue_v1`, `xana_theme`. No service worker — rely on Vercel cache + localStorage.
-
-### 9. What it deliberately does not do
-
-* No SharePoint write from UI — mirror is read-only.
-* No separate `Barcode` column — label encodes Tag/Serial.
-* No PDF label generator in-app — `labels/` is backup, staff scan vendor barcodes.
-* No private bucket signed URLs — public read is intentional for `<img>` without auth header.
+- **Silent loss.** Everything is soft deleted into a recycle bin first.
+- **Unverified inventory.** Every scan stamps who checked it and when, so the
+  dashboard can show what has not been seen in 90 days.
+- **Untracked change.** Every field edit is written to an audit trail with the
+  person and timestamp.
+- **Over-broad access.** Reading anything requires a role, and deactivating an
+  account removes its access to the data, not just the screens.
 
 ---
 
-*This document describes functionality, not issues. For issues fixed 2026-08-26 see `docs/decisions/ADR-003*` and for CEO/IT handoff see `CEO_Executive_Briefing_2026-08-26.md` / `IT_Manager_Handoff.md`.*
+## For the IT reader
+
+### Routes
+
+| Route | Who can open | What it does |
+|---|---|---|
+| `/` | anyone signed in | Landing, tiles filtered by role |
+| `/assets` | `asset_viewer`, `scanner`, admins | Register, detail card, scanning, People |
+| `/dashboard` | `dashboard_viewer`, admins | KPIs and exports, computed in the browser |
+| `/admin` | `admin`, `super_admin` | Users, lists, sync health, recycle bin, documents |
+| `/login` | public | Magic link or password, forced change on first sign-in |
+| `/scan` | redirect | Permanent redirect to `/assets` |
+
+### Roles
+
+`super_admin`, `admin`, `scanner`, `asset_viewer`, `dashboard_viewer`. They
+stack, and most IT accounts hold several.
+
+`asset_viewer` alone is genuinely view only: the register renders with no Scan,
+no Add, no inline editing, no Verify, no Clone, and the USB scanner is inert.
+The database refuses those writes independently of the UI. This is the default
+for a new invite.
+
+Reading `assets`, `asset_history` and `asset_events` requires at least one
+active role. An account with no roles, or one switched to inactive in Admin,
+reads nothing at all, including through the API.
+
+### Register
+
+Loaded in one query through `listAssetsDetailed()` in `js/supabase-client.js`,
+which enriches each row with book value, depreciation status, useful life, age
+and warranty. Filtering, sorting and paging happen in the browser over that
+one fetch, so the table stays responsive.
+
+The detail card offers, for writers: inline edit on any field, Scan again,
+Clone (prefills the add form and suggests the next free tag), Verify, an image
+upload, and Delete for admins. For everyone: History and Events.
+
+### Scanning
+
+Matches **asset tag first, then serial**, case-insensitively. Tags win because
+some assets currently carry a placeholder tag in the serial field, and the tag
+is what is physically on the label.
+
+- **Camera** through `html5-qrcode`.
+- **Walk mode** keeps the camera open for stock takes: hit and miss counters,
+  1.5 second dedup of a barcode sitting in frame, flash, beep and vibrate.
+- **USB wedge** works anywhere on the page. Fast keystroke bursts ending in
+  Enter are classified as a scan, unless a field has focus.
+
+A hit stamps `last_verified` and `last_verified_by`. A miss offers to add the
+device with the scanned code prefilled.
+
+### Adding assets
+
+Tag, serial and department are required, plus either a price or the "estimate
+pending" flag; database constraints back all of that up. Tags are typed, never
+auto-generated, though Clone and the scan-miss flow suggest the next free
+`XL-N`. A bundled option creates a tower plus components in one submit,
+splitting the total price across them.
+
+For bulk work, `scripts/add-cameras.mjs` is the worked example: it validates
+the batch, refuses duplicates, allocates tags and item ids the same way the app
+does, and inserts in chunks so the SharePoint mirror is not flooded.
+
+### Events and history
+
+Two separate records against an asset:
+
+- **History** is automatic: every field change, who and when, from a database
+  trigger.
+- **Events** are entered by hand: issues, repairs, maintenance, transfers and
+  notes, each with an optional cost. Issues can be left open and closed later.
+  Writers see **+ Log event**; read-only roles see the list.
+
+### Dashboard
+
+Computed in the browser from the same enriched rows, so there is no server
+round trip and no second implementation of the numbers. Depreciation is
+straight line with no salvage value, prorated continuously. Useful life comes
+from the asset type, editable in Admin, falling back to a built-in table.
+
+The depreciation CSV reconciles against the dashboard: cost minus accumulated
+equals the closing book value on every row.
+
+### Data and sync
+
+Supabase holds `assets`, `asset_history`, `asset_events`, `app_choices`,
+`profiles`, `user_roles`, `sharepoint_sync`, the `choice_usage` view and the
+`asset-images` bucket.
+
+Every write queues one row in `sharepoint_sync` and fires an immediate call to
+the worker, with a 5 minute cron sweep as backstop. Rows stop retrying after 5
+attempts and appear as failed in Admin, where `requeue_failed_sync_rows()`
+brings them back. The mirror is one way; nothing typed in SharePoint returns.
+
+### What it deliberately does not do
+
+- No writes from SharePoint back into the register.
+- No separate barcode column. The printed label encodes the tag or serial.
+- No offline mode. Earlier versions cached and queued writes; that was retired
+  with the move to Supabase, and the app now expects a connection.
+- No signed URLs for asset images. Public read is intentional so `<img>` works
+  without an auth header.
+
+---
+
+*Functionality only. Decisions and their reasons live in `docs/decisions/`,
+current operational state in `IT_Manager_Handoff.md`.*

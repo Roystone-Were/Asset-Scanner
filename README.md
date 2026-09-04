@@ -1,183 +1,221 @@
 # Xana Asset System
 
-One unified system — the **register** (scan, edit, offboard) + **Dashboard** for execs — live from Supabase, mirrored to the **Xana Asset Inventory** SharePoint list.
+The asset register for XanaLife: one web app covering the register, barcode
+scanning, offboarding, an exec dashboard and user administration. Supabase
+Postgres is the source of truth. The SharePoint list is a read-only mirror
+kept in step automatically.
 
-- **Live app (unified):** `https://<your-project>.vercel.app` → `/` landing, `/assets` register (scanning built in), `/dashboard` dashboard, `/admin` admin. `/scan` permanently redirects to `/assets`.
-  - Legacy: `https://xana-asset-lookup.vercel.app` (scanner) and `https://asset-scanner-iota.vercel.app` (dashboard) — now combined
-- **Source of truth:** Supabase Postgres (project `irqrnyixizzorvfmtvag`, eu-west-1). The SharePoint Online list `Xana Asset Inventory` on `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData` is a **read-only mirror**, kept in sync by the `api/sharepoint-sync.js` worker.
-- **Auth:** Supabase email OTP / password — invite-only (admin-managed in `/admin`), with roles `super_admin` · `admin` · `scanner` · `asset_viewer` · `dashboard_viewer`. RLS enforces roles server-side; UI gates are cosmetic.
+**Live:** https://xana-assets.vercel.app
 
-## What's in this repo
+| Page | What it is | Who gets in |
+|---|---|---|
+| `/` | Landing and sign-in. Shows only the tiles your roles allow | anyone signed in |
+| `/assets` | The register: search, filter, scan, edit, People/offboarding | `asset_viewer`, `scanner`, admins |
+| `/dashboard` | Portfolio value, depreciation, warranty and activity KPIs | `dashboard_viewer`, admins |
+| `/admin` | Users and roles, dropdown lists, sync health, recycle bin, IT documents | `admin`, `super_admin` |
+| `/login` | Magic link or password | anyone |
+
+`/scan` permanently redirects to `/assets`; scanning lives inside the register.
+
+## Architecture
+
+Static HTML pages with no build step, talking straight to Supabase from the
+browser through `js/supabase-client.js`. There is no bundler, no framework and
+no npm install for the app itself.
+
+```
+browser ──> Supabase Postgres (source of truth, RLS enforced)
+                 │
+                 ├─ assets_to_outbox trigger  ──> sharepoint_sync queue
+                 │                                     │
+                 │                              api/sharepoint-sync.js
+                 │                                     │
+                 └─ pg_cron retry sweep (5 min)  ──> SharePoint list (mirror)
+```
+
+- **Supabase project** `irqrnyixizzorvfmtvag` (eu-west-1). Every table has RLS;
+  the UI gates are convenience, the database is the actual boundary.
+- **SharePoint mirror:** `Xana Asset Inventory` on the `xanalifeTechData` site.
+  One way only. Nothing written in SharePoint flows back.
+- **Auth:** Supabase email magic link or password, invite only. Accounts are
+  created by an admin in `/admin`.
+
+## Roles
+
+| Role | Read register | Scan and edit | Delete | Dashboard | Admin |
+|---|---|---|---|---|---|
+| `asset_viewer` | yes | no | no | no | no |
+| `scanner` | yes | yes | no | no | no |
+| `dashboard_viewer` | yes | no | no | yes | no |
+| `admin` | yes | yes | yes | yes | yes |
+| `super_admin` | yes | yes | yes | yes | yes, plus protected accounts |
+
+Roles stack: most staff hold several. Two things worth knowing:
+
+- **Reading anything requires at least one active role** (migration 0029).
+  An account with no roles, or one deactivated in `/admin`, reads nothing,
+  including through the API. Deactivating someone genuinely cuts them off.
+- **`asset_viewer` on its own is view only.** The register renders without
+  Scan, Add, inline edit, Verify or Clone, and the database refuses those
+  writes regardless. New invites default to this.
+
+## Repo map
 
 | Path | Purpose |
 |---|---|
-| `/` (landing) | `index.html` — chooser: Assets vs Dashboard vs Admin. `vercel.json` routes `/assets`, `/dashboard`, `/admin`, `/login`; `/scan` 301s to `/assets`. |
-| `scanner-app/` | No longer a page — holds the vendored browser libraries (`lib/supabase.min.js`, `lib/html5-qrcode.min.js`), the shared pure logic (`logic.js`) and its test suite, icons and the logo. The old standalone scanner page was retired; its features (camera scan, walk mode, wedge input, people/offboarding) live in `/assets`. |
-| `summary/` | Exec dashboard (`index.html` + `app.js`). KPIs, depreciation, health, register with CSV export. |
-| `Export-AssetLabels.ps1` | Silent cert-auth export of the list → `scanner-app/assets.csv` / `assets.json`. |
-| `Xana-Asset-Format.ps1` | Applies Status-column color + row formatting to the list. |
-| `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED (Aug 2026): the `Barcode` column was removed — the barcode on an asset label encodes the tag or serial, so tag/serial matching covers scans. Scripts kept for history. |
-| `Add-LastVerifiedColumn.ps1` | Adds the `Last Verified` date column the app writes on every scan. |
-| `Add-LastVerifiedByColumn.ps1` | Adds the `Last Verified By` text column the app writes with the signed-in user on every scan (accountability for the health report + history view). |
-| `Health-Check.ps1` + `.github/workflows/data-health.yml` | Monthly data-health report (duplicate serials, missing tags/serials, unverified 90+ days) filed as a GitHub issue; unverified assets listed in a table. Optional SMTP email via `Send-HealthEmail.ps1`. |
-| `Export-AssetsJson.ps1` | Cert-auth export → `scanner-app/test/fixtures/assets.json` for the golden test suite (commit after bulk list changes). |
-| `Index-LookupFields.ps1` | Indexes the lookup columns (`SerialNumber`, `Title`); `-Verify` mode just reports state. |
-| `generate-cert.ps1` | Creates the self-signed client certificate for PowerShell automation — random pfx password per run, prints the full rotation runbook. |
-| `ocr.ps1` | Windows OCR helper for reading screenshots. |
-| `labels/` | Deprecated QR label generator (backup only — staff scan existing vendor barcodes, not QRs). |
-| `HANDOFF.md` | Full context/history — read it before modifying the tenant-side setup. |
+| `index.html` | Landing page and sign-in |
+| `assets/` | The register: table, filters, detail card, scanning, People view |
+| `summary/` | Exec dashboard (`index.html` + `app.js`), KPIs and CSV exports |
+| `admin/` | Admin console: users, lists, sync health, recycle bin, documents |
+| `login/` | Sign-in page |
+| `js/supabase-client.js` | The one data layer. Field mapping, depreciation, all queries |
+| `scanner-app/` | Vendored browser libs, shared pure logic (`logic.js`) and its tests. Not a page any more |
+| `css/`, `fonts/` | Shared tokens, page-entry overlay, view transitions, Geist |
+| `api/sharepoint-sync.js` | Drains the outbox into SharePoint. Service role, keyed |
+| `api/admin-users.js` | Invite, roles, activation, password reset. Verifies the caller is an admin |
+| `supabase/migrations/` | Schema and RLS, numbered and applied in order |
+| `scripts/` | Migration runner, backfills, e2e and debug tools |
+| `backfill/` | Work lists for filling gaps. CSVs stay local, never committed |
+| `docs/` | Runbook, what-it-does, exec briefing, ADRs |
+| `*.ps1` | PowerShell automation against SharePoint (cert auth) |
 
-## How the lookup works
+## How scanning works
 
-The app matches the scanned/typed value (case-insensitive) against these
-columns only — a client-side match over the live Supabase register, which is
-also cached locally for offline lookups:
+The register matches a scanned or typed code against **asset tag first, then
+serial**, case-insensitively, over the register already loaded in the browser.
+Tags win because the tag is the label physically on the asset, and some kit
+currently carries a placeholder tag in its serial field.
 
-- **Title** — this is the "Asset Tag" column you see in the list UI (SharePoint
-  renders Title as a link column; internal name `LinkTitle`, value in `Title`)
-- **Serial Number** (`SerialNumber`)
+Three ways to scan, all in `/assets`:
 
-The barcode printed on an asset label is not a separate column: it *encodes*
-the tag (e.g. a vendor label reading "METROCARE … — MICL0045" scans, gets
-cleaned to `MICL0045`, and matches Title) or the serial. A scan that matches
-nothing simply isn't in the inventory — the miss screen offers adding the
-device as a new asset.
+- **Scan button:** opens the camera sheet. A hit jumps to that asset's card.
+- **Walk mode:** keeps the camera running for stock takes, counting hits and
+  misses with flash, beep and vibrate feedback.
+- **USB wedge scanner:** works anywhere on the page with no button. Fast
+  keystroke bursts ending in Enter are classified as a scan, except while
+  typing in a field.
 
-Deliberately **not** matched: the `Asset` column (internal name of **Asset Type** —
-Laptop/CPU/Monitor…), so typing "Laptop" can't match every laptop.
+A scan is a verification: it stamps `Last Verified` and the signed in user,
+so routine scanning doubles as an inventory audit. A miss offers to add the
+device. Read-only roles can do none of this, camera and wedge alike.
 
-Every successful scan also writes a timestamp to **Last Verified** and the
-signed-in user to **Last Verified By**, and the result card lets staff change
-**Status / Location** inline — routine scans become an automatic inventory
-audit. The card's **🕘 History** expander shows SharePoint's version history
-(who changed what, when; verification scans collapse to one line).
+## Depreciation
 
-The app keeps working offline: the last successful fetch is cached locally,
-scans match the cache when Graph is unreachable, and any writes made offline
-(verify stamps, edits, new assets) queue up and sync automatically
-when the connection returns.
+One implementation, `enrichAsset()` in `js/supabase-client.js`. Straight line,
+no salvage value, age prorated continuously:
 
-The **👥 People** view is the offboarding tool: search an employee, see every
-asset assigned to them, and mark a leaver's devices returned in one tap
-(Status → Available, Employee cleared).
+```
+annual        = purchase_price / useful_life
+accumulated   = min(price, age_in_years x annual)
+book value    = max(0, price - accumulated)
+status        = "No data" | "In progress" | "Fully depreciated"
+```
 
-When a scan misses because the device isn't in the list at all, the miss
-screen offers **🆕 Device not in the list — add it**: a minimal form (tag,
-serial, model, type, status, location) that creates the item on the spot —
-or queues it for sync if offline. Bulk additions are still easiest directly
-in SharePoint; the form is for the field.
+Useful life resolves in this order:
 
-The camera offers **torch and zoom** controls while scanning — shown only
-when the device supports them, so the view stays clean. Interface motion
-(card entrances, screen switches, the add-asset bottom sheet, toast
-notifications) is plain CSS/Web Animations — no animation library, no build
-step, and it all switches off automatically for users who prefer reduced
-motion.
+1. `extra.useful_life` on the individual asset, if set
+2. `app_choices.useful_life` for its type, editable in **Admin > Lists**
+3. the built-in `USEFUL_LIFE_BY_TYPE` map, as a fallback
+4. 3 years
 
-**Walk mode** (🚶 button) is built for inventory walks: continuous scanning
-with hit/miss counters, instant flash + beep + vibrate feedback, and no taps
-between scans. USB barcode scanners (keyboard/"wedge" mode) are detected
-anywhere in the app — scan into a laptop and the lookup fires by itself.
+So adding a new asset type and giving it a depreciation life is entirely
+self-service. No code change, no deploy.
 
-On desktop (≥768px) the layout widens, the result card shows its fields in
-two columns, and keyboard shortcuts apply: **W** toggles walk mode, **/**
-focuses the input, **Esc** exits walk mode. Mobile is unchanged.
+An asset with no purchase date reads "No data", holds full book value and
+never depreciates, so gaps show up rather than quietly distorting the numbers.
 
-Field-name lookups tolerate internal-name quirks: "Asset Type" may come back from
-Graph as `AssetType` or `Asset_x0020_Type`; `fieldV()` normalizes `_xNNNN_` hex
-escapes and case before comparing. (The renamed column here lives at internal name
-`Asset`.)
+## Deploying
 
-## Entra app registration (`pnp`) — sync worker only
+**Push to `main`.** Vercel's Git integration builds and promotes automatically.
+There is no CLI step; `.vercel/project.json` only records a one time
+`vercel link`. Confirm the deploy landed rather than assuming:
 
-The browser apps no longer talk to Microsoft. The Entra app is used solely by
-`api/sharepoint-sync.js` (client-credentials flow) and the PowerShell
-automation scripts:
+```bash
+git push
+curl -s https://xana-assets.vercel.app/js/supabase-client.js | grep "something only the new build has"
+```
 
-- **Client ID:** `7caa51af-9f32-42d8-8264-da5b97c2f8eb`
-- **Tenant:** `refrontiergroup.onmicrosoft.com`
-- **Graph application permission:** `Sites.ReadWrite.All` (admin-consented)
+## Database migrations
 
-All interactive sign-in runs through Supabase Auth (`/login`); staff accounts
-are created by an admin via `/admin` (email invite or manual password).
+Numbered SQL in `supabase/migrations/`, applied through the Management API:
 
-`Health-Check.ps1` (run monthly by `.github/workflows/data-health.yml`) checks the
-list for duplicate serial numbers, missing tags/serials,
-missing/renamed columns, and assets not verified in 90 days — unverified assets
-appear in a Markdown table. The report leads with a **health score** (share of
-assets fully clean) and, from the second month on, **month-over-month deltas**
-(the workflow commits an aggregate `health-history.json` after each run).
-It also warns when the automation client certificate has less than 90 days
-left. When issues are found the workflow files a GitHub issue (@mentioning
-the owner) and can email the report via SMTP (`Send-HealthEmail.ps1`, off by
-default — needs the `SMTP_*` secrets).
+```bash
+node scripts/apply-migration.mjs supabase/migrations/00NN_name.sql
+```
 
-## Hardening checklist (manual, one-time)
-
-- **CI deploy gate:** GitHub → Settings → Branches → require the `test` status
-  check on `main` so failing tests can't reach production.
-- **Secrets for the data-health workflow:** `SP_TENANT`, `SP_CLIENT_ID`,
-  `SP_CERT_B64` (base64 of `pnp-cert.pfx`), `SP_THUMBPRINT`, and `SP_CERT_PASS`
-  (the pfx password — **required**, created randomly by `generate-cert.ps1` and
-  saved locally to `pnp-cert-pass.txt`; there is no default password).
-- **Site sharing:** give scanning staff **Contribute** on the list so
-  register-on-scan and Status/Location edits work (the app requests
-  `Sites.ReadWrite.All` delegated, but that can't exceed each user's own
-  permission).
-- **Revoke the orphan client secret** (legacy ACS, unused) in the Entra app
-  registration.
-- **Monthly cron note:** GitHub disables scheduled workflows after 60 days of
-  repo inactivity — re-enable via Actions → `data-health` → Enable, or run it
-  manually with **Run workflow**.
+The runner prints `HTTP 201` on success. On Windows it may follow that with a
+libuv assertion during teardown; the migration has already applied.
 
 ## Local development
 
 ```bash
-# Serve unified app (landing + scan + dashboard)
-py -m http.server 8100
-# Open http://localhost:8100/          (landing)
-#      http://localhost:8100/assets    (register + scanning + people)
-
-# Dashboard API locally needs Vercel dev (for /api/summary):
-# vercel dev  (from repo root, needs SUMMARY_* + CLIENT_SECRET env)
+py -m http.server 8100      # or any static server from the repo root
+# http://localhost:8100/          landing
+# http://localhost:8100/assets    register
 ```
 
+Pages talk to the live Supabase project, so you are working against real data.
+The two `/api` functions (SharePoint sync, admin user management) need
+`vercel dev` and the environment below.
 
-
-Unified project: root `vercel.json` routes `/assets`, `/dashboard` + `/api` → `summary/`; `/scan` redirects to `/assets`.
-
-**Deploying: push to `main`.** Vercel's Git integration builds and promotes to
-production automatically — there is no CLI step. `.vercel/project.json` only
-records a one-time `vercel link`; running `npx vercel deploy --prod` is
-redundant (and re-downloads the CLI every time). Confirm a deploy landed by
-checking the live file rather than assuming:
+Tests for the shared logic:
 
 ```bash
-git push
-curl -s https://xana-assets.vercel.app/js/supabase-client.js | grep "<something only the new build has>"
+cd scanner-app && npm test
 ```
 
-For CI auto-deploys, connect the GitHub repo in the Vercel dashboard (Project → Settings → Git, root directory = `/`). Legacy projects (`xana-asset-lookup` and `asset-scanner-iota`) can be archived after the unified URL is verified.
+## Environment
 
-## Re-exporting the asset data
+`.env.local` at the repo root, never committed:
 
-```powershell
-pwsh -NoProfile -File Export-AssetLabels.ps1
-```
+| Key | Used by |
+|---|---|
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | public, also inlined in `js/supabase-client.js` |
+| `SUPABASE_SERVICE_ROLE_KEY` | admin API, e2e scripts. Bypasses RLS |
+| `SUPABASE_DB_URL` | direct Postgres for scripts and migrations |
+| `SUPABASE_ACCESS_TOKEN` | Management API (migration runner) |
+| `CLIENT_SECRET` | Entra app, for Graph and the SharePoint sync worker |
+| `SYNC_ACCESS_KEY` | shared secret the sync endpoint checks |
 
-Requires the PnP module and the client certificate (thumbprint
-`B4437765C89E84AE84B813194E6BD0D54EB3F430` — `.pfx`/`.cer` live next to this file
-**and are intentionally NOT committed**; keep them out of git).
+The Entra app (`pnp`, client `7caa51af-9f32-42d8-8264-da5b97c2f8eb`, tenant
+`refrontiergroup.onmicrosoft.com`, `Sites.ReadWrite.All`) is used only by the
+sync worker and the PowerShell scripts. Browsers never touch Microsoft.
 
-## Notes / gotchas
+## Operations
 
-- Camera scanning needs HTTPS (secure context) — satisfied by the Vercel URL;
-  `localhost` also works for desktop testing.
-- The list previously had duplicate serial numbers (e.g. `9CP541RLNV` on two
-  rows); the latest health-check run found none — the monthly report will catch
-  any that reappear.
-- `assets.json`/`assets.csv` are exported snapshots (for the label generator); the
-  web app always reads live from Graph. They contain employee names and serials,
-  so they must never deploy publicly — `scanner-app/.vercelignore` enforces that
-  (old Vercel deployments from before Aug 2026 should be deleted from the
-  dashboard).
+**SharePoint mirror.** Every insert, update and delete queues one row in
+`sharepoint_sync` and fires an immediate HTTP call to the worker, with a
+`pg_cron` sweep every 5 minutes as backstop. A row stops retrying after 5
+attempts and shows as `failed` in **Admin > Sync health**, which is read only;
+requeue with `requeue_failed_sync_rows()`. Bulk inserts are worth doing in
+chunks so Microsoft Graph is not hit with a burst.
+
+**Data health.** `Health-Check.ps1`, run monthly by
+`.github/workflows/data-health.yml`, reports duplicate serials, missing tags
+and serials, and assets unverified for 90 days, then files a GitHub issue.
+It also warns when the automation certificate has under 90 days left. GitHub
+disables scheduled workflows after 60 days of repo inactivity, so re-enable it
+under Actions if it goes quiet.
+
+**Deletes** are soft. Assets go to the recycle bin in `/admin` and can be
+restored; purging is admin only and mirrors the delete to SharePoint.
+
+**Backfills.** `backfill/` holds CSV work lists (missing prices, missing dates).
+They carry employee names and serials and are gitignored.
+
+## Gotchas
+
+- Camera scanning needs a secure context. The Vercel URL and `localhost` both
+  qualify; a LAN IP does not.
+- Serial numbers have no uniqueness constraint and the add form does not check
+  for duplicates. Placeholder serials (`0000`, `-`, `N/A`) and a handful of
+  genuine duplicates exist. The monthly health check reports them.
+- Asset tags are unique, enforced by a partial unique index on `lower(asset_tag)`
+  for live rows. `item_id` is allocated server side by `next_asset_item_id()`.
+- Some assets carry placeholder tags in the serial field while real tags are
+  awaited. Scanning handles this by preferring tags, but reports should not
+  assume a serial is a serial.
+- `assets.json` and `assets.csv` under `scanner-app/` are local snapshots
+  containing employee names. `.vercelignore` keeps them off the deployment.
+- Motion respects `prefers-reduced-motion` on every page. Keep it that way when
+  adding animation.

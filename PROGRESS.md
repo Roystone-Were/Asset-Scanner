@@ -104,6 +104,88 @@ SharePoint orphans: find via `$filter=fields/Title eq '<name>'` then `DELETE /it
 - Admin page rewritten: Users tab · Lists tab · Sync-health tab (shows pending/failed outbox rows)
 - SharePoint Status/Location columns converted to plain text (user did in SP UI) so new choice values mirror freely
 
+## Post-migration work (2026-09-03 and 2026-09-04)
+
+The migration itself was done by this point. What follows is the first block of
+work on top of it, grouped by theme.
+
+### Access and roles
+
+- **`asset_viewer` made genuinely view only.** RLS had always refused its
+  writes, but `/assets` still rendered Scan, Add, inline edit, Verify, Clone
+  and the USB wedge listener, so a viewer met failures instead of an honest
+  read-only page. Now hidden at render, with `openAdd()` guarded at the single
+  choke point. Verified end to end against a real `asset_viewer` account:
+  26 checks, DB and UI.
+- **New invites default to view only** (`asset_viewer` ticked, Scanner not),
+  and the role grid resets on every open. It used to keep the previous
+  invite's ticks, so an admin+scanner grant could ride onto the next person.
+- **`0029_read_requires_role.sql`: reading requires an active role.** `assets`,
+  `asset_history` and `asset_events` were readable by any signed-in account
+  through PostgREST regardless of role, and a deactivated account kept that
+  access. All six real accounts were checked before and after; a role-less or
+  deactivated account now reads nothing.
+
+### The CCTV batch
+
+- **71 UniFi cameras added** across the six branches, from screenshots in
+  `CAMERAS.pdf`. MAC as serial, canonical `AA:BB:CC:DD:EE:FF`, tags `XL-200`
+  to `XL-270`, KES 30,400 each, 5 year life, so KES 431,680/yr of new
+  depreciation. Script: `scripts/add-cameras.mjs`, dry-run by default, refusing
+  duplicate or malformed MACs and unknown branches.
+- **Branch purchase dates** taken from each site's existing assets, so cameras
+  depreciate in step with the rest of the kit: Syokimau 2025-09-01, Ruiru
+  2026-06-05, TRM Dr and Lumumba Dr 2026-07-02, Githurai 2026-05-15, Katani
+  2025-12-01 (the last two supplied by IT; those branches had no dated assets).
+- **Custodians.** The batch first went in with a blank `employee`, which made
+  all 71 count as idle stock on the dashboard (73 assets, KES 1.9M, "redeploy
+  before buying new"). The estate labels fixed infrastructure with a custodian,
+  so cameras took `<Branch> CCTV` and idle stock fell back to 2.
+
+### Depreciation
+
+- **`0027_choice_useful_life.sql`: useful life moved into `app_choices`.** It
+  was a hardcoded JS map, so a type added in Admin silently inherited the 3
+  year "Other" default and only a deploy could fix it. Editable per type in
+  Admin now, seeded from the map, which stays as the fallback.
+- **Depreciation CSV reconciles.** Accumulated was counted in whole months
+  while closing book value came from fractional-year ageing, so cost minus
+  accumulated never equalled the closing value. Both now come from one engine.
+
+### Features and fixes
+
+- **Asset events wired up.** The table, RLS and form had existed since 0017
+  but nothing ever called the form, so nothing could be logged. Issues,
+  repairs, maintenance, transfers and notes with costs can now be recorded,
+  left open, and closed.
+- **Scanning prefers the tag over another asset's serial.** Placeholder tags
+  currently sit in some serial fields, so scanning `XL-94` could open the
+  asset whose *serial* was XL-94. Two-pass lookup, covered by a test.
+- **Admin Lists rebuilt.** Five sequential queries became one, categories are
+  collapsible with counts and a filter, values show how many assets use them,
+  removal asks first, and Departments is manageable at last (it had been a
+  valid category since 0012 with no UI).
+- **Status colours.** In Repair rendered green on the register (no branch in
+  `statusColor`) and blue on the dashboard (the map keyed "Under Repair", not
+  the live value). Both fixed; Lost split to a distinct red; Under
+  Investigation given its own colour.
+- **Motion and loading.** Shared `.page-boot` overlay, cross-page view
+  transitions, skeletons in place of "Loading…" text in Admin. Two bugs
+  surfaced: `--ease-out` was undefined on `/` and `/login`, silently killing
+  every shared transition there, and the dashboard's boot overlay had no
+  opacity rule so it never faded.
+- **`.gitignore`** never actually ignored `backfill/*.csv`: the pattern had a
+  leading space. Those files carry employee names and serials.
+
+### Data quality found and left open
+
+- 90 of 228 assets have no purchase price (112 flagged estimate pending), so
+  the register's stated value covers roughly 60% of the estate. Work list:
+  `backfill/missing-purchase-price-2026-09-04.csv`.
+- 16 Syokimau assets still have no purchase date, so they never depreciate.
+- Three genuine duplicate serials, plus placeholder serials (`0000`, `-`,
+  `N/A`) on 28 rows.
+
 ## Remaining roadmap
 
 - [x] Site URL + uri_allow_list fixed via Management API (was localhost) — emailed links now land correctly

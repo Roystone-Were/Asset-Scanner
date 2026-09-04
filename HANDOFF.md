@@ -6,9 +6,10 @@
 > first — it's the current, detailed runbook. This file is the narrative:
 > how we got here, and what's still open.
 >
-> Last reconciled: 2026-08-27. Previous version of this file described the
-> pre-migration (SharePoint + MSAL, browser talks to Graph directly)
-> architecture as current — it wasn't anymore; see §1.
+> Last reconciled: 2026-09-04. This file has drifted before: a version of it
+> described the pre-migration setup (browser MSAL talking to Graph directly)
+> as current long after that had been retired. If anything here disagrees with
+> `PROGRESS.md` or `docs/IT_Manager_Handoff.md`, trust those and fix this.
 
 ## 0. Where to look for what
 
@@ -16,8 +17,9 @@
 |---|---|
 | How do I deploy / set up locally? | `README.md` |
 | What's the current live state (counts, env vars, runbooks)? | `docs/IT_Manager_Handoff.md` |
-| What does the app do, for a non-technical reader? | `docs/APP_WHAT_IT_DOES.md`, `docs/CEO_Executive_Briefing_2026-08-26.md` |
-| Why is it built this way? | `docs/decisions/ADR-001..003` |
+| What does the app do, for a non-technical reader? | `docs/APP_WHAT_IT_DOES.md` |
+| What do I show an exec? | `docs/Exec_Briefing_2026-09-04.md` (the 2026-08-26 one is superseded, kept for the record) |
+| Why is it built this way? | `docs/decisions/ADR-001..005` |
 | What happened, in order, during the migration? | `PROGRESS.md` |
 | Tenant/Entra/SharePoint specifics, history, this session's narrative | This file |
 | What should be built next (feature roadmap, not infra)? | `asset-management-how-we-achieve-this.md` |
@@ -47,9 +49,9 @@ Apps (/assets /dashboard /admin /login) ──supabase-js──▶ Supabase Post
   `/login`. The old two-project split (`xana-asset-lookup` scanner +
   `asset-scanner-iota` dashboard) is legacy — see README's note to archive
   those once the unified URL is confirmed.
-- Live counts as of 2026-08-26 (see `docs/IT_Manager_Handoff.md` §3):
-  **144 assets** in Supabase (not the 36-item SharePoint list this file used
-  to cite), 781 sync rows `done`, 0 pending/failed.
+- Live counts as of 2026-09-04: **228 assets** in Supabase (1 in the recycle
+  bin), 1,178 sync rows `done`, none pending or failed. The 144 figure this
+  file used to cite was the 2026-08-26 snapshot, before the CCTV batch.
 
 **What SharePoint/Entra is still for:** the sync worker's write path
 (`api/sharepoint-sync.js`), the monthly `Health-Check.ps1` report, and the
@@ -62,8 +64,9 @@ accurate and worth reading before changing it.
 1. ~~Make the SharePoint list nicer~~ — superseded; SharePoint is now a
    generated mirror, not hand-maintained.
 2. Staff scan a physical asset barcode → see/edit that asset on their phone —
-   **DONE**, now against Supabase (offline-first, walk mode, USB wedge
-   scanners, People/offboarding view — all live).
+   **DONE**, now against Supabase (camera, walk mode, USB wedge scanners,
+   People/offboarding view, all live). The offline cache and write queue were
+   retired with the platform move; the app expects a connection.
 3. Stable, non-interactive automation for the SharePoint side — **DONE**,
    unchanged: cert auth (§5/§6 below) still runs the sync worker and
    PowerShell scripts.
@@ -85,13 +88,13 @@ accurate and worth reading before changing it.
 
 ## 4. Tenant & List (SharePoint side — mirror only now)
 
-- Tenant **Refrontier Group** → `refrontiergroup.onmicrosoft.com`; admin
-  `itadmin@refrontier.group` (Global Admin).
+- Tenant: `refrontiergroup.onmicrosoft.com`; admin `itadmin@refrontier.group`
+  (Global Admin).
 - Site **Xana Tech & Data**: `https://refrontiergroup.sharepoint.com/sites/xanalifeTechData`
   (private group, 7 members).
 - List **Xana Asset Inventory**, Graph list Id `7d3b5f47-8199-4cb9-b7c4-361dc70c4622`.
-  Row count now tracks Supabase via the sync worker (144 assets as of
-  2026-08-26) — the "36 items" and "61 items" figures previously in this file
+  Row count now tracks Supabase via the sync worker (228 assets as of
+  2026-09-04) - the "36 items" and "61 items" figures previously in this file
   were snapshots from before the Supabase migration and bulk imports; don't
   treat either as current. Check live counts via `docs/IT_Manager_Handoff.md`
   §3 or a fresh `Health-Check.ps1` run.
@@ -187,7 +190,7 @@ it's just no longer used by any browser code (see §1):
 | `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED — `Barcode` column removed Aug 2026; kept for history. |
 | `generate-cert.ps1` | Created the client cert. `ocr.ps1` — Windows OCR helper for screenshots. |
 | `labels/` | Deprecated QR label generator (backup only). |
-| `docs/` | `APP_WHAT_IT_DOES.md`, `CEO_Executive_Briefing_2026-08-26.md`, `IT_Manager_Handoff.md`, `decisions/ADR-001..003`. |
+| `docs/` | `APP_WHAT_IT_DOES.md`, `Exec_Briefing_2026-09-04.md`, `IT_Manager_Handoff.md`, `decisions/ADR-001..005`. |
 | `references/session-aug25-2026-session2.md` | Prior session notes. |
 | `README.md` | Setup/deploy docs. `PROGRESS.md` | Migration log. `HANDOFF.md` | This file. |
 
@@ -212,10 +215,18 @@ it's just no longer used by any browser code (see §1):
 
 1. **Delete old Vercel deployments** that still serve `assets.csv`/`assets.json`
    publicly at their immutable URLs (Deployments → … → Delete, or `npx vercel rm`).
-2. **Finance: clear the 100 `estimate_pending` assets** by 30 Sept 2026 —
-   biggest remaining data-quality gap; makes book-value totals trustworthy
-   (echoes §10 of `asset-management-how-we-achieve-this.md`).
-3. **Sweep the 19 assets unverified >90 days** — one Walk-mode pass covers it.
+2. **Finance: fill in the 90 assets with no purchase price** (112 carry the
+   `estimate_pending` flag). This is the biggest remaining data-quality gap:
+   the register states roughly 60% of what the company actually owns. A ready
+   work list with a blank price column sits at
+   `backfill/missing-purchase-price-2026-09-04.csv` (gitignored). 84 of the 90
+   are at Syokimau and Ruiru, and the 9 laptops matter most per unit.
+3. **Sweep the assets unverified over 90 days** (32 as of 2026-09-04, after
+   the 71 cameras were stamped from the UniFi export). One walk-mode pass
+   covers a branch.
+
+3b. **Date the 16 Syokimau assets with no purchase date.** Undated assets hold
+   full book value forever and never depreciate. Every other branch is done.
 4. **Index `SupabaseId` in SharePoint** (List settings → Columns → Indexed) —
    pure perf win for the sync worker's duplicate-check query; not urgent
    (worker already works around it with the `Prefer` header).
@@ -230,14 +241,19 @@ it's just no longer used by any browser code (see §1):
 7. **Revoke the orphan legacy client secret** in the Entra app registration —
    still just a dangling unused credential; low urgency, do during a tenant
    cleanup pass.
-8. **Retire `api/summary.js` references** — the file itself is already gone
-   from `api/`, but `summary/README.md` and root `package.json`
-   (`@azure/msal-node` dependency) still describe/depend on the retired
-   MSAL-backed design. Worth a small doc/dependency cleanup pass so a future
-   reader doesn't chase a dead file.
+8. **Retire the last `api/summary.js` references** — the file is long gone,
+   but root `package.json` still carries the `@azure/msal-node` dependency
+   from the MSAL-backed design. `summary/README.md` was corrected on
+   2026-09-04.
 9. Longer-term roadmap (features, not infra): see
-   `asset-management-how-we-achieve-this.md` — §10 data quality and §1
-   lifecycle (`asset_events`) are the recommended next build targets.
+   `asset-management-how-we-achieve-this.md`. Lifecycle events shipped on
+   2026-09-04, so data quality is now the standout item.
+
+10. **Serial hygiene.** Serials have no uniqueness constraint and the add form
+   does not check for duplicates. Three genuine duplicates exist, 28 rows use
+   placeholders (`0000`, `-`, `N/A`), and 11 switches and TVs carry another
+   asset's tag as their serial while real tags are awaited. Scanning copes by
+   preferring tags, but reports should not assume a serial is a serial.
 
 ## 10. Notes / gotchas
 
@@ -254,5 +270,28 @@ it's just no longer used by any browser code (see §1):
   (`%23`) when using it outside `apply-migration.mjs` (which already does
   `encodeURIComponent`).
 - git identity (repo-local): `Roystone-Were <patorankingquavo100@gmail.com>`.
+  That address also holds `asset_viewer` + `dashboard_viewer` in the app; it is
+  the IT lead's personal account, kept for testing.
 - The app now reads live from Supabase, not Graph — `assets.json`/`assets.csv`
   are still just label-generator snapshots, same as before.
+
+## 11. What changed on 2026-09-03 and 2026-09-04
+
+Full detail in `PROGRESS.md`. The headlines a tenant-side reader needs:
+
+- **`asset_viewer` is now genuinely view only** in the UI, and new invites
+  default to it. Nothing about SharePoint changed.
+- **Reading the register requires an active role** (migration 0029). This also
+  means deactivating an account in `/admin` revokes its data access, not just
+  its screens. Previously any signed-in account could read everything through
+  the API.
+- **71 UniFi cameras were added** as `XL-200` to `XL-270`, MAC as serial,
+  KES 30,400 each over 5 years. They mirrored to SharePoint cleanly in chunks;
+  the outbox drained with no failures.
+- **Useful life per asset type moved into the database** (`app_choices.useful_life`,
+  migration 0027) and is editable in Admin, so adding a type no longer needs a
+  code change to depreciate correctly.
+- **Asset events work**: issues, repairs, maintenance, transfers and notes with
+  costs, logged and closed from the asset card. The table had existed unused
+  since 0017.
+- **Migrations now run to 0029.** Any recovery drill should apply 0001 to 0029.

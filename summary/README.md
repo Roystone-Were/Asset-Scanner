@@ -1,108 +1,63 @@
-# Xana Asset Summary — C-suite Dashboard (Route A)
+# Exec dashboard (`/dashboard`)
 
-A real-time executive summary of the **Xana Asset Inventory**, designed to be
-**embedded on the existing SharePoint site** via the Embed web part. No Power BI,
-no build step, no per-viewer login.
+The executive view of the asset register: portfolio value, depreciation,
+warranty exposure, verification health and breakdowns by status, type,
+location and department.
 
-- Live data on every open (serverless backend reads SharePoint via Microsoft Graph
-  as the app itself — viewers need no sign-in).
-- Straight-line depreciation computed per asset (useful-life defaults by type).
-- Access-protected via a shared key (`?key=...`), since the data contains employee
-  names/serials.
+Served at https://xana-assets.vercel.app/dashboard (routed here by
+`vercel.json`). Two files: `index.html` and `app.js`. No build step, no
+framework, no chart library. Charts are hand-rolled SVG and CSS.
 
-> **beUI (starc007/ui-components) was evaluated and NOT used:** it's a React 19 /
-> Next.js / Tailwind motion-component library that requires a full build pipeline.
-> Route A is intentionally a no-build, self-contained page — so charts are
-> hand-rolled SVG/CSS instead. If a beUI look is required later, pivot this
-> project to Next.js (documented under *Future*).
+## How it gets its data
 
-## Architecture
+Everything comes from one call, in the browser:
 
 ```
-┌─────────────┐   Embed web part (iframe)   ┌──────────────────────────┐
-│ SharePoint  │◄────────────────────────────│  summary/index.html      │
-│ site page   │      https://….vercel.app    │  (self-contained, static)│
-└─────────────┘                             └───────────┬──────────────┘
-                                                        │ GET /api/summary?key=…
-┌────────────────────────────────────────────────────────▼──────────────────┐
-│  Vercel serverless function  (api/summary.js)                              │
-│  · MSAL client-credentials (app-only) → Graph token                        │
-│  · resolves site + list, fetches all items (paged)                         │
-│  · computes KPIs / status / type / location / depreciation / data health   │
-│  · returns JSON (no-store)                                                 │
-└───────────────────────────────────────────────┬────────────────────────────┘
-                                                │ app-only Graph (Sites.ReadWrite.All Application)
-                                        ┌───────▼────────┐
-                                        │ SharePoint List │  ← single source of truth
-                                        └────────────────┘
+XanaSupabase.listAssetsDetailed()   →  enriched rows
+XanaSupabase.computeSummary(rows)   →  every KPI on the page
 ```
 
-## File structure
+Both live in `js/supabase-client.js`, which is also what `/assets` uses. That
+is deliberate: the register and the dashboard cannot disagree about an asset's
+book value, because they call the same function on the same rows.
 
-```
-summary/
-  index.html          # Self-contained dashboard (KPIs, donut, bars, register table)
-  api/summary.js      # Serverless backend: Graph fetch + summary computation
-  package.json        # @azure/msal-node (the only dependency)
-  vercel.json         # Vercel function config
-  .env.example        # Documented environment variables
-  .gitignore          # Keeps .env.local / secrets out of git
-  test/summary.test.js# Unit tests for the summary computation
-```
+There is no server API behind this page. An earlier design had `api/summary.js`
+reading SharePoint through Microsoft Graph with a shared `?key=` in the URL,
+and no per-viewer sign-in. That is retired. Access is now a Supabase session
+plus the `dashboard_viewer` role (or admin), and the database enforces it.
 
-## API endpoints
+## What it shows
 
-| Endpoint | Method | Auth | Returns |
-|---|---|---|---|
-| `/api/summary` | GET | `?key=` or `x-summary-key` header | `{ totals, byStatus, byType, byLocation, byDepartment, dataHealth, items[] }` |
-| `/` | GET | — | The dashboard page |
+- **Portfolio:** asset count, purchase value, book value, confirmed book value
+  (excluding estimates), how many are fully depreciated, how many still carry
+  an estimated price.
+- **Depreciation:** annual charge, expensed this year, replacement due (fully
+  depreciated, or inside a year of it).
+- **Operations:** idle stock (available or unassigned), lost assets, assets
+  unverified for over 90 days.
+- **Breakdowns:** by status, type, location and department.
+- **Exports:** register CSV, and a depreciation schedule with monthly charge,
+  year-of-service, accumulated and closing book value per asset.
 
-Key payload fields:
-`totals.{total,purchaseValue,bookValue,fullyDepreciated,expensedThisYear,missingPurchase}`
-· `dataHealth.{missingTag,missingSerial,missingPurchase,unverified}` · `items[]` (one row per asset).
+## Depreciation
 
-## Depreciation model (straight-line, C-suite friendly)
+Straight line, no salvage value, age prorated continuously from the purchase
+date. Useful life resolves from the asset's own override, then the type's
+`useful_life` in `app_choices` (editable in Admin), then a built-in map, then
+3 years.
 
-- `AnnualDep = (Purchase Price − Salvage) / Useful Life`  (Salvage = 0)
-- `Book Value = max(0, Price − AgeYears × AnnualDep)`
-- `Dep Status` = No data · In progress · Fully depreciated
-- Useful-life defaults: Laptop 3, Desktop 4, Monitor 5, Server 5, Printer 4, Other 3
-  (a per-asset `Useful Life` column overrides when present).
-- Missing `Purchase Date`/`Purchase Price` → flagged in `dataHealth`, never guessed.
+The depreciation CSV reconciles with the page: cost minus accumulated equals
+the closing book value on every row. Both figures derive from the same
+enrichment, which was not true before 2026-09-04.
 
-## Deploy (new Vercel project)
+An asset with no purchase date reads "No data", keeps its full book value and
+never depreciates. It still contributes to the annual depreciation total, so a
+large number of undated assets will make that figure and "expensed this year"
+disagree. The fix is to date the assets, not to change the arithmetic.
 
-1. Push the repo, then create a **new Vercel project** (`Assets-Summary`):
-   - Framework: **Other** · Root directory: **`summary`**
-   - (This must be a separate project — the existing one deploys `scanner-app`.)
-2. Set **Environment Variables** (from `.env.example`):
-   - `TENANT`, `CLIENT_ID`, `CLIENT_SECRET`, `SITE_URL`, `LIST_NAME`, `SUMMARY_ACCESS_KEY`
-   - `CLIENT_SECRET` = the Entra app's server-side secret; `SUMMARY_ACCESS_KEY` = any long random string you choose.
-3. Deploy → note the URL, e.g. `https://xana-asset-summary.vercel.app`.
+## Notes
 
-### Embed in SharePoint
-1. On the Xana site → **Pages** → **New** → name it “Assets Summary”.
-2. Edit → **+ (Add web part)** → search **“Embed”** → choose **Embed web part**.
-3. Under **Website address or embed code**, paste:
-   `https://<your-project>.vercel.app/?key=<SUMMARY_ACCESS_KEY>`
-4. **Save** & **Publish**. C-suite opens the page → live dashboard, fresh on every open.
-
-> Anyone with the site page can view (site members). The `?key=` prevents casual
-> direct access; rotate it by changing the env var + the embed URL.
-
-## Local dev & tests
-
-```powershell
-cd summary
-npm install
-$env:CLIENT_SECRET="..."; $env:SUMMARY_ACCESS_KEY="..."; npm run dev   # vercel dev
-npm test
-```
-
-## Future
-
-- **beUI / Next.js** pivot if a motion-heavy component look is wanted.
-- Wire the same JSON into **Google Sheets** (your existing dashboard) via a scheduled
-  push — no logic rework.
-- Migrate the source of truth to **v2 (Supabase)** when cut over; the dashboard only
-  calls one JSON endpoint, so it keeps working with a new backend.
+- Theme follows the shared `xana_theme` setting, same as the rest of the app.
+- The page-entry overlay and all motion respect `prefers-reduced-motion`.
+- Numbers are computed client side over the whole register, so the page scales
+  with the size of the estate. At a few hundred assets this is instant.

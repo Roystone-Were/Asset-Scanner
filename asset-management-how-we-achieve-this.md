@@ -18,12 +18,12 @@ Guiding principle: Xana is the primary system. SharePoint stays a mirror. Nothin
 | Purchase date & cost at procurement | Already captured (`purchase_date`, `purchase_price` in extra). Gap is discipline, not tech — see §10 validation. | [BUILT] |
 | Warranty period & expiry alerts | Add `warranty_months` + `purchase_date` → expiry computed; dashboard widget "expiring ≤30/60/90d" reuses the depreciation-date pattern that exists today. | [SMALL] |
 | Deployment date & branch | `location` column covers branch today. Add `deployed_at` date on the asset form. | [SMALL] |
-| Maintenance / repair history | New `asset_events` table (asset_id, type=maintenance/repair/transfer/note, date, cost, notes, by). One table powers §1, §2 transfers, and IT "open maintenance" widgets. | [MEDIUM] |
-| Depreciation schedule | Already computed client-side per asset (straight-line, useful-life-by-type). Add the method/rate as visible fields so Finance can audit the math. | [SMALL] |
+| Maintenance / repair history | `asset_events` shipped 2026-09-04: issues, repairs, maintenance, transfers and notes with costs, logged from the asset card. Issues stay open until closed. | [BUILT] |
+| Depreciation schedule | Computed per asset (straight line, no salvage, prorated daily). Useful life per type is admin-editable since 2026-09-04, and the CSV export reconciles: cost minus accumulated equals closing book value. | [BUILT] |
 | Retirement & disposal record | Status "Retired" exists. Extend with `disposal_method`, `disposal_date`, `disposal_value` shown when status = Retired. | [SMALL] |
 | End-of-life forecasting | Dashboard already flags replacement-due via useful-life math. Refine: flag at 80%/90%/100% of useful life with dates, not just a count. | [SMALL] |
 
-**Sequencing:** `asset_events` table first — three requirements hang off it.
+**Sequencing:** `asset_events` is now built, so warranty alerts, disposal fields and transfer history can be layered on it next.
 
 ---
 
@@ -172,8 +172,10 @@ The 112-asset numbers (109 missing tag, 110 missing price) are the most urgent i
 
 ## Recommended order
 
-1. **§10 data quality** — everything downstream inherits clean data
-2. **§1 lifecycle core** (`asset_events` + warranty/disposal fields) — unlocks §2 transfers, §6 TCO, §9 IT/CEO widgets
+*Reviewed 2026-09-04.*
+
+1. **§10 data quality** — still the top item, and the gap is bigger than it looks: 90 of 228 assets have no purchase price and 16 have no purchase date. Work list at `backfill/missing-purchase-price-2026-09-04.csv`
+2. **§1 lifecycle core** — `asset_events` is built. What remains is warranty alerting and disposal fields
 3. **§2 audit workflow** — uses existing scanner, clears the 85-unverified backlog
 4. **§5 finance exports** — makes James self-sufficient
 5. **§3+§6 licenses/vendors** — one Admin tab each

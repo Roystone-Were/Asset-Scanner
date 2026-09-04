@@ -1,12 +1,16 @@
 # Xana Asset System — Executive Briefing
 
-**For:** CEO, Refrontier Group  
+**For:** CEO  
 **From:** IT / Asset Systems  
 **Date:** 2026-08-26  
 **Version:** Live on `xana-assets.vercel.app`  
 **Classification:** Internal
 
 > One page: where we are, what it costs, what changed today, what you need to decide.
+
+> **Superseded by `docs/Exec_Briefing_2026-09-04.md`.** Kept as the record of
+> what was reported on 26 August 2026. Its figures and the offline-resilience
+> claim no longer describe the system.
 
 ---
 
