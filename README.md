@@ -144,10 +144,17 @@ py -m http.server 8100
 
 
 
-Unified project: root `vercel.json` routes `/assets`, `/dashboard` + `/api` → `summary/`; `/scan` redirects to `/assets`. Deploy from repo root:
+Unified project: root `vercel.json` routes `/assets`, `/dashboard` + `/api` → `summary/`; `/scan` redirects to `/assets`.
+
+**Deploying: push to `main`.** Vercel's Git integration builds and promotes to
+production automatically — there is no CLI step. `.vercel/project.json` only
+records a one-time `vercel link`; running `npx vercel deploy --prod` is
+redundant (and re-downloads the CLI every time). Confirm a deploy landed by
+checking the live file rather than assuming:
+
 ```bash
-npx vercel deploy --prod --yes
-# or: npx vercel --prod  (first time, set project root to repo root)
+git push
+curl -s https://xana-assets.vercel.app/js/supabase-client.js | grep "<something only the new build has>"
 ```
 
 For CI auto-deploys, connect the GitHub repo in the Vercel dashboard (Project → Settings → Git, root directory = `/`). Legacy projects (`xana-asset-lookup` and `asset-scanner-iota`) can be archived after the unified URL is verified.

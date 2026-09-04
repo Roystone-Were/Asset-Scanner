@@ -558,12 +558,15 @@ const DEP_COLORS = {
       const d = i.purchaseDate ? new Date(i.purchaseDate + "T00:00:00") : null;
       let ytd = 0, accum = 0;
       if (d && !isNaN(d.getTime()) && i.purchasePrice > 0 && i.usefulLife > 0) {
-        const now = new Date();
-        const monthsOld = Math.max(0, (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth()));
-        const totalMonths = i.usefulLife * 12;
-        accum = Math.min(i.purchasePrice, Math.round((monthsOld * monthly) * 100) / 100);
-        const monthsThisFY = monthsOld % 12 === 0 && monthsOld > 0 ? 12 : monthsOld % 12;   // anniversary-based: months into the current year of service
-        ytd = Math.min(accum, Math.round((monthsThisFY * monthly) * 100) / 100);
+        // Accumulated is derived from the same enrichAsset() book value the
+        // rest of the app shows, so Cost - Accumulated == Closing Book Value
+        // on every row. It used to be counted in whole months while the book
+        // value came from fractional-year ageing, so the two never tied and
+        // the sheet failed to reconcile against the dashboard.
+        accum = Math.round((i.purchasePrice - i.bookValue) * 100) / 100;
+        const annual = i.purchasePrice / i.usefulLife;
+        const yearsCompleted = i.ageYears !== null && i.ageYears !== undefined ? Math.floor(i.ageYears) : 0;
+        ytd = Math.max(0, Math.min(accum, Math.round((accum - yearsCompleted * annual) * 100) / 100));
       }
       totMonth += monthly; totYtd += ytd; totAccum += accum; totBook += i.bookValue;
       return [
