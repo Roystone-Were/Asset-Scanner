@@ -88,6 +88,13 @@
     .listcard>summary::before{content:"›";font-size:1rem;line-height:1;color:var(--muted);transition:transform .16s var(--ease-out)}
     .listcard[open]>summary::before{transform:rotate(90deg)}
     .listcard>summary:hover{background:color-mix(in srgb,var(--accent) 4%,transparent)}
+    /* <details> snaps open natively. Animating ::details-content height was
+       tried first and left the card collapsed with its content unreachable,
+       so the reveal is done on the content instead: it always renders, and
+       just eases in. Degrades to an instant open if animation is off. */
+    @keyframes lc-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+    .listcard[open] .lc-body{animation:lc-in .26s var(--ease-out) both}
+    .listcard[open]>summary{background:color-mix(in srgb,var(--accent) 3%,transparent)}
     .lc-count{margin-left:auto;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--card2);border:1px solid var(--hairline);border-radius:999px;padding:2px 9px}
     .lc-body{padding:2px 18px 16px}
     /* 230px keeps the longest values ("Speaker/Mic", "Finance and Admin")
