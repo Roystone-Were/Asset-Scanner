@@ -145,7 +145,24 @@ await probe('CANNOT grant itself a role', "insert into public.user_roles(user_id
 const seesProfiles = (await c.query('select count(*)::int n from public.profiles')).rows[0].n;
 check('sees only its own profile row', seesProfiles === 1, seesProfiles + ' rows visible');
 const seesAssets = (await c.query('select count(*)::int n from public.assets')).rows[0].n;
-check('sees the whole register (read is open to any signed-in user)', seesAssets > 0, seesAssets + ' assets');
+check('sees the whole register (a role grants read since 0029)', seesAssets > 0, seesAssets + ' assets');
+
+// 0029 made reads role-gated. Prove the other side of that here rather than
+// only asserting the happy path: an account with no roles must read nothing.
+await c.query('savepoint noroles');
+await c.query("select set_config('request.jwt.claims',$1,true)", [
+  JSON.stringify({ sub: '00000000-0000-0000-0000-000000000000', email: 'noroles@example.com', role: 'authenticated' }),
+]);
+await c.query("select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000000',true)");
+const strangerAssets = (await c.query('select count(*)::int n from public.assets')).rows[0].n;
+const strangerHist = (await c.query('select count(*)::int n from public.asset_history')).rows[0].n;
+check('an account with no roles reads nothing', strangerAssets === 0 && strangerHist === 0, strangerAssets + ' assets, ' + strangerHist + ' history');
+await c.query('rollback to savepoint noroles');
+// restore this user's claims for anything that follows
+await c.query("select set_config('request.jwt.claims',$1,true)", [
+  JSON.stringify({ sub: user.id, email: TEST_EMAIL, role: 'authenticated' }),
+]);
+await c.query("select set_config('request.jwt.claim.sub',$1,true)", [user.id]);
 
 await c.query('rollback');
 const stillThere = (await c.query('select status from public.assets where id=$1', [victim.id])).rows[0];

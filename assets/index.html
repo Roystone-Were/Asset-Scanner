@@ -1568,11 +1568,11 @@ async function startApp(){
       for(const t of types)atSel.insertAdjacentHTML("beforeend",'<option>'+esc(t)+'</option>');
     }
   }catch(e){}
-  try{
-    await load();
-    // a link may carry a saved view; apply it before the first paint
-    if(urlToView())applyFilters();
-  }catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
+  // Restore an incoming saved view BEFORE the first load. load() ends in
+  // applyFilters(), which serialises the current (empty) filters back into
+  // the URL -- so reading the link afterwards found it already wiped.
+  urlToView();
+  try{await load();}catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
 }
 function dismissBoot(){
   const b=document.getElementById("boot");
