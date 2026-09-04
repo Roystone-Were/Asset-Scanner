@@ -10,6 +10,7 @@
   const STATUS_COLORS = {
     "In Use": "#16a34a", Available: "#d97706",
     "In Repair": "#dc2626", "Under Repair": "#dc2626",
+    "Under Investigation": "#c2410c",
     Lost: "#991b1b", Retired: "#64748b", "Left With": "#7c3aed",
   };
 const PAGE_SIZE = 50;
