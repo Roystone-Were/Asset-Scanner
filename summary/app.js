@@ -442,7 +442,7 @@ const DEP_COLORS = {
     return panel(bandBars +
       '<div style="border-top:1px solid var(--hairline);margin:16px 0 12px"></div>' +
       '<h3 class="sub-h">Refresh forecast</h3>' + forecastTable +
-      branchBlock + note, "Fleet age and refresh");
+      branchBlock + note, "Fleet age and refresh", "panel-block");
   }
 
   // valueIsHtml: only for values this file builds itself (moneyKpi). Anything
@@ -452,7 +452,7 @@ const DEP_COLORS = {
     const val = valueIsHtml ? v : esc(v);
     return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"><div class="label">' + esc(l) + '</div><div class="value">' + val + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
-  function panel(i, t) { return '<div class="panel"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
+  function panel(i, t, cls) { return '<div class="panel ' + (cls || "") + '"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
   // Bucket assets by lastVerified age: fresh <=30d, recent <=90d, overdue >90d,
   // never when missing/unparseable. Mirrors the unverified-90d rule in supabase-client.js.
   function verificationBreakdown(items) {

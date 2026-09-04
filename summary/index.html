@@ -104,6 +104,9 @@
     background:var(--panel); border:1px solid var(--hairline); border-radius:var(--radius);
     padding:22px; box-shadow:var(--shadow-ambient), var(--inner-highlight);
   }
+  /* a top-level block that sits between other sections and needs its own
+     breathing room, rather than each caller inlining a margin */
+  .panel-block { margin:14px 0; }
   .panel h2 { font-size:.95rem; font-weight:600; letter-spacing:-.01em; margin-bottom:16px; color:var(--text); }
   .sub-h { font-size:.78rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:0 0 10px; }
   .bars { display:flex; flex-direction:column; gap:12px; }
