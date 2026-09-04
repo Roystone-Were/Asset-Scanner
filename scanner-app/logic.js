@@ -195,6 +195,8 @@
     "Router",
     "Switch",
     "UNVR",
+    "Camera",
+    "TV",
   ];
 
   // Find serial numbers that appear on more than one asset row. `rows` are

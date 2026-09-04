@@ -139,7 +139,7 @@
     Laptop: 3, Desktop: 4, Tower: 4, CPU: 4, Monitor: 5, Server: 5,
     Printer: 4, Scanner: 4, Tablet: 3, Phone: 3,
     POS: 5, "Cash Drawer": 8, Scale: 8,
-    "Speaker/Mic": 5, Router: 5, Switch: 5, UNVR: 5,
+    "Speaker/Mic": 5, Router: 5, Switch: 5, UNVR: 5, Camera: 5,
     Keyboard: 3, Mouse: 2, Headset: 3,
     Other: 3, TV: 5,
   };
