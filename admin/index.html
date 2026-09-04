@@ -75,6 +75,27 @@
     .lists-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .lists-grid .card{margin-top:0}
     @media(max-width:640px){.lists-grid{grid-template-columns:1fr}}
+    /* Lists pane: one collapsible card per category. Collapsed by default so
+       the page is five headers rather than ~40 stacked rows; the values
+       inside flow into as many columns as the width allows. */
+    .lists-stack{display:grid;grid-template-columns:1fr;gap:10px}
+    .listcard{background:var(--card);border:1px solid var(--hairline);border-radius:var(--radius);box-shadow:var(--shadow-ambient), var(--inner-highlight)}
+    .listcard>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;padding:14px 18px;font-size:.92rem;font-weight:600;letter-spacing:-.01em;-webkit-user-select:none;user-select:none;border-radius:var(--radius)}
+    .listcard>summary::-webkit-details-marker{display:none}
+    .listcard>summary::before{content:"›";font-size:1rem;line-height:1;color:var(--muted);transition:transform .16s var(--ease-out)}
+    .listcard[open]>summary::before{transform:rotate(90deg)}
+    .listcard>summary:hover{background:color-mix(in srgb,var(--accent) 4%,transparent)}
+    .lc-count{margin-left:auto;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--card2);border:1px solid var(--hairline);border-radius:999px;padding:2px 9px}
+    .lc-body{padding:2px 18px 16px}
+    /* 230px keeps the longest values ("Speaker/Mic", "Finance and Admin")
+       readable next to the years box rather than ellipsing them */
+    .choice-wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}
+    .choice-wrap .choice-row{margin-top:0}
+    .lc-filter{width:100%;margin-bottom:9px;padding:7px 11px;font-size:.8rem;border:1px solid var(--border);border-radius:10px;background:var(--card2);color:var(--text)}
+    .lc-filter:focus{outline:none;border-color:var(--accent)}
+    .lc-add{display:flex;gap:8px;margin-top:11px}
+    .lc-add input{flex:1;min-width:0}
+    .lc-empty{color:var(--muted);font-size:.8rem}
     /* --- premium pass: grain, focus, segmented tabs, sheets, skeletons, user rows --- */
     body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.04;
       background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
@@ -198,20 +219,8 @@
 
     <!-- ================= LISTS ================= -->
     <section id="pane-lists" style="display:none">
-      <div class="lists-grid">
-        <div class="card"><h3>Asset types</h3><div id="list-asset_type"></div>
-          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-asset_type" placeholder="new asset type" style="flex:1"/><button class="small" data-addcat="asset_type">Add</button></div>
-        </div>
-        <div class="card"><h3>Statuses</h3><div id="list-status"></div>
-          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-status" placeholder="new status" style="flex:1"/><button class="small secondary" data-addcat="status">Add</button></div>
-        </div>
-        <div class="card"><h3>Locations</h3><div id="list-location"></div>
-          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-location" placeholder="new location" style="flex:1"/><button class="small secondary" data-addcat="location">Add</button></div>
-        </div>
-        <div class="card"><h3>Regions</h3><div id="list-region"></div>
-          <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="add-region" placeholder="new region" style="flex:1"/><button class="small secondary" data-addcat="region">Add</button></div>
-        </div>
-      </div>
+      <p class="sub" style="margin:0 0 12px">Dropdown values used across the apps. Asset types also carry the useful life that drives depreciation.</p>
+      <div class="lists-stack" id="listsHost"><div class="msg info show">Loading…</div></div>
       <div id="listMsg" class="msg"></div>
     </section>
 
@@ -612,26 +621,59 @@ function showResetDialog(userId){
 }
 
 // ---------- lists ----------
-const CAT_LABELS={asset_type:"asset type",status:"status",location:"location",region:"region"};
+// One collapsible card per category, all five fetched in a single query
+// (it was five sequential round-trips, one per category, and `department`
+// was missing entirely even though migration 0012 made it a valid category).
+const CATS=[
+  {key:"asset_type", label:"Asset types",  noun:"asset type", life:true},
+  {key:"status",     label:"Statuses",     noun:"status"},
+  {key:"location",   label:"Locations",    noun:"location"},
+  {key:"department", label:"Departments",  noun:"department"},
+  {key:"region",     label:"Regions",      noun:"region"},
+];
+const OPEN_KEY="xana_admin_lists_open";
+const FILTER_FROM=10;   // long lists get a filter box
+function openCats(){
+  try{return new Set(JSON.parse(localStorage.getItem(OPEN_KEY)||"[]"));}catch(e){return new Set();}
+}
+function rememberOpen(cat,isOpen){
+  const s=openCats();
+  isOpen?s.add(cat):s.delete(cat);
+  try{localStorage.setItem(OPEN_KEY,JSON.stringify([...s]));}catch(e){}
+}
 async function loadChoices(){
-  for(const cat of Object.keys(CAT_LABELS)){
-    const el=document.getElementById("list-"+cat);
-    try{
-      const cols=cat==="asset_type"?"value,sort_order,useful_life":"value,sort_order";
-      const {data,error}=await XanaSupabase.client().from("app_choices").select(cols).eq("category",cat).order("sort_order");
-      if(error)throw error;
+  const host=document.getElementById("listsHost");
+  try{
+    const {data,error}=await XanaSupabase.client()
+      .from("app_choices").select("category,value,sort_order,useful_life").order("sort_order");
+    if(error)throw error;
+    const byCat={};
+    for(const r of data||[])(byCat[r.category]=byCat[r.category]||[]).push(r);
+    const open=openCats();
+    host.innerHTML=CATS.map(c=>{
+      const rows=byCat[c.key]||[];
       // Asset types carry a depreciation life; without one they fall back to
       // 3 years, which is rarely right for anything but a laptop.
-      const life=v=>cat!=="asset_type"?"":
+      const life=v=>!c.life?"":
         "<input type='number' class='ul-input' min='1' max='50' placeholder='yrs' title='Useful life in years - drives depreciation' "+
         "data-ul='"+esc(v.value)+"' value='"+(v.useful_life==null?"":v.useful_life)+"' />";
-      el.innerHTML=(data||[]).map(v=>"<div class='choice-row'><span>"+esc(v.value)+"</span>"+life(v)+
-        "<button class='small danger' data-cat='"+cat+"' data-val='"+esc(v.value)+"'>✕</button></div>").join("")||"<span style='color:var(--muted);font-size:.8rem'>empty</span>";
-    }catch(err){el.innerHTML='<span style="color:#dc2626;font-size:.8rem">'+esc(err.message)+"</span>";}
-  }
+      const body=rows.length
+        ? "<div class='choice-wrap'>"+rows.map(v=>
+            "<div class='choice-row' data-name='"+esc(String(v.value).toLowerCase())+"'><span>"+esc(v.value)+"</span>"+life(v)+
+            "<button class='small danger' title='Remove' data-cat='"+c.key+"' data-val='"+esc(v.value)+"'>✕</button></div>").join("")+"</div>"
+        : "<div class='lc-empty'>No "+esc(c.noun)+"s yet.</div>";
+      const filter=rows.length>=FILTER_FROM
+        ? "<input type='text' class='lc-filter' data-filter='"+c.key+"' placeholder='Filter "+esc(c.label.toLowerCase())+"…' />" : "";
+      return "<details class='listcard' data-cat='"+c.key+"'"+(open.has(c.key)?" open":"")+">"+
+        "<summary><span>"+esc(c.label)+"</span><span class='lc-count' data-count='"+c.key+"'>"+rows.length+"</span></summary>"+
+        "<div class='lc-body'>"+filter+body+
+          "<div class='lc-add'><input type='text' id='add-"+c.key+"' placeholder='new "+esc(c.noun)+"' />"+
+          "<button class='small"+(c.life?"":" secondary")+"' data-addcat='"+c.key+"'>Add</button></div>"+
+        "</div></details>";
+    }).join("");
+  }catch(err){host.innerHTML='<div class="msg err show">'+esc(err.message||err)+"</div>";}
 }
-document.querySelectorAll("[data-addcat]").forEach(b=>b.addEventListener("click",async()=>{
-  const cat=b.getAttribute("data-addcat");
+async function addChoice(cat){
   const inp=document.getElementById("add-"+cat);
   const val=(inp.value||"").trim();
   if(!val)return;
@@ -639,9 +681,37 @@ document.querySelectorAll("[data-addcat]").forEach(b=>b.addEventListener("click"
     const {error}=await XanaSupabase.client().from("app_choices").insert({category:cat,value:val,sort_order:99});
     if(error)throw error;
     inp.value="";
-    loadChoices();
-  }catch(err){showListMsg((err.message||err)+(err.code==="23505"?" — already exists":""));}
-}));
+    rememberOpen(cat,true);       // keep the card the user was working in open
+    await loadChoices();
+    showListMsg('Added "'+val+'"');
+  }catch(err){showListMsg((err.message||err)+(err.code==="23505"?" — already exists":""),true);}
+}
+// delegated: cards are rendered dynamically, so nothing can be bound up front
+document.getElementById("pane-lists").addEventListener("click",e=>{
+  const add=e.target.closest("button[data-addcat]");
+  if(add)addChoice(add.dataset.addcat);
+});
+document.getElementById("pane-lists").addEventListener("keydown",e=>{
+  const inp=e.target.closest("input[id^='add-']");
+  if(inp&&e.key==="Enter"){e.preventDefault();addChoice(inp.id.slice(4));}
+});
+document.getElementById("pane-lists").addEventListener("input",e=>{
+  const f=e.target.closest("input[data-filter]");
+  if(!f)return;
+  const q=(f.value||"").trim().toLowerCase();
+  const card=f.closest(".listcard");
+  let shown=0;
+  card.querySelectorAll(".choice-row").forEach(row=>{
+    const hit=!q||row.dataset.name.includes(q);
+    row.style.display=hit?"":"none";
+    if(hit)shown++;
+  });
+  card.querySelector("[data-count]").textContent=q?shown+" / "+card.querySelectorAll(".choice-row").length:shown;
+});
+document.getElementById("pane-lists").addEventListener("toggle",e=>{
+  const d=e.target.closest("details.listcard");
+  if(d)rememberOpen(d.dataset.cat,d.open);
+},true);
 // Useful life auto-saves on change, same feel as the role checkboxes.
 // Blank clears it, and the type falls back to the built-in default.
 document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("change",async(e)=>{
@@ -667,8 +737,10 @@ document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("click",a
   try{
     const {error}=await XanaSupabase.client().from("app_choices").delete().eq("category",b.dataset.cat).eq("value",b.dataset.val);
     if(error)throw error;
-    loadChoices();
-  }catch(err){showListMsg(err.message);}
+    rememberOpen(b.dataset.cat,true);
+    await loadChoices();
+    showListMsg('Removed "'+b.dataset.val+'" — assets already using it keep the value.');
+  }catch(err){showListMsg(err.message,true);}
 }));
 function showListMsg(text,isErr){
   const m=document.getElementById("listMsg");
