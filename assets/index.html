@@ -244,7 +244,8 @@
     <h2>+ Add Asset <button type="button" class="theme-toggle" id="addClose">✕</button></h2>
     <label>Asset Tag *</label><input type="text" id="addTag" placeholder="e.g. MICL0048" />
     <label>Serial Number *</label><input type="text" id="addSerial" placeholder="Serial" />
-    <label>Model</label><input type="text" id="addModel" placeholder="Lenovo L13" />
+    <label>Model</label><input type="text" id="addModel" placeholder="Lenovo L13" list="modelList" autocomplete="off" />
+    <datalist id="modelList"></datalist>
     <label>Asset Type</label><select id="addType"></select>
     <label>Status</label><select id="addStatus"><option value="">—</option></select>
     <label>Location</label><select id="addLocation"><option value="">—</option></select>
@@ -255,6 +256,9 @@
     <label id="addPriceLabel">Purchase Price (KES)</label><input type="number" id="addPrice" min="0" placeholder="120000" />
     <label class="chk"><input type="checkbox" id="addPriceEstimate" /> Price is an estimate (pending invoice)</label>
     <label>Warranty (months from purchase)</label><input type="number" id="addWarrantyMonths" min="0" placeholder="e.g. 12, 24, 36 — blank = none" />
+    <label>Vendor</label><input type="text" id="addVendor" placeholder="who it was bought from" list="vendorList" autocomplete="off" />
+    <datalist id="vendorList"></datalist>
+    <label>PO Number</label><input type="text" id="addPo" placeholder="purchase order reference" />
     <label>Image</label>
     <label class="img-drop" for="addImage">Click to upload image
       <input type="file" id="addImage" accept="image/*" style="display:none" />
@@ -431,6 +435,21 @@ async function load(){
   if(pid){const it=allItems.find(x=>String(x.id)===pid||String(x.tag).toLowerCase()===pid.toLowerCase()); if(it) showDetail(it);}
   applyFilters();
 }
+// Suggestions for the free-text Model and Vendor inputs, built from what the
+// register already contains. This is the cheap half of normalization: it does
+// not stop someone typing a new variant, but it makes the existing spelling
+// the path of least resistance.
+function refreshSuggestLists(){
+  const put=(id,vals)=>{
+    const dl=document.getElementById(id);
+    if(!dl)return;
+    dl.innerHTML=vals.map(v=>'<option value="'+esc(v)+'"></option>').join("");
+  };
+  const uniq=(sel)=>[...new Set(allItems.map(sel).map(v=>(v||"").trim()).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+  put("modelList",uniq(it=>it.model));
+  put("vendorList",uniq(it=>it.vendor));
+}
 function applyFilters(){
   const q=(document.getElementById("search").value||"").trim().toLowerCase();
   filtered=allItems.filter(it=>{
@@ -449,7 +468,7 @@ function applyFilters(){
     if(cmp) return cmp*sortDir;
     return String(a.item_id||"").localeCompare(String(b.item_id||""),undefined,{numeric:true})*sortDir;
   });
-  currentPage=0; renderTable();
+  currentPage=0; renderTable(); refreshSuggestLists();
 }
 function renderTable(){
   const main=document.getElementById("main");
@@ -516,6 +535,8 @@ function showDetail(it){
     '<div class="'+erow+'"><span>Status</span><span data-edit="Status">'+esc(it.status||"")+'</span></div>'+
     '<div class="'+erow+'"><span>Condition</span><span data-edit="Condition">'+(esc(it.condition||"")||"—")+'</span></div>'+
     '<div class="'+erow+'"><span>Purchase Date</span><span data-edit="PurchaseDate">'+(esc(it.purchaseDate||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>Vendor</span><span data-edit="Vendor">'+(esc(it.vendor||"")||"—")+'</span></div>'+
+    '<div class="'+erow+'"><span>PO Number</span><span data-edit="PoNumber">'+(esc(it.poNumber||"")||"—")+'</span></div>'+
     '<div class="'+erow+'"><span>Purchase Price</span><span data-edit="PurchasePrice">'+(it.purchasePrice?money(it.purchasePrice):(it.estimatePending?"estimate pending":"—"))+'</span></div>'+
     '<div class="row"><span>Book Value</span><span style="color:var(--book)"><b>'+money(it.bookValue)+'</b></span></div>'+
     '<div class="row"><span>Dep Status</span><span>'+esc(it.depStatus||"")+'</span></div>'+
@@ -634,7 +655,7 @@ function showDetail(it){
   }, 650);
 }
 const FIELD_LABELS={title:"Tag",asset_tag:"Asset tag",asset_type:"Type",model:"Model",serial:"Serial",employee:"Employee",status:"Status",location:"Location",extra:"Details"};
-const EXTRA_FRIENDLY={department:"Department",employee_number:"Employee #",phone_number:"Phone",condition:"Condition",ram:"RAM",region:"Region",purchase_date:"Purchase Date",purchase_price:"Purchase Price",date_issued:"Date Issued",estimate_pending:"Estimate pending",warranty_months:"Warranty",image_url:"Image",useful_life:"Useful Life",sp_created:"Created in SP",sp_modified:"Modified in SP",last_verified:"Last verified",last_verified_by:"Verified by"};
+const EXTRA_FRIENDLY={po_number:"PO Number",vendor:"Vendor",department:"Department",employee_number:"Employee #",phone_number:"Phone",condition:"Condition",ram:"RAM",region:"Region",purchase_date:"Purchase Date",purchase_price:"Purchase Price",date_issued:"Date Issued",estimate_pending:"Estimate pending",warranty_months:"Warranty",image_url:"Image",useful_life:"Useful Life",sp_created:"Created in SP",sp_modified:"Modified in SP",last_verified:"Last verified",last_verified_by:"Verified by"};
 function friendlyExtra(k){ return EXTRA_FRIENDLY[k]||k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
 function fmtVal(v){
   if(v===null||v===undefined)return"—";
@@ -927,6 +948,8 @@ function cloneIntoForm(it){
   set("addEmployee",it.employee);
   set("addDept",it.department);
   set("addCondition",it.condition);
+  set("addVendor",it.vendor);
+  set("addPo",it.poNumber);
   set("addPDate",it.purchaseDate);
   set("addPrice",it.purchasePrice?String(it.purchasePrice):"");
   document.getElementById("addPriceEstimate").checked=!!it.estimatePending;
@@ -1162,6 +1185,8 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
     msg.innerHTML='<div class="msg err">'+problems.map(p=>"• "+esc(p)).join("<br>")+'</div>';
     return;
   }
+  const vendorVal=(document.getElementById("addVendor").value||"").trim();
+  const poVal=(document.getElementById("addPo").value||"").trim();
   msg.innerHTML='<div class="msg info">Saving…</div>';
   // fields shared by every component of a bundle
   const shared={Status:status,Location:location};
@@ -1171,6 +1196,8 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(pDate) shared.PurchaseDate=pDate;
   if(est) shared.EstimatePending=true;
   if(wMonths!=="") shared.WarrantyMonths=wMonths;
+  if(vendorVal) shared.Vendor=vendorVal;
+  if(poVal) shared.PoNumber=poVal;
   const fieldsFor=c=>{
     const f={Title:c.tag,...shared};
     if(c.serial) f.SerialNumber=c.serial;

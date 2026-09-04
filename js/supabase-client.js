@@ -44,6 +44,8 @@
     DateIssued: "date_issued",
     EstimatePending: "estimate_pending",
     WarrantyMonths: "warranty_months",
+    PoNumber: "po_number",
+    Vendor: "vendor",
   };
 
   function createClient() {
@@ -216,6 +218,8 @@
       lastVerified: str(extra.last_verified),
       estimatePending: extra.estimate_pending === true || extra.estimate_pending === "true",
       imageUrl: str(extra.image_url),
+      vendor: str(extra.vendor),
+      poNumber: str(extra.po_number),
 
       warrantyMonths: (() => {
         const w = extra.warranty_months;
