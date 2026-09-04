@@ -87,14 +87,29 @@ const DEP_COLORS = {
   // ---------- API helpers ----------
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
   function money(n) { const v = n == null ? 0 : n; return CURRENCY + " " + (v < 0 ? "-" : "") + Math.round(Math.abs(v)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  const CSV_DQ = String.fromCharCode(34);
+  const CSV_TICK = String.fromCharCode(39);
+  // Explicit list, not a character class: "[=+-@]" reads + to @ as a RANGE,
+  // which swallows every digit and would prefix every number in the export.
+  const CSV_RISKY = ["=", "+", "-", "@", String.fromCharCode(9), String.fromCharCode(13)];
   function statusColor(s) { return STATUS_COLORS[s] || "#3b82f6"; }
   function depColor(s) { return DEP_COLORS[s] || "#3b82f6"; }
 
   // CSV cell that cannot execute as a spreadsheet formula (=, +, -, @, tab).
   function csvCell(v) {
     let s = String(v == null ? "" : v);
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return '"' + s.replace(/"/g, '""') + '"';
+    if (CSV_RISKY.indexOf(s.charAt(0)) > -1) s = CSV_TICK + s;
+    return CSV_DQ + s.split(CSV_DQ).join(CSV_DQ + CSV_DQ) + CSV_DQ;
+  }
+
+  // KPI-sized money: the currency becomes a small muted prefix so the number
+  // leads and the pair never breaks across two lines. Reuses money() rather
+  // than repeating its grouping logic.
+  function moneyKpi(n) {
+    const full = money(n);
+    const sp = full.indexOf(" ");
+    if (sp < 0) return esc(full);
+    return '<span class="cur">' + esc(full.slice(0, sp)) + "</span>" + esc(full.slice(sp + 1));
   }
 
   async function load() {
@@ -216,9 +231,9 @@ const DEP_COLORS = {
       verificationBars(verificationBreakdown(lastItems));
     main.innerHTML =
       `<div class="kpis">
-        ${kpi("Total Assets", t.total, null, null, "neutral")}
-        ${kpi("Purchase Value", money(t.purchaseValue), t.missingPurchase + " missing", t.missingPurchase > t.total * 0.3 ? "warn" : "neutral")}
-        ${kpi("Book Value", money(t.bookValue), t.estimatePendingCount > 0 ? "incl. " + t.estimatePendingCount + " estimate-pending · confirmed " + money(t.confirmedBookValue) : "after depreciation", "acc")}
+        ${kpi("Total Assets", t.total, "across " + Object.keys(d.byLocation || {}).length + " branches", null, "neutral")}
+        ${kpi("Purchase Value", moneyKpi(t.purchaseValue), t.missingPurchase + " missing", t.missingPurchase > t.total * 0.3 ? "warn" : "neutral", "", true)}
+        ${kpi("Book Value", moneyKpi(t.bookValue), t.estimatePendingCount > 0 ? "incl. " + t.estimatePendingCount + " estimate-pending · confirmed " + money(t.confirmedBookValue) : "after depreciation", "acc", "", true)}
         ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
         ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
       </div>
@@ -284,8 +299,8 @@ const DEP_COLORS = {
       '<div class="panel" style="margin:14px 0;"><h2>Financial Position</h2>' +
       '<div class="fin-grid">' +
       it("", "Annual Depreciation", money(f.annualDepreciation), "P&L impact per year") +
-      it("warn", "Replacement due ≤12mo", f.replacementDue12mo + " assets · " + money(f.replacementCost12mo), "Fully or nearly depreciated") +
-      it("good", "Idle stock (unassigned)", f.idleAssets + " assets · " + money(f.idleBookValue) + " book value", "Redeploy before buying new") +
+      it(f.replacementDue12mo ? "warn" : "", "Replacement due ≤12mo", f.replacementDue12mo + " assets · " + money(f.replacementCost12mo), "Fully or nearly depreciated") +
+      it(f.idleAssets ? "warn" : "good", "Idle stock (unassigned)", f.idleAssets + " assets · " + money(f.idleBookValue) + " book value", "Redeploy before buying new") +
       it(lostAssetsClass(f.lostAssets), "Lost assets", f.lostAssets + " · " + money(f.lostCost) + " cost", "Write-off exposure") +
       "</div></div>");
   }
@@ -430,9 +445,12 @@ const DEP_COLORS = {
       branchBlock + note, "Fleet age and refresh");
   }
 
-  function kpi(l, v, h, status, extraClass) {
+  // valueIsHtml: only for values this file builds itself (moneyKpi). Anything
+  // derived from asset data must stay escaped.
+  function kpi(l, v, h, status, extraClass, valueIsHtml) {
     const statusClass = status || "neutral";
-    return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
+    const val = valueIsHtml ? v : esc(v);
+    return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"><div class="label">' + esc(l) + '</div><div class="value">' + val + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
   function panel(i, t) { return '<div class="panel"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
   // Bucket assets by lastVerified age: fresh <=30d, recent <=90d, overdue >90d,

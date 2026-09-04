@@ -70,13 +70,23 @@
   .kpi {
     background:var(--panel); border:1px solid var(--hairline); border-radius:var(--radius);
     padding:18px; position:relative;
+    display:flex; flex-direction:column;
     box-shadow:var(--shadow-ambient), var(--inner-highlight);
     transition: transform .35s var(--ease-out), box-shadow .35s var(--ease-out);
   }
   .kpi:hover { transform: translateY(-3px); box-shadow:var(--shadow-lifted), var(--inner-highlight); }
   .kpi .label { color:var(--muted); font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.09em; }
-  .kpi .value { font-size:1.8rem; font-weight:700; margin-top:8px; letter-spacing:-.02em; }
-  .kpi .hint { color:var(--muted); font-size:.75rem; margin-top:5px; }
+  .kpi .value {
+    /* clamp, not a fixed 1.8rem: "KES 4,588,820" in a 176px card wrapped
+       between the currency and the number, which read as two values */
+    font-size:clamp(1.2rem, .95rem + 1.15vw, 1.75rem);
+    font-weight:700; margin-top:8px; letter-spacing:-.02em;
+    white-space:nowrap; font-variant-numeric:tabular-nums;
+  }
+  .kpi .value .cur { font-size:.58em; font-weight:600; color:var(--muted); margin-right:.55em; letter-spacing:.04em; vertical-align:.06em; }
+  /* hint pinned to the bottom so all five cards read as one aligned row
+     rather than each floating its content at a different height */
+  .kpi .hint { color:var(--muted); font-size:.75rem; margin-top:auto; padding-top:8px; }
   .kpi.acc .value { color:var(--book); }
 
   /* KPI accent - subtle, not AI obvious */
