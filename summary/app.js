@@ -173,13 +173,38 @@ const DEP_COLORS = {
       body.innerHTML = "No warranties expiring in the next 90 days, and none lapsed in the last 60." + footnote;
       return;
     }
-    body.innerHTML = rows.map(({ i, w }) => {
-      const color = w.days < 0 ? "#dc2626" : w.days <= 30 ? "#ff8c00" : "var(--text)";
-      const state = w.days < 0 ? "EXPIRED" : w.days + " days left";
-      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)">' +
-        '<span><b>' + esc(i.tag || "#" + i.id) + "</b> — " + esc(i.type || "") + "</span>" +
-        '<span style="color:' + color + '">' + w.expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) + " · " + state + "</span></div>";
+    // Assets are bought in batches, so a flat list repeats the same date
+    // dozens of times: the Syokimau intake alone is 73 rows. Group by expiry
+    // date and name the assets only when a group is small enough to read.
+    const groups = new Map();
+    for (const { i, w } of rows) {
+      const key = w.expiry.toISOString().slice(0, 10);
+      if (!groups.has(key)) groups.set(key, { expiry: w.expiry, days: w.days, items: [] });
+      groups.get(key).items.push(i);
+    }
+    body.innerHTML = [...groups.values()].map((g) => {
+      const color = g.days < 0 ? "#dc2626" : g.days <= 30 ? "#ff8c00" : "var(--text)";
+      const state = g.days < 0 ? "EXPIRED " + Math.abs(g.days) + "d ago" : g.days + " days left";
+      const when = g.expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      const n = g.items.length;
+      const LIST_LIMIT = 6;
+      const label = n <= LIST_LIMIT
+        ? g.items.map((i) => esc(i.tag || "#" + i.id)).join(", ")
+        : n + " assets" + summariseTypes(g.items);
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line)">' +
+        "<span>" + label + "</span>" +
+        '<span style="color:' + color + ';white-space:nowrap">' + when + " · " + state + "</span></div>";
     }).join("") + footnote;
+  }
+
+  // "12 Cameras, 8 Printers and 4 more" for a grouped warranty row
+  function summariseTypes(items) {
+    const counts = {};
+    for (const i of items) counts[i.type || "Other"] = (counts[i.type || "Other"] || 0) + 1;
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const head = sorted.slice(0, 2).map(([t, n]) => n + " " + t).join(", ");
+    const restCount = sorted.slice(2).reduce((sum, e) => sum + e[1], 0);
+    return head ? ' <span style="color:var(--muted)">(' + esc(head) + (restCount ? " and " + restCount + " more" : "") + ")</span>" : "";
   }
 
   async function mountItWidget(main, items) {
