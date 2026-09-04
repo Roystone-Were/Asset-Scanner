@@ -149,15 +149,28 @@ const DEP_COLORS = {
     })();
     return { expiry, days: Math.ceil((expiry - new Date()) / 86400000) };
   }
+  // Window: expiring within 90 days, plus anything that lapsed in the last
+  // 60. The filter used to be `days <= 90` with no lower bound, so an asset
+  // that expired once stayed on this list for ever and the panel could only
+  // grow. An expired warranty is a task; after two months it is history.
+  const WARRANTY_AHEAD_DAYS = 90;
+  const WARRANTY_BEHIND_DAYS = 60;
   function mountWarrantyWidget(items) {
     const body = document.getElementById("warrantyBody");
     if (!body) return;
     const rows = items
       .map(i => ({ i, w: warrantyExpiry(i) }))
-      .filter(x => x.w && x.w.days <= 90)
+      .filter(x => x.w && x.w.days <= WARRANTY_AHEAD_DAYS && x.w.days >= -WARRANTY_BEHIND_DAYS)
       .sort((a, b) => a.w.days - b.w.days);
+    // a warranty with no purchase date can never be dated, so it would
+    // silently never appear here. Say so rather than hide it.
+    const undatable = items.filter(i => i.warrantyMonths && !i.purchaseDate).length;
+    const footnote = undatable
+      ? '<p style="font-size:.72rem;color:var(--muted);margin-top:10px">' + undatable +
+        " asset" + (undatable === 1 ? " has" : "s have") + " a warranty recorded but no purchase date, so no expiry can be worked out.</p>"
+      : "";
     if (!rows.length) {
-      body.innerHTML = "No warranties expiring in the next 90 days.";
+      body.innerHTML = "No warranties expiring in the next 90 days, and none lapsed in the last 60." + footnote;
       return;
     }
     body.innerHTML = rows.map(({ i, w }) => {
@@ -166,7 +179,7 @@ const DEP_COLORS = {
       return '<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)">' +
         '<span><b>' + esc(i.tag || "#" + i.id) + "</b> — " + esc(i.type || "") + "</span>" +
         '<span style="color:' + color + '">' + w.expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) + " · " + state + "</span></div>";
-    }).join("");
+    }).join("") + footnote;
   }
 
   async function mountItWidget(main, items) {
