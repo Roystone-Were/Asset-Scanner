@@ -22,7 +22,7 @@ node_modules/
 health-metrics.json
 
 # Backfill task lists (filled locally, never commit)
- /backfill/*.csv
+/backfill/*.csv
 
 # Data snapshots contain employee names/serials - local only, never commit
 # (test/fixtures/assets.json is the deliberate exception: CI golden tests).
