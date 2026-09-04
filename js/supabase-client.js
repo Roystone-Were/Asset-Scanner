@@ -587,7 +587,7 @@
     return data || [];
   }
 
-  async function addAssetEvent(itemId, { type, description, cost }) {
+  async function addAssetEvent(itemId, { type, description, cost, resolved }) {
     const email = await currentUserEmail();
     const { data, error } = await client()
       .from("asset_events")
@@ -596,12 +596,24 @@
         event_type: type,
         description: String(description || "").trim(),
         cost: cost === "" || cost === null || cost === undefined ? null : Number(cost),
+        // only an issue can stay open; everything else is a completed happening
+        resolved: type === "issue" ? resolved === true : true,
         created_by: email || null,
       })
       .select("id")
       .single();
     if (error) throw sbError(error)
     return { id: data.id };
+  }
+
+  // Close an open issue (RLS: scanner/admin, same as logging one)
+  async function resolveAssetEvent(eventId) {
+    const { error } = await client()
+      .from("asset_events")
+      .update({ resolved: true })
+      .eq("id", eventId);
+    if (error) throw sbError(error)
+    return true;
   }
 
   async function setEventResolved(eventId, resolved) {
@@ -660,6 +672,7 @@
     deleteItDocument,
     listAssetEvents,
     addAssetEvent,
+    resolveAssetEvent,
     setEventResolved,
     logTransfer,
   };

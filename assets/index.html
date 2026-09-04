@@ -576,7 +576,8 @@ function showDetail(it){
   // Event log — repairs, issues, transfers, maintenance
   const evPanel=document.getElementById("evPanel");
   document.getElementById("evToggle")?.addEventListener("click",async function(){
-    if(evPanel.dataset.mode==="form"){await loadEvents(current,evPanel);evPanel.dataset.mode="list";this.textContent="Log event";return;}
+    // in the form: step back to the list, panel stays open
+    if(evPanel.dataset.mode==="form"){await loadEvents(current,evPanel);this.textContent="Hide events";return;}
     if(evPanel.dataset.open==="1"){evPanel.innerHTML="";evPanel.dataset.open="";return;}
     evPanel.dataset.open="1";evPanel.dataset.mode="list";
     await loadEvents(current,evPanel);
@@ -690,22 +691,39 @@ const EV_META={
 async function loadEvents(current,histPanel){
   try{
     const rows=await XanaSupabase.listAssetEvents(current.id);
+    const addBtn=canWrite()?'<button class="btn secondary" id="evAdd" style="margin-top:10px">+ Log event</button>':"";
     if(!rows.length){
-      // read-only roles have no "Log event" button to point them at
-      histPanel.innerHTML='<div class="hint" style="margin-top:10px">No events logged yet.'+(canWrite()?" Use “Log event” to record repairs, issues or moves.":"")+'</div>';
-      return;
+      histPanel.innerHTML='<div class="hint" style="margin-top:10px">No events logged yet.'+
+        (canWrite()?" Record a repair, fault, transfer or note against this asset.":"")+'</div>'+addBtn;
+    }else{
+      histPanel.innerHTML='<div class="hint" style="margin-top:10px">Event log (latest first)</div>'+rows.map(r=>{
+        const m=EV_META[r.event_type]||{icon:"•",label:r.event_type};
+        const cost=r.cost!=null&&r.cost!==""?"<b>KES "+Number(r.cost).toLocaleString()+"</b> · ":"";
+        const open=r.event_type==="issue"&&!r.resolved;
+        const badge=open?' <span class="pill" style="background:#dc2626;font-size:.6rem;padding:2px 7px">OPEN</span>':"";
+        // an open issue is actionable, so offer the close from where it shows
+        const resolve=(open&&canWrite())?' <button class="btn secondary" data-resolve="'+r.id+'" style="padding:2px 9px;font-size:.68rem;margin-left:6px">Mark resolved</button>':"";
+        return '<div class="hrow"><span class="hwhat"><b>'+m.label+'</b>'+badge+" — "+esc(r.description)+resolve+"<br/><span class=\"hwhen\">"+cost+esc(r.created_by||"—")+" · "+new Date(r.event_date).toLocaleDateString()+'</span></span></div>';
+      }).join("")+addBtn;
     }
-    histPanel.innerHTML='<div class="hint" style="margin-top:10px">Event log (latest first)</div>'+rows.map(r=>{
-      const m=EV_META[r.event_type]||{icon:"•",label:r.event_type};
-      const cost=r.cost!=null&&r.cost!==""?"<b>KES "+Number(r.cost).toLocaleString()+"</b> · ":"";
-      const badge=(r.event_type==="issue"&&!r.resolved)?' <span class="pill" style="background:#dc2626;font-size:.6rem;padding:2px 7px">OPEN</span>':"";
-      return '<div class="hrow"><span class="hwhat"><b>'+m.label+'</b>'+badge+" — "+esc(r.description)+"<br/><span class=\"hwhen\">"+cost+esc(r.created_by||"—")+" · "+new Date(r.event_date).toLocaleDateString()+'</span></span></div>';
-    }).join("");
+    histPanel.dataset.mode="list";
+    document.getElementById("evAdd")?.addEventListener("click",()=>renderEventForm(histPanel,current));
+    histPanel.querySelectorAll("[data-resolve]").forEach(b=>b.addEventListener("click",async()=>{
+      b.disabled=true;b.textContent="Closing…";
+      try{
+        await XanaSupabase.resolveAssetEvent(b.dataset.resolve);
+        await loadEvents(current,histPanel);
+        toast("Issue closed",false);
+      }catch(err){b.disabled=false;b.textContent="Mark resolved";toast("Could not close: "+(err.message||err),true);}
+    }));
   }catch(err){
     histPanel.innerHTML='<div class="msg err">'+esc(err.message||err)+'</div>';
   }
 }
+// Reached from the "+ Log event" button in loadEvents(). Writers only -- the
+// button is not rendered for read-only roles, and RLS refuses the insert.
 function renderEventForm(histPanel,current){
+  histPanel.dataset.mode="form";
   histPanel.innerHTML=
     '<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;max-width:420px">'+
     '<select id="evType" class="inlineedit" style="max-width:none">'+
@@ -724,16 +742,23 @@ function renderEventForm(histPanel,current){
   function syncOpen(){openWrap.style.display=(typeSel.value==="issue")?"flex":"none";}
   typeSel.addEventListener("change",syncOpen);syncOpen();
   document.getElementById("evCancel").addEventListener("click",()=>loadEvents(current,histPanel));
-  document.getElementById("evSave").addEventListener("click",async()=>{
+  document.getElementById("evSave").addEventListener("click",async function(){
     const desc=document.getElementById("evDesc").value.trim();
     if(!desc){flash(histPanel,"err","Describe the event first.");return;}
     const type=typeSel.value;
     const cost=document.getElementById("evCost").value.trim();
+    if(cost!==""&&!(Number(cost)>=0)){flash(histPanel,"err","Cost must be a number.");return;}
     // open flag only applies to issues; everything else is a completed happening
+    const resolved=type==="issue"?!document.getElementById("evOpen").checked:true;
+    this.disabled=true;this.textContent="Saving…";
     try{
-      await XanaSupabase.addAssetEvent(current.id,{type,description:desc,cost});
+      await XanaSupabase.addAssetEvent(current.id,{type,description:desc,cost,resolved});
       await loadEvents(current,histPanel);
-    }catch(err){flash(histPanel,"err",err.message||err);}
+      toast((EV_META[type]||{label:type}).label+" logged",false);
+    }catch(err){
+      this.disabled=false;this.textContent="Save event";
+      flash(histPanel,"err",err.message||err);
+    }
   });
 }
 let _choices=null;
