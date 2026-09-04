@@ -144,18 +144,45 @@
     Other: 3, TV: 5,
   };
 
+  // Useful life per type, admin-editable in /admin -> Lists (app_choices
+  // .useful_life, migration 0027). Loaded once per page load; a type with no
+  // value set falls back to USEFUL_LIFE_BY_TYPE below, so this can be empty
+  // and everything still behaves exactly as before.
+  let _lifeByChoice = null;
+  async function loadUsefulLives() {
+    if (_lifeByChoice) return _lifeByChoice;
+    const map = {};
+    try {
+      const { data, error } = await client()
+        .from("app_choices")
+        .select("value,useful_life")
+        .eq("category", "asset_type");
+      if (!error) {
+        for (const r of data || []) {
+          const n = parseFloat(r.useful_life);
+          if (n > 0) map[r.value] = n;
+        }
+      }
+    } catch (e) { /* offline or column missing - the JS map still covers it */ }
+    _lifeByChoice = map;
+    return map;
+  }
+
   function enrichAsset(row) {
     const extra = row.extra || {};
     const str = (v) => (v === null || v === undefined ? "" : String(v).trim());
     const typeRaw = str(row.asset_type);
+    const configured = _lifeByChoice && _lifeByChoice[typeRaw];
     // keep any known type verbatim (incl. admin-added types); unknown → Other
-    const type = typeRaw && USEFUL_LIFE_BY_TYPE[typeRaw] ? typeRaw : "Other";
+    const type = typeRaw && (configured || USEFUL_LIFE_BY_TYPE[typeRaw]) ? typeRaw : "Other";
     let price = extra.purchase_price === null || extra.purchase_price === undefined || extra.purchase_price === ""
       ? NaN
       : parseFloat(String(extra.purchase_price).replace(/[^0-9.-]/g, ""));
     if (isNaN(price)) price = 0;
+    // precedence: this asset's own override > the admin-set life for its type
+    // > the built-in map > 3 years
     const ulRaw = extra.useful_life === undefined ? null : parseFloat(extra.useful_life);
-    const usefulLife = ulRaw && ulRaw > 0 ? ulRaw : USEFUL_LIFE_BY_TYPE[type] || 3;
+    const usefulLife = ulRaw && ulRaw > 0 ? ulRaw : configured || USEFUL_LIFE_BY_TYPE[type] || 3;
     let age = null;
     if (extra.purchase_date) {
       const d = new Date(extra.purchase_date);
@@ -200,21 +227,29 @@
   }
 
   async function listAssetsDetailed() {
-    const { data, error } = await client()
-      .from("assets")
-      .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra")
-      .is("deleted_at", null);
+    // the life map must be in place before enrichAsset runs; both /assets and
+    // /dashboard come through here, so one load covers the whole app
+    const [{ data, error }] = await Promise.all([
+      client()
+        .from("assets")
+        .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra")
+        .is("deleted_at", null),
+      loadUsefulLives(),
+    ]);
     if (error) throw sbError(error)
     return (data || []).map(enrichAsset);
   }
 
   // Recycle bin: soft-deleted assets only
   async function listDeletedAssets() {
-    const { data, error } = await client()
-      .from("assets")
-      .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra,deleted_at")
-      .not("deleted_at", "is", null)
-      .order("deleted_at", { ascending: false });
+    const [{ data, error }] = await Promise.all([
+      client()
+        .from("assets")
+        .select("item_id,title,asset_tag,asset_type,model,serial,employee,status,location,extra,deleted_at")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false }),
+      loadUsefulLives(),
+    ]);
     if (error) throw sbError(error)
     return (data || []).map((row) => ({
       ...enrichAsset(row),

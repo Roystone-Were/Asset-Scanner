@@ -67,6 +67,11 @@
     .grid2{display:flex;gap:10px;flex-wrap:wrap}
     .grid2 > *{flex:1;min-width:180px}
     .choice-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;border:1px solid var(--hairline);border-radius:10px;margin-top:6px;background:var(--card)}
+    /* value takes the slack so the years box sits beside the delete button */
+    .choice-row>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ul-input{width:62px;flex:0 0 auto;padding:4px 7px;font-size:.78rem;text-align:right;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text)}
+    .ul-input:focus{outline:none;border-color:var(--accent)}
+    .ul-input::placeholder{color:var(--muted)}
     .lists-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .lists-grid .card{margin-top:0}
     @media(max-width:640px){.lists-grid{grid-template-columns:1fr}}
@@ -612,9 +617,16 @@ async function loadChoices(){
   for(const cat of Object.keys(CAT_LABELS)){
     const el=document.getElementById("list-"+cat);
     try{
-      const {data,error}=await XanaSupabase.client().from("app_choices").select("value,sort_order").eq("category",cat).order("sort_order");
+      const cols=cat==="asset_type"?"value,sort_order,useful_life":"value,sort_order";
+      const {data,error}=await XanaSupabase.client().from("app_choices").select(cols).eq("category",cat).order("sort_order");
       if(error)throw error;
-      el.innerHTML=(data||[]).map(v=>"<div class='choice-row'><span>"+esc(v.value)+"</span><button class='small danger' data-cat='"+cat+"' data-val='"+esc(v.value)+"'>✕</button></div>").join("")||"<span style='color:var(--muted);font-size:.8rem'>empty</span>";
+      // Asset types carry a depreciation life; without one they fall back to
+      // 3 years, which is rarely right for anything but a laptop.
+      const life=v=>cat!=="asset_type"?"":
+        "<input type='number' class='ul-input' min='1' max='50' placeholder='yrs' title='Useful life in years - drives depreciation' "+
+        "data-ul='"+esc(v.value)+"' value='"+(v.useful_life==null?"":v.useful_life)+"' />";
+      el.innerHTML=(data||[]).map(v=>"<div class='choice-row'><span>"+esc(v.value)+"</span>"+life(v)+
+        "<button class='small danger' data-cat='"+cat+"' data-val='"+esc(v.value)+"'>✕</button></div>").join("")||"<span style='color:var(--muted);font-size:.8rem'>empty</span>";
     }catch(err){el.innerHTML='<span style="color:#dc2626;font-size:.8rem">'+esc(err.message)+"</span>";}
   }
 }
@@ -629,6 +641,25 @@ document.querySelectorAll("[data-addcat]").forEach(b=>b.addEventListener("click"
     inp.value="";
     loadChoices();
   }catch(err){showListMsg((err.message||err)+(err.code==="23505"?" — already exists":""));}
+}));
+// Useful life auto-saves on change, same feel as the role checkboxes.
+// Blank clears it, and the type falls back to the built-in default.
+document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("change",async(e)=>{
+  const inp=e.target.closest("input[data-ul]");
+  if(!inp)return;
+  const raw=(inp.value||"").trim();
+  const years=raw===""?null:parseInt(raw,10);
+  if(years!==null&&(!Number.isFinite(years)||years<1||years>50)){
+    showListMsg("Useful life must be between 1 and 50 years.",true);
+    loadChoices();
+    return;
+  }
+  try{
+    const {error}=await XanaSupabase.client().from("app_choices")
+      .update({useful_life:years}).eq("category","asset_type").eq("value",inp.dataset.ul);
+    if(error)throw error;
+    showListMsg(inp.dataset.ul+(years===null?" reset to the built-in default":" now depreciates over "+years+" yr"+(years===1?"":"s")));
+  }catch(err){showListMsg(err.message||err,true);loadChoices();}
 }));
 document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("click",async(e)=>{
   const b=e.target.closest("button[data-val]");
