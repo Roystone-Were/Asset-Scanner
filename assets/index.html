@@ -522,7 +522,7 @@ function showDetail(it){
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
     '<div class="row"><span>Last Verified</span><span id="lastVerifiedVal">'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions">'+(w?'<button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button><button class="btn secondary" id="verifyBtn">✓ Verify</button>':'')+'<span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">'+(w?"Log event":"Events")+'</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
+    '</div><div id="editBar"></div><div class="detail-actions">'+(w?'<button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button><button class="btn secondary" id="verifyBtn">✓ Verify</button>':'')+'<span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Events</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
@@ -554,7 +554,7 @@ function showDetail(it){
   // History panel — who changed what, when (from asset_history audit trail)
   const histPanel=document.getElementById("histPanel");
   document.getElementById("histToggle")?.addEventListener("click",async function(){
-    if(histPanel.dataset.open==="1"){histPanel.innerHTML="";histPanel.dataset.open="";return;}
+    if(histPanel.dataset.open==="1"){histPanel.innerHTML="";histPanel.dataset.open="";this.textContent="History";return;}
     this.disabled=true;this.textContent="Loading…";
     try{
       const {data,error}=await XanaSupabase.client()
@@ -578,7 +578,9 @@ function showDetail(it){
   document.getElementById("evToggle")?.addEventListener("click",async function(){
     // in the form: step back to the list, panel stays open
     if(evPanel.dataset.mode==="form"){await loadEvents(current,evPanel);this.textContent="Hide events";return;}
-    if(evPanel.dataset.open==="1"){evPanel.innerHTML="";evPanel.dataset.open="";return;}
+    // closing has to put the label back, or the button reads "Hide events"
+    // over a hidden panel and the next click looks like it does nothing
+    if(evPanel.dataset.open==="1"){evPanel.innerHTML="";evPanel.dataset.open="";evPanel.dataset.mode="";this.textContent="Events";return;}
     evPanel.dataset.open="1";evPanel.dataset.mode="list";
     await loadEvents(current,evPanel);
     this.textContent="Hide events";
