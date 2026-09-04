@@ -229,6 +229,8 @@
       <input type="text" id="search" placeholder="Search tag, serial, model, employee…" autocomplete="off" />
       <button class="btn book" id="btnScan">Scan</button>
       <button class="btn" id="btnAdd">+ Add Asset</button>
+      <button class="btn secondary" id="btnCopyView" title="Copy a link to this filtered view">Copy link</button>
+      <button class="btn secondary" id="btnExportView" title="Download the rows currently matching, as CSV">Export view</button>
     </div>
     <div id="main"><div class="card"><div class="skel" style="height:16px;width:32%;margin-bottom:16px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px"></div></div></div>
     <div id="people" class="hidden"></div>
@@ -468,7 +470,45 @@ function applyFilters(){
     if(cmp) return cmp*sortDir;
     return String(a.item_id||"").localeCompare(String(b.item_id||""),undefined,{numeric:true})*sortDir;
   });
-  currentPage=0; renderTable(); refreshSuggestLists();
+  currentPage=0; renderTable(); refreshSuggestLists(); viewToUrl();
+}
+const VIEW_KEYS=["type","location","status","department"];
+// The filtered view is expressed in the URL so it can be bookmarked and
+// sent to someone. replaceState, not pushState: filtering is continuous and
+// should not fill the Back stack with every keystroke.
+function viewToUrl(){
+  const p=new URLSearchParams();
+  const q=(document.getElementById("search").value||"").trim();
+  if(q)p.set("q",q);
+  for(const k of VIEW_KEYS){ if(colFilters[k].size)p.set(k,[...colFilters[k]].join(",")); }
+  if(sortKey!=="tag")p.set("sort",sortKey);
+  if(sortDir!==1)p.set("dir","desc");
+  const qs=p.toString();
+  try{history.replaceState(null,"",location.pathname+(qs?"?"+qs:""));}catch(e){}
+}
+function urlToView(){
+  const p=new URLSearchParams(location.search);
+  let any=false;
+  const q=p.get("q");
+  if(q){document.getElementById("search").value=q;any=true;}
+  for(const k of VIEW_KEYS){
+    const v=p.get(k);
+    if(!v)continue;
+    // values that no longer exist are ignored, so an old link still opens
+    colFilters[k]=new Set(v.split(",").map(x=>x.trim()).filter(Boolean));
+    any=true;
+  }
+  const sort=p.get("sort");
+  if(sort){sortKey=sort;any=true;}
+  if(p.get("dir")==="desc"){sortDir=-1;any=true;}
+  return any;
+}
+function viewLabel(){
+  const bits=[];
+  for(const k of VIEW_KEYS){ if(colFilters[k].size)bits.push([...colFilters[k]].join("-")); }
+  const q=(document.getElementById("search").value||"").trim();
+  if(q)bits.push(q);
+  return bits.join("-").toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"")||"all";
 }
 function renderTable(){
   const main=document.getElementById("main");
@@ -1465,6 +1505,35 @@ async function startApp(){
   }
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").classList.remove("hidden");
+  // Copy link / Export view: the filtered register, shareable and portable.
+  // Export covers every matching row, not just the page of 30 on screen.
+  document.getElementById("btnCopyView").addEventListener("click",async()=>{
+    try{
+      await navigator.clipboard.writeText(location.href);
+      toast("Link copied. Whoever opens it still needs to sign in.",false);
+    }catch(e){ toast("Could not copy. The address bar holds the same link.",true); }
+  });
+  document.getElementById("btnExportView").addEventListener("click",()=>{
+    if(!filtered.length){ toast("Nothing to export in this view",true); return; }
+    const cols=[
+      ["Asset Tag","tag"],["Type","type"],["Model","model"],["Serial","serial"],
+      ["Employee","employee"],["Department","department"],["Location","location"],
+      ["Status","status"],["Condition","condition"],["Vendor","vendor"],
+      ["PO Number","poNumber"],["Purchase Date","purchaseDate"],
+      ["Purchase Price","purchasePrice"],["Useful Life (Years)","usefulLife"],
+      ["Book Value","bookValue"],["Depreciation Status","depStatus"],
+      ["Last Verified",r=>r.lastVerified?String(r.lastVerified).slice(0,10):""],
+    ];
+    const csv=Xana.toCsv(filtered,cols);
+    const name="assets-"+viewLabel()+"-"+new Date().toISOString().slice(0,10)+".csv";
+    // BOM so Excel reads the UTF-8 names correctly
+    const blob=new Blob([String.fromCharCode(65279)+csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("Exported "+filtered.length+" asset"+(filtered.length===1?"":"s"),false);
+  });
   document.getElementById("search").addEventListener("input",applyFilters);
   // View-only roles (asset_viewer with no scanner/admin) get the register,
   // search, filters, People, history and events — and nothing that writes.
@@ -1499,7 +1568,11 @@ async function startApp(){
       for(const t of types)atSel.insertAdjacentHTML("beforeend",'<option>'+esc(t)+'</option>');
     }
   }catch(e){}
-  try{await load();}catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
+  try{
+    await load();
+    // a link may carry a saved view; apply it before the first paint
+    if(urlToView())applyFilters();
+  }catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
 }
 function dismissBoot(){
   const b=document.getElementById("boot");

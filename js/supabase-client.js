@@ -302,6 +302,79 @@
       return isNaN(d.getTime()) || Date.now() - d.getTime() > 90 * 86400000;
     }).length;
 
+    // ---------- Fleet age and refresh ----------
+    // Answers the refresh-budget question: how much of the estate is near
+    // end of life, where, and what does the next few years cost. Everything
+    // here comes off ageYears / usefulLife / purchasePrice, already on each
+    // enriched row, so there is no second definition of "old".
+    //
+    // Two honesty rules, because this feeds a budget:
+    //  - an asset with no purchase date has no age and lands in `unknown`
+    //    rather than being dropped, so the gap is visible;
+    //  - cost is ORIGINAL purchase price, not a replacement estimate, and
+    //    assets with no price are counted separately as `missingPrice`.
+    const AGE_BANDS = [
+      { key: "under50", label: "Under 50% of life" },
+      { key: "to80", label: "50 to 80%" },
+      { key: "to100", label: "80 to 100%" },
+      { key: "over100", label: "Past end of life" },
+      { key: "unknown", label: "No purchase date" },
+    ];
+    const bands = {};
+    for (const b of AGE_BANDS) bands[b.key] = { key: b.key, label: b.label, count: 0, cost: 0, book: 0, missingPrice: 0 };
+    const thisYear = new Date().getFullYear();
+    const forecast = {};   // year -> {count, cost, missingPrice}
+    const overdue = { count: 0, cost: 0, missingPrice: 0 };
+    const byBranch = {};   // location -> {total, ageing}
+    for (const i of it) {
+      const life = i.usefulLife > 0 ? i.usefulLife : null;
+      const consumed = i.ageYears !== null && i.ageYears !== undefined && life ? i.ageYears / life : null;
+      const key = consumed === null ? "unknown"
+        : consumed >= 1 ? "over100"
+        : consumed >= 0.8 ? "to100"
+        : consumed >= 0.5 ? "to80" : "under50";
+      const band = bands[key];
+      band.count++;
+      band.cost += i.purchasePrice > 0 ? i.purchasePrice : 0;
+      band.book += i.bookValue || 0;
+      if (!(i.purchasePrice > 0)) band.missingPrice++;
+      const b = byBranch[i.location || "Unassigned"] || (byBranch[i.location || "Unassigned"] = { total: 0, ageing: 0 });
+      b.total++;
+      if (key === "to100" || key === "over100") b.ageing++;
+      // when does it reach end of life?
+      if (consumed !== null && i.purchaseDate) {
+        const bought = new Date(i.purchaseDate);
+        if (!isNaN(bought.getTime())) {
+          const eolYear = bought.getFullYear() + Math.ceil(life);
+          if (consumed >= 1) {
+            overdue.count++;
+            overdue.cost += i.purchasePrice > 0 ? i.purchasePrice : 0;
+            if (!(i.purchasePrice > 0)) overdue.missingPrice++;
+          } else if (eolYear >= thisYear && eolYear <= thisYear + 3) {
+            const y = forecast[eolYear] || (forecast[eolYear] = { year: eolYear, count: 0, cost: 0, missingPrice: 0 });
+            y.count++;
+            y.cost += i.purchasePrice > 0 ? i.purchasePrice : 0;
+            if (!(i.purchasePrice > 0)) y.missingPrice++;
+          }
+        }
+      }
+    }
+    const round2 = (n) => Math.round(n * 100) / 100;
+    for (const k of Object.keys(bands)) { bands[k].cost = round2(bands[k].cost); bands[k].book = round2(bands[k].book); }
+    const fleetAge = {
+      bands: AGE_BANDS.map((b) => bands[b.key]),
+      overdue: { count: overdue.count, cost: round2(overdue.cost), missingPrice: overdue.missingPrice },
+      forecast: Object.keys(forecast).map(Number).sort().map((y) => ({
+        year: forecast[y].year, count: forecast[y].count,
+        cost: round2(forecast[y].cost), missingPrice: forecast[y].missingPrice,
+      })),
+      byBranch: Object.keys(byBranch).sort().map((loc) => ({
+        location: loc, total: byBranch[loc].total, ageing: byBranch[loc].ageing,
+      })).sort((a, b) => (b.ageing / b.total) - (a.ageing / a.total)),
+      missingPriceTotal: it.filter((i) => !(i.purchasePrice > 0)).length,
+      missingDateTotal: bands.unknown.count,
+    };
+
     return {
       generatedAt: new Date().toISOString(),
       totals: {
@@ -324,6 +397,7 @@
         lostCost: Math.round(sum(lostAssets, (i) => i.purchasePrice) * 100) / 100,
       },
       byStatus, byType, byLocation, byDepartment,
+      fleetAge,
       dataHealth: {
         missingSerial: it.filter((i) => !i.serial).length,
         missingTag: it.filter((i) => !i.tag).length,

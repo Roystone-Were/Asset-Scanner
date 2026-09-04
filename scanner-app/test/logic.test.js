@@ -413,3 +413,39 @@ test("assetsOfEmployee matches with the same normalization", () => {
   assert.deepStrictEqual(X.assetsOfEmployee(items, ""), []);
   assert.deepStrictEqual(X.assetsOfEmployee(items, "Nobody"), []);
 });
+
+test("toCsv quotes every cell and escapes embedded quotes", () => {
+  const rows = [
+    { tag: "XL-1", model: [34, 72, 80, 34].map(c => String.fromCharCode(c)).join("") + " Pro, G9" },
+    { tag: "XL-2", model: null },
+  ];
+  const csv = X.toCsv(rows, [["Tag", "tag"], ["Model", "model"], ["Who", r => "u:" + r.tag]]);
+  const lines = csv.split(String.fromCharCode(13, 10));
+  // header, then one line per row: a comma inside a model must not add a column
+  assert.strictEqual(lines.length, 3);
+  assert.strictEqual(lines[0], ['"Tag"', '"Model"', '"Who"'].join(","));
+  // an embedded double quote is doubled, so the cell survives a round trip
+  assert.ok(lines[1].indexOf('""') > -1);
+  // null becomes an empty quoted cell, never the text "null"
+  assert.ok(lines[2].indexOf('"",') > -1 || lines[2].indexOf(',""') > -1);
+  assert.ok(lines[2].indexOf("null") === -1);
+  // a function column is evaluated per row
+  assert.ok(lines[1].indexOf('"u:XL-1"') > -1);
+});
+
+test("toCsv handles no rows and no columns", () => {
+  assert.strictEqual(X.toCsv([], [["Tag", "tag"]]), '"Tag"');
+  assert.strictEqual(X.toCsv(null, null), "");
+});
+
+test("csvCell neutralises spreadsheet formulas", () => {
+  // A model or employee name starting with = + - @ is executed by Excel and
+  // Sheets on open. Every such cell must be prefixed so it stays text.
+  const tick = String.fromCharCode(39);
+  for (const risky of ["=SUM(A1:A9)", "+44700", "-1", "@here"]) {
+    const cell = X.csvCell(risky);
+    assert.ok(cell.indexOf(tick + risky) > -1, risky + " should be prefixed");
+  }
+  // ordinary text is untouched
+  assert.strictEqual(X.csvCell("HP Pro Tower"), [34, 72].map(c => String.fromCharCode(c)).join("") + "P Pro Tower" + String.fromCharCode(34));
+});

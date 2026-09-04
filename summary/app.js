@@ -224,6 +224,7 @@ const DEP_COLORS = {
       </div>
       <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
+      fleetAgePanel(d.fleetAge) +
       // Two independent stacked columns rather than a strict 2x2 grid --
       // CSS Grid rows share height across the row no matter what
       // align-items says, so a tall Status panel forced By Type's row to
@@ -366,6 +367,69 @@ const DEP_COLORS = {
       requestAnimationFrame(tick);
     });
   }
+  // ---------- Fleet age and refresh ----------
+  // A planning view, not an instruction to spend: age is not condition, and
+  // the cost shown is what things originally cost, not what replacing them
+  // would cost today. Both caveats are printed on the panel because this is
+  // the number that gets quoted in a budget meeting.
+  function fleetAgePanel(fa) {
+    if (!fa) return "";
+    const BAND_COLORS = { under50: "#16a34a", to80: "#d97706", to100: "#dc2626", over100: "#991b1b", unknown: "#64748b" };
+    const total = Math.max(1, fa.bands.reduce((n, b) => n + b.count, 0));
+    // Every asset in the row unpriced means we genuinely do not know, which
+    // is not the same as zero. Saying "KES 0" here would read as free.
+    const costCell = (cost, count, missing) =>
+      count > 0 && missing >= count
+        ? '<span style="color:var(--muted)">not costed</span>'
+        : money(cost) + (missing ? ' <span style="color:var(--muted);font-size:.72rem">(' + missing + " unpriced)</span>" : "");
+
+    const bandBars =
+      '<div class="bars">' +
+      fa.bands.map((b) =>
+        '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(b.label) + '</span><span>' + b.count +
+        (b.count ? ' <span style="color:var(--muted);font-weight:400">' + costCell(b.cost, b.count, b.missingPrice) + "</span>" : "") + "</span></div>" +
+        '<div class="bar-track"><div class="bar-fill" data-w="' + ((b.count / total) * 100) + '" style="width:0;background:' + (BAND_COLORS[b.key] || "#3b82f6") + '"></div></div></div>'
+      ).join("") + "</div>";
+
+    const rows = [];
+    if (fa.overdue.count) rows.push(["Already overdue", fa.overdue.count, fa.overdue.cost, fa.overdue.missingPrice]);
+    for (const y of fa.forecast) rows.push([String(y.year), y.count, y.cost, y.missingPrice]);
+    const forecastTable = rows.length
+      ? '<table style="width:100%;font-size:.82rem;border-collapse:collapse;margin-top:4px">' +
+        '<thead><tr><th style="text-align:left;padding:4px 0;color:var(--muted);font-weight:600">Due</th>' +
+        '<th style="text-align:right;padding:4px 0;color:var(--muted);font-weight:600">Assets</th>' +
+        '<th style="text-align:right;padding:4px 0;color:var(--muted);font-weight:600">At original cost</th></tr></thead><tbody>' +
+        rows.map(([label, count, cost, missing]) =>
+          "<tr><td style=\"padding:4px 0\">" + esc(label) + "</td>" +
+          '<td style="text-align:right;padding:4px 0">' + count + "</td>" +
+          '<td style="text-align:right;padding:4px 0">' + costCell(cost, count, missing) +
+          "</td></tr>"
+        ).join("") + "</tbody></table>"
+      : '<p style="font-size:.82rem;color:var(--muted);margin:6px 0 0">Nothing reaches end of life in the next three years.</p>';
+
+    const branch = fa.byBranch.filter((b) => b.ageing > 0);
+    const branchBlock = branch.length
+      ? '<div style="border-top:1px solid var(--hairline);margin:16px 0 12px"></div>' +
+        '<h3 class="sub-h">Ageing kit by branch (past 80% of life)</h3>' +
+        '<div class="bars">' + branch.map((b) =>
+          '<div class="bar-row"><div class="bar-top"><span class="lbl">' + esc(b.location) + '</span><span>' + b.ageing + " of " + b.total + "</span></div>" +
+          '<div class="bar-track"><div class="bar-fill" data-w="' + ((b.ageing / Math.max(1, b.total)) * 100) + '" style="width:0;background:#dc2626"></div></div></div>'
+        ).join("") + "</div>"
+      : "";
+
+    const caveats = [];
+    if (fa.missingPriceTotal) caveats.push(fa.missingPriceTotal + " assets have no purchase price, so every cost here is a floor");
+    if (fa.missingDateTotal) caveats.push(fa.missingDateTotal + " have no purchase date and sit in “No purchase date”");
+    const note = '<p style="font-size:.72rem;color:var(--muted);margin:10px 0 0;line-height:1.5">' +
+      "Useful life drives these bands and is set per asset type in Admin. Age is not condition: treat this as a prompt to look, not a decision to buy. Costs are original purchase price, not today’s replacement price." +
+      (caveats.length ? "<br>" + esc(caveats.join(". ")) + "." : "") + "</p>";
+
+    return panel(bandBars +
+      '<div style="border-top:1px solid var(--hairline);margin:16px 0 12px"></div>' +
+      '<h3 class="sub-h">Refresh forecast</h3>' + forecastTable +
+      branchBlock + note, "Fleet age and refresh");
+  }
+
   function kpi(l, v, h, status, extraClass) {
     const statusClass = status || "neutral";
     return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"><div class="label">' + esc(l) + '</div><div class="value">' + esc(v) + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";

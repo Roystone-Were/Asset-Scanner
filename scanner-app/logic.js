@@ -437,6 +437,35 @@
     );
   }
 
+  // ---------- CSV assembly (pure) ----------
+  // Every cell is quoted, so a comma, quote or newline inside a model or an
+  // employee name cannot shift columns. Rows are CRLF-terminated because
+  // that is what Excel expects. columns: [[header, key or fn(row)], ...]
+  const CSV_Q = String.fromCharCode(34);
+  const CSV_TICK = String.fromCharCode(39);
+  const CSV_RISKY = [String.fromCharCode(61), String.fromCharCode(43), String.fromCharCode(45), String.fromCharCode(64), String.fromCharCode(9), String.fromCharCode(13)];
+  const CSV_EOL = String.fromCharCode(13, 10);
+  function csvCell(v) {
+    let cell = v === null || v === undefined ? "" : String(v);
+    // Formula injection: a cell opening with = + - @ or a control character is
+    // executed by Excel and Sheets. Model and employee names are hand-typed,
+    // so prefix an apostrophe to neutralise it. Same guard the dashboard
+    // export has always had (summary/app.js csvCell).
+    if (CSV_RISKY.indexOf(cell.charAt(0)) > -1) cell = CSV_TICK + cell;
+    return CSV_Q + cell.split(CSV_Q).join(CSV_Q + CSV_Q) + CSV_Q;
+  }
+  function toCsv(rows, columns) {
+    const cols = columns || [];
+    const head = cols.map(function (c) { return csvCell(c[0]); }).join(",");
+    const body = (rows || []).map(function (r) {
+      return cols.map(function (c) {
+        const pick = c[1];
+        return csvCell(typeof pick === "function" ? pick(r) : (r || {})[pick]);
+      }).join(",");
+    });
+    return [head].concat(body).join(CSV_EOL);
+  }
+
   return {
     g,
     escapeHtml,
@@ -464,5 +493,7 @@
     REGION_CHOICES,
     ASSET_TYPE_CHOICES,
     findDuplicateSerials,
+    csvCell,
+    toCsv,
   };
 });
