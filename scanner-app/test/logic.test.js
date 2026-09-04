@@ -283,6 +283,28 @@ test("findAssetByCode matches tag, serial and #id on enriched rows", () => {
   assert.strictEqual(X.findAssetByCode(items, ""), null);
 });
 
+test("findAssetByCode prefers a tag over another asset's serial", () => {
+  // real shape of the register: placeholder tags sit in some serial fields, so
+  // "XL-94" is both XL-171's serial and XL-94's own tag. The tag must win
+  // regardless of which row the scanner walks into first.
+  const serialFirst = [
+    { id: "1", tag: "XL-171", serial: "XL-94" },
+    { id: "2", tag: "XL-94", serial: "CNK4260PDW" },
+  ];
+  const tagFirst = [serialFirst[1], serialFirst[0]];
+  assert.strictEqual(X.findAssetByCode(serialFirst, "XL-94").id, "2");
+  assert.strictEqual(X.findAssetByCode(tagFirst, "XL-94").id, "2");
+  // and the serial still resolves when nothing carries it as a tag
+  assert.strictEqual(X.findAssetByCode(serialFirst, "CNK4260PDW").id, "2");
+  // two assets sharing one serial: first match, but never over a real tag
+  const shared = [
+    { id: "1", tag: "XL-134", serial: "XL-98" },
+    { id: "2", tag: "XL-172", serial: "XL-98" },
+    { id: "3", tag: "XL-98", serial: "9CP541RLNV" },
+  ];
+  assert.strictEqual(X.findAssetByCode(shared, "xl-98").id, "3");
+});
+
 test("groupPeopleEnriched groups enriched rows and skips blanks", () => {
   const items = [
     { id: "1", employee: "Ada Kim" },

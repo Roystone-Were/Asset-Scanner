@@ -340,8 +340,15 @@
     }
     const clean = cleanScanInput(raw).toLowerCase();
     if (!clean) return null;
+    // Two passes, tags first. Checking tag-then-serial per item let the array
+    // order decide the winner: placeholder tags are currently used as serials
+    // on some kit (XL-171's serial is "XL-94"), so scanning XL-94 could open
+    // XL-171 instead of the asset actually tagged XL-94. A tag is the label on
+    // the asset, so it wins; serial is only consulted when no tag matches.
     for (const it of items || []) {
       if (String(it.tag || "").toLowerCase().trim() === clean) return it;
+    }
+    for (const it of items || []) {
       if (String(it.serial || "").toLowerCase().trim() === clean) return it;
     }
     return null;
