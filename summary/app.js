@@ -4,8 +4,12 @@
   // ---------- Config ----------
   const CURRENCY = "KES";
 
+  // Keys must match app_choices.status exactly -- this map is looked up by
+  // exact key, so a status missing here renders in the fallback blue. "In
+  // Repair" is the live value; "Under Repair" is kept for legacy rows.
   const STATUS_COLORS = {
-    "In Use": "#16a34a", Available: "#d97706", "Under Repair": "#dc2626",
+    "In Use": "#16a34a", Available: "#d97706",
+    "In Repair": "#dc2626", "Under Repair": "#dc2626",
     Lost: "#991b1b", Retired: "#64748b", "Left With": "#7c3aed",
   };
 const PAGE_SIZE = 50;

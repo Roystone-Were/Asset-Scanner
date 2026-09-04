@@ -297,7 +297,10 @@ async function initAuth(){
   return false;
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("lost"))return "#d13438";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
+// Substring matching, same shape as Xana.statusColor in scanner-app/logic.js,
+// so "In Repair" and legacy "Under Repair"/"Broken" all read red rather than
+// falling through to the In-Use green.
+function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("repair")||l.includes("broken"))return "#d13438";if(l.includes("lost"))return "#d13438";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
 function money(n){return "KES "+Math.round(n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");}
 function fmtWhen(iso){
   if(!iso)return "";
