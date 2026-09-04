@@ -240,10 +240,12 @@
     </div>
   </header>
 
-  <div id="boot" style="position:fixed;inset:0;z-index:99;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .25s ease">
-    <img src="/scanner-app/xana-logo.png" alt="" style="height:52px;opacity:.9" />
-    <div style="width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite"></div>
-    <div style="color:var(--muted);font-size:.85rem">Checking your session…</div>
+  <!-- .page-boot (css/base.css) carries the fade; app.js adds .done. Without
+       the class this overlay had no opacity-0 rule and vanished abruptly. -->
+  <div id="boot" class="page-boot">
+    <img src="/scanner-app/xana-logo.png" alt="" />
+    <div class="spin"></div>
+    <div class="boot-note">Checking your session…</div>
   </div>
 
   <div id="signin" style="display:none;max-width:380px;margin:12vh auto;text-align:center;">

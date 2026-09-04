@@ -47,6 +47,9 @@
     button:disabled{opacity:.55}
     button:active{transform:scale(.98)}
     @keyframes dsp{to{transform:rotate(360deg)}}
+    /* Admin was the only page without this guard, so its shimmer, spinners
+       and tab slides ignored the OS "reduce motion" setting. */
+    @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
     label.chk{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;color:var(--muted);margin-right:10px;cursor:pointer}
     .msg{margin-top:10px;padding:10px;border-radius:10px;text-align:center;font-size:.85rem;display:none}
     .msg.show{display:block}
@@ -220,7 +223,7 @@
     <!-- ================= LISTS ================= -->
     <section id="pane-lists" style="display:none">
       <p class="sub" style="margin:0 0 12px">Dropdown values used across the apps. Asset types also carry the useful life that drives depreciation.</p>
-      <div class="lists-stack" id="listsHost"><div class="msg info show">Loading…</div></div>
+      <div class="lists-stack" id="listsHost"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div></div>
       <div id="listMsg" class="msg"></div>
     </section>
 
@@ -230,7 +233,7 @@
       <div class="card">
         <h3>SharePoint mirror queue</h3>
         <p class="sub" style="margin-top:4px">Rows pending/failed = not yet mirrored to SharePoint. Failed rows stop retrying after 5 attempts.</p>
-        <div id="syncList"><div class="msg info show">Loading…</div></div>
+        <div id="syncList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div></div>
       </div>
     </section>
     <!-- ================= RECYCLE BIN ================= -->
@@ -238,7 +241,7 @@
       <div class="card">
         <h3>Recycle bin</h3>
         <p class="sub" style="margin-top:4px">Deleted assets live here. Restore puts them back on the register; purge removes them permanently (mirrored as deleted to SharePoint).</p>
-        <div id="binList"><div class="msg info show">Loading…</div></div>
+        <div id="binList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div></div>
       </div>
     </section>
     <!-- ================= DOCUMENTS ================= -->
@@ -250,7 +253,7 @@
           <input type="file" id="docUpload" style="display:none" />
         </div>
         <p class="sub" style="margin-top:4px">Reference forms — audit checklist, issuance/return forms. Anyone with the link can view; only admins can add or remove.</p>
-        <div id="docsList"><div class="msg info show">Loading…</div></div>
+        <div id="docsList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div></div>
         <div id="docsMsg" class="msg"></div>
       </div>
     </section>
@@ -644,6 +647,7 @@ function rememberOpen(cat,isOpen){
 async function loadChoices(){
   const host=document.getElementById("listsHost");
   try{
+    if(!host.querySelector(".listcard"))host.innerHTML=SKEL_ROWS(3);   // first paint only; re-renders keep the cards in place
     const {data,error}=await XanaSupabase.client()
       .from("app_choices").select("category,value,sort_order,useful_life").order("sort_order");
     if(error)throw error;
@@ -752,6 +756,7 @@ function showListMsg(text,isErr){
 async function loadSync(){
   const el=document.getElementById("syncList");
   try{
+    el.innerHTML=SKEL_ROWS(3);
     // sharepoint_sync is service-role only (RLS default-deny), so read it
     // through the server-verified admin API - a direct client() query would
     // return zero rows and always claim "everything is mirrored".

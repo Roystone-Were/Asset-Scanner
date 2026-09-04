@@ -210,6 +210,13 @@
   </div>
 </nav>
 <div class="main">
+  <!-- Same entry overlay as /, /admin and /dashboard (.page-boot in
+       css/base.css); faded once the register is actually on screen. -->
+  <div id="boot" class="page-boot">
+    <img src="/scanner-app/xana-logo.png" alt="" />
+    <div class="spin"></div>
+    <div class="boot-note">Loading the register…</div>
+  </div>
   <h1>Assets - Detailed</h1>
   <p class="sub">Full register - click an asset for details.</p>
   <div id="authState">Signing in…</div>
@@ -1440,9 +1447,22 @@ async function startApp(){
   }catch(e){}
   try{await load();}catch(e){document.getElementById("main").innerHTML='<div class="card"><div class="msg err">'+esc(e.message||e)+'</div></div>';}
 }
+function dismissBoot(){
+  const b=document.getElementById("boot");
+  if(!b||b.classList.contains("done"))return;
+  b.classList.add("done");
+  setTimeout(()=>b.remove(),320);
+}
 async function boot(){
-  const ok=await initAuth();
-  if(ok) await startApp();
+  try{
+    const ok=await initAuth();
+    if(ok) await startApp();
+  }finally{
+    // fades even if the load failed, so an error is never hidden behind it.
+    // A redirect (no viewer role / signed out) leaves it up by design --
+    // the next page raises its own.
+    if(location.pathname.startsWith("/assets")) dismissBoot();
+  }
 }
 boot();
 </script>

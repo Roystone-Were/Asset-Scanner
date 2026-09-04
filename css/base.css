@@ -7,6 +7,13 @@
   font-display: swap;
 }
 
+/* Motion token every shared rule below leans on. The app pages each declare
+   their own copy, but / and /login never did -- so `transition: ... var(--ease-out)`
+   was invalid there and collapsed to 0s, silently killing the theme-switch
+   slide and the page-boot fade. Declaring it here means the shared styles hold
+   on every page; a page redeclaring it still wins. */
+:root { --ease-out: cubic-bezier(0.32, 0.72, 0, 1); }
+
 /* --- theme switch: sliding sun/moon pill (state keyed off html[data-theme]) --- */
 .theme-switch{position:relative;display:inline-flex;align-items:center;width:62px;height:30px;padding:3px;border:1px solid var(--hairline);border-radius:999px;background:var(--card2);cursor:pointer;box-shadow:var(--shadow-ambient),var(--inner-highlight);transition:background-color .5s var(--ease-out)}
 .ts-opt{position:relative;z-index:1;flex:1;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);transition:color .5s var(--ease-out)}
@@ -48,4 +55,39 @@ html {
 /* Inner scrollers (tables, popovers, sheets) shouldn't chain to the page */
 .tbl-scroll, .fpop, .sheet-panel {
   overscroll-behavior: contain;
+}
+
+/* ---------------------------------------------------------------------------
+   Page entry + navigation feel. Shared so every page enters and leaves the
+   same way instead of each one hand-rolling its own overlay.
+   --------------------------------------------------------------------------- */
+@keyframes xana-spin { to { transform: rotate(360deg); } }
+
+/* Full-bleed overlay held until the page's own data is on screen, then faded.
+   Add .done to fade; the element can be removed after the transition. */
+.page-boot {
+  position: fixed; inset: 0; z-index: 99;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  opacity: 1; transition: opacity .28s var(--ease-out);
+}
+.page-boot.done { opacity: 0; pointer-events: none; }
+.page-boot img { height: 52px; opacity: .9; }
+.page-boot .spin {
+  width: 22px; height: 22px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: xana-spin .8s linear infinite;
+}
+.page-boot .boot-note { color: var(--muted); font-size: .85rem; }
+
+/* Cross-document view transitions: navigating between /, /assets, /dashboard
+   and /admin cross-fades instead of flashing the background. Progressive --
+   browsers without support simply navigate as before. */
+@view-transition { navigation: auto; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .22s; }
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
+  .page-boot { transition: none; }
+  .page-boot .spin { animation: none; }
 }
