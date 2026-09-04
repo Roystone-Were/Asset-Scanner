@@ -168,10 +168,13 @@ for (let i = 0; i < planned.length; i += CHUNK) {
       };
       if (p.purchase_date) extra.purchase_date = p.purchase_date;
       if (p.region) extra.region = p.region;
+      // Custodian, not a person: the estate labels fixed infrastructure this
+      // way ("Syokimau Server Room", "TRM Drive Pharmacy"). Leaving it blank
+      // makes the exec dashboard count every camera as idle/unassigned stock.
       await c.query(
         `insert into public.assets (item_id, title, asset_tag, asset_type, model, serial, employee, status, location, extra)
-         values ($1,$2,$3,$4,$5,$6,'',$7,$8,$9::jsonb)`,
-        [itemId, p.tag, p.tag, ASSET_TYPE, p.model, p.serial, STATUS, p.site, JSON.stringify(extra)]
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+        [itemId, p.tag, p.tag, ASSET_TYPE, p.model, p.serial, p.site + ' CCTV', STATUS, p.site, JSON.stringify(extra)]
       );
       inserted++;
     }
