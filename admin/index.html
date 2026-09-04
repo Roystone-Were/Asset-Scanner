@@ -75,6 +75,9 @@
     .ul-input{width:62px;flex:0 0 auto;padding:4px 7px;font-size:.78rem;text-align:right;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text)}
     .ul-input:focus{outline:none;border-color:var(--accent)}
     .ul-input::placeholder{color:var(--muted)}
+    /* how many assets use this value: the at-a-glance "safe to delete?" cue */
+    .lc-use{flex:0 0 auto;min-width:22px;text-align:right;font-size:.72rem;font-variant-numeric:tabular-nums;color:var(--muted)}
+    .lc-use.zero{opacity:.35}
     .lists-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .lists-grid .card{margin-top:0}
     @media(max-width:640px){.lists-grid{grid-template-columns:1fr}}
@@ -651,13 +654,18 @@ function rememberOpen(cat,isOpen){
   isOpen?s.add(cat):s.delete(cat);
   try{localStorage.setItem(OPEN_KEY,JSON.stringify([...s]));}catch(e){}
 }
+let _usage={};   // usage[category][value] = assets using it (view choice_usage, migration 0028)
 async function loadChoices(){
   const host=document.getElementById("listsHost");
   try{
     if(!host.querySelector(".listcard"))host.innerHTML=SKEL_ROWS(3);   // first paint only; re-renders keep the cards in place
-    const {data,error}=await XanaSupabase.client()
-      .from("app_choices").select("category,value,sort_order,useful_life").order("sort_order");
+    const [{data,error},usage]=await Promise.all([
+      XanaSupabase.client().from("app_choices").select("category,value,sort_order,useful_life").order("sort_order"),
+      XanaSupabase.client().from("choice_usage").select("category,value,n"),
+    ]);
     if(error)throw error;
+    _usage={};
+    for(const u of usage.data||[])(_usage[u.category]=_usage[u.category]||{})[u.value]=u.n;
     const byCat={};
     for(const r of data||[])(byCat[r.category]=byCat[r.category]||[]).push(r);
     const open=openCats();
@@ -668,9 +676,14 @@ async function loadChoices(){
       const life=v=>!c.life?"":
         "<input type='number' class='ul-input' min='1' max='50' placeholder='yrs' title='Useful life in years - drives depreciation' "+
         "data-ul='"+esc(v.value)+"' value='"+(v.useful_life==null?"":v.useful_life)+"' />";
+      // usage count doubles as the "is this safe to delete" signal
+      const used=v=>{
+        const n=(_usage[c.key]||{})[v.value]||0;
+        return "<span class='lc-use"+(n?"":" zero")+"' title='"+(n?n+" asset"+(n===1?"":"s")+" use this":"nothing uses this")+"'>"+n+"</span>";
+      };
       const body=rows.length
         ? "<div class='choice-wrap'>"+rows.map(v=>
-            "<div class='choice-row' data-name='"+esc(String(v.value).toLowerCase())+"'><span>"+esc(v.value)+"</span>"+life(v)+
+            "<div class='choice-row' data-name='"+esc(String(v.value).toLowerCase())+"'><span>"+esc(v.value)+"</span>"+used(v)+life(v)+
             "<button class='small danger' title='Remove' data-cat='"+c.key+"' data-val='"+esc(v.value)+"'>✕</button></div>").join("")+"</div>"
         : "<div class='lc-empty'>No "+esc(c.noun)+"s yet.</div>";
       const filter=rows.length>=FILTER_FROM
@@ -745,13 +758,32 @@ document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("change",
 document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("click",async(e)=>{
   const b=e.target.closest("button[data-val]");
   if(!b)return;
-  try{
-    const {error}=await XanaSupabase.client().from("app_choices").delete().eq("category",b.dataset.cat).eq("value",b.dataset.val);
-    if(error)throw error;
-    rememberOpen(b.dataset.cat,true);
-    await loadChoices();
-    showListMsg('Removed "'+b.dataset.val+'" — assets already using it keep the value.');
-  }catch(err){showListMsg(err.message,true);}
+  // Removing a choice used to happen on a single click. Assets survive it
+  // (no FK, they keep the string) but the value stops being selectable, and
+  // an asset type's useful_life goes with it -- so depreciation quietly
+  // reverts. Same dialog the other destructive admin actions use.
+  const cat=b.dataset.cat, val=b.dataset.val;
+  const n=(_usage[cat]||{})[val]||0;
+  const years=cat==="asset_type"
+    ? (b.closest(".choice-row").querySelector(".ul-input")||{}).value : "";
+  const lines=[];
+  lines.push(n
+    ? "<b style='color:var(--text)'>"+n+"</b> asset"+(n===1?"":"s")+" currently use this. They keep the value, but it can no longer be picked from any dropdown."
+    : "Nothing is using it, so this is safe.");
+  if(years)lines.push("Its <b style='color:var(--text)'>"+esc(years)+"-year</b> useful life will be lost — re-adding it starts blank and depreciation falls back to the built-in default.");
+  showDialog({
+    title:'Remove "'+val+'"?',
+    body:lines.join("<br><br>"),
+    confirmText:"Remove",
+    danger:true,
+    onConfirm:async()=>{
+      const {error}=await XanaSupabase.client().from("app_choices").delete().eq("category",cat).eq("value",val);
+      if(error)throw error;
+      rememberOpen(cat,true);
+      await loadChoices();
+      showListMsg('Removed "'+val+'"'+(n?" — the "+n+" asset"+(n===1?"":"s")+" using it kept the value.":"."));
+    },
+  });
 }));
 function showListMsg(text,isErr){
   const m=document.getElementById("listMsg");
