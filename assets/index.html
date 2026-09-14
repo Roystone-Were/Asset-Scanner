@@ -8,6 +8,7 @@
 <link rel="icon" href="/scanner-app/icon-192.png" />
 <script src="/scanner-app/lib/supabase.min.js"></script>
 <script src="/js/supabase-client.js"></script>
+<script src="/js/ui.js"></script>
 <script src="/scanner-app/logic.js"></script>
 <script src="/scanner-app/lib/html5-qrcode.min.js"></script>
 <link rel="stylesheet" href="/css/base.css" />
@@ -309,14 +310,15 @@ async function initAuth(){
   location.href="/login?next="+encodeURIComponent(location.pathname);
   return false;
 }
-function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function esc(s){return window.XanaUI.esc(s);}
 // Substring matching, same shape as Xana.statusColor in scanner-app/logic.js,
 // so "In Repair" and legacy "Under Repair"/"Broken" all read red rather than
 // falling through to the In-Use green.
 // Two distinct reds, matching Xana.statusColor: repair is recoverable, lost is
 // not, so they must not read as the same pill at a glance.
+// (Kept local intentionally: the dashboard uses exact-key matching instead.)
 function statusColor(s){const l=(s||"").toLowerCase();if(l.includes("investigation"))return "#c2410c";if(l.includes("repair")||l.includes("broken"))return "#d13438";if(l.includes("lost"))return "#c50f1f";if(l.includes("available"))return "#ff8c00";if(l.includes("retired"))return "#605e5c";if(l.includes("left"))return "#5c2d91";return "#16a34a";}
-function money(n){return "KES "+Math.round(n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");}
+function money(n){return window.XanaUI.money(n);}
 function fmtWhen(iso){
   if(!iso)return "";
   const d=new Date(iso);

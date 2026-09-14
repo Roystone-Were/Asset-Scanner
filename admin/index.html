@@ -8,6 +8,7 @@
   <link rel="icon" href="/scanner-app/icon-192.png" />
   <script src="/scanner-app/lib/supabase.min.js"></script>
   <script src="/js/supabase-client.js"></script>
+  <script src="/js/ui.js"></script>
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/nav.css" />
   <style>
@@ -310,7 +311,7 @@ const STORAGE_THEME="xana_theme";
 function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";document.documentElement.setAttribute("data-theme",s);document.getElementById("themeToggle").setAttribute("aria-checked",s==="dark");}
 applyTheme();document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").setAttribute("aria-checked",c==="dark");});
 
-function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function esc(s){return window.XanaUI.esc(s);}
 let account=null, accessToken=null;
 const ROLES=[["admin","Admin"],["scanner","Scanner"],["asset_viewer","Assets"],["dashboard_viewer","Dashboard"]];
 

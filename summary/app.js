@@ -1,8 +1,10 @@
 ﻿// app.js — Xana Asset Summary client: Supabase auth + theme toggle + dashboard
 "use strict";
 (function () {
-  // ---------- Config ----------
-  const CURRENCY = "KES";
+  // Shared display helpers (esc/money/moneyKpi/csvCell) live in /js/ui.js,
+  // loaded before this file. Status palettes stay local: exact-key matching
+  // here is dashboard semantics, unlike the register's substring matching.
+  const { esc, money, moneyKpi, csvCell } = window.XanaUI;
 
   // Keys must match app_choices.status exactly -- this map is looked up by
   // exact key, so a status missing here renders in the fallback blue. "In
@@ -85,32 +87,8 @@ const DEP_COLORS = {
   }
 
   // ---------- API helpers ----------
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-  function money(n) { const v = n == null ? 0 : n; return CURRENCY + " " + (v < 0 ? "-" : "") + Math.round(Math.abs(v)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
-  const CSV_DQ = String.fromCharCode(34);
-  const CSV_TICK = String.fromCharCode(39);
-  // Explicit list, not a character class: "[=+-@]" reads + to @ as a RANGE,
-  // which swallows every digit and would prefix every number in the export.
-  const CSV_RISKY = ["=", "+", "-", "@", String.fromCharCode(9), String.fromCharCode(13)];
   function statusColor(s) { return STATUS_COLORS[s] || "#3b82f6"; }
   function depColor(s) { return DEP_COLORS[s] || "#3b82f6"; }
-
-  // CSV cell that cannot execute as a spreadsheet formula (=, +, -, @, tab).
-  function csvCell(v) {
-    let s = String(v == null ? "" : v);
-    if (CSV_RISKY.indexOf(s.charAt(0)) > -1) s = CSV_TICK + s;
-    return CSV_DQ + s.split(CSV_DQ).join(CSV_DQ + CSV_DQ) + CSV_DQ;
-  }
-
-  // KPI-sized money: the currency becomes a small muted prefix so the number
-  // leads and the pair never breaks across two lines. Reuses money() rather
-  // than repeating its grouping logic.
-  function moneyKpi(n) {
-    const full = money(n);
-    const sp = full.indexOf(" ");
-    if (sp < 0) return esc(full);
-    return '<span class="cur">' + esc(full.slice(0, sp)) + "</span>" + esc(full.slice(sp + 1));
-  }
 
   async function load() {
     const btn = document.getElementById("refresh"); if (btn) btn.disabled = true;

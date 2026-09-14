@@ -8,6 +8,7 @@
   <link rel="icon" href="/scanner-app/icon-192.png" />
   <script src="/scanner-app/lib/supabase.min.js"></script>
   <script src="/js/supabase-client.js"></script>
+  <script src="/js/ui.js"></script>
   <link rel="stylesheet" href="/css/base.css" />
   <style>
     :root {
@@ -261,7 +262,7 @@ applyThemeLanding();
 document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").setAttribute("aria-checked",c==="dark");});
 function show(el,on){el.style.display=on?"block":"none";}
 function msg(id,text,isErr){const m=document.getElementById(id);if(!m)return;m.textContent=text||"";m.className="msg show "+(isErr?"err":"info");}
-function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c];});}
+function esc(s){return window.XanaUI.esc(s);}
 
 (async function boot() {
   const who = document.getElementById("who");
