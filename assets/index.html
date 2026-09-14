@@ -665,10 +665,12 @@ function showDetail(it){
     document.getElementById("detailImageBtn").addEventListener("click",()=>document.getElementById("detailImageInput").click());
     document.getElementById("detailImageInput").addEventListener("change", async e=>{
       const f=e.target.files&&e.target.files[0]; if(!f) return;
-      const status=document.getElementById("detailImageStatus"); status.textContent="Uploading…";
+      const status=document.getElementById("detailImageStatus"); status.textContent="Compressing…";
       try{
-        const dataUrl=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error("read failed")); r.readAsDataURL(f); });
-        const url=await XanaSupabase.uploadAssetImage(current.id, dataUrl, f.name);
+        const dataUrl=await compressImageToDataUrl(f);
+        status.textContent="Uploading…";
+        const safeName=(f.name||"asset").replace(/\.\w+$/, "")+".jpg";
+        const url=await XanaSupabase.uploadAssetImage(current.id, dataUrl, safeName);
         if(!url) throw new Error("no URL");
         await XanaSupabase.attachAssetImage(current.id, url);
         current.imageUrl=url; it.imageUrl=url;
@@ -1017,6 +1019,28 @@ function closeDetail(){
   if(d)d.innerHTML="";
 }
 
+// Client-side image compression (Canvas 2D downsample + JPEG DCT encode).
+// Keeps Supabase Storage under the 1GB free cap: 3-4MB phone photo -> ~150KB.
+// Falls back to the original file if compression fails.
+async function compressImageToDataUrl(file, max=1280, q=0.72){
+  try{
+    let bmp=null;
+    try{ bmp=await createImageBitmap(file, { imageOrientation:"from-image" }); }
+    catch(_){ bmp=await createImageBitmap(file); }
+    const s=Math.min(1, max/Math.max(bmp.width||1, bmp.height||1));
+    const c=document.createElement("canvas");
+    c.width=Math.max(1, Math.round(bmp.width*s));
+    c.height=Math.max(1, Math.round(bmp.height*s));
+    c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+    if(bmp.close) bmp.close();
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",q));
+    if(!blob) throw new Error("encode failed");
+    return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=()=>rej(new Error("read failed")); fr.readAsDataURL(blob); });
+  }catch(_){
+    return await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error("read failed")); r.readAsDataURL(file); });
+  }
+}
+
 // Add form logic
 let pendingImage=null, pendingImageName="";
 const addSheet=document.getElementById("addSheet");
@@ -1047,14 +1071,23 @@ function openAddWithScannedCode(code){
 }
 document.getElementById("addBackdrop")?.addEventListener("click",closeAdd);
 document.getElementById("addCancel")?.addEventListener("click",closeAdd);
-document.getElementById("addImage")?.addEventListener("change",e=>{
+document.getElementById("addImage")?.addEventListener("change",async e=>{
   const f=e.target.files[0];
   if(!f) return;
-  pendingImageName=f.name;
-  document.getElementById("imgName").textContent=f.name+" ("+Math.round(f.size/1024)+" KB)";
-  const r=new FileReader();
-  r.onload=()=>{const img=document.getElementById("imgPreview");img.src=r.result;img.style.display="block";pendingImage=r.result;};
-  r.readAsDataURL(f);
+  document.getElementById("imgName").textContent=f.name+" ("+Math.round(f.size/1024)+" KB) — compressing…";
+  try{
+    const dataUrl=await compressImageToDataUrl(f);
+    pendingImage=dataUrl;
+    pendingImageName=(f.name||"asset").replace(/\.\w+$/, "")+".jpg";
+    const kb=Math.round((String(dataUrl).length*3/4)/1024);
+    document.getElementById("imgName").textContent=pendingImageName+" (~"+kb+" KB compressed)";
+    const img=document.getElementById("imgPreview");img.src=dataUrl;img.style.display="block";
+  }catch(err){
+    document.getElementById("imgName").textContent=f.name+" (compression failed, using original)";
+    const r=new FileReader();
+    r.onload=()=>{const img=document.getElementById("imgPreview");img.src=r.result;img.style.display="block";pendingImage=r.result;pendingImageName=f.name;};
+    r.readAsDataURL(f);
+  }
 });
 // ---------- Bundled setup: one submit -> tower (main form) + component rows ----------
 const BUNDLE_PRESET=[{type:"Monitor"},{type:"Keyboard"},{type:"Mouse"}];

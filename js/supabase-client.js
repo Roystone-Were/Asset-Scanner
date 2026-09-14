@@ -617,10 +617,18 @@
 
   // ---------- Asset images (Supabase Storage) ----------
   async function uploadAssetImage(itemId, dataUrl, fileName) {
-    const base64 = String(dataUrl || "").split(",")[1];
+    const s = String(dataUrl || "");
+    const m = s.match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
+    if (!m) return null;
+    const mime = m[1] || "image/jpeg";
+    const base64 = m[3] || "";
     if (!base64) return null;
     const path = itemId + "/" + (fileName || "asset.jpg").replace(/[^\w.\-]+/g, "_");
-    const blob = await (await fetch(dataUrl)).blob();
+    // Decode base64 directly — fetch(data:) is blocked by CSP connect-src.
+    const bin = atob(base64);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const blob = new Blob([u8], { type: mime });
     const up = await client().storage.from("asset-images").upload(path, blob, {
       contentType: blob.type || "image/jpeg",
       upsert: true,
