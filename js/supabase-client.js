@@ -676,6 +676,32 @@
     return { ok: true };
   }
 
+  // Remove an asset's photo: delete the file from Storage, then null the URL
+  // key so the detail card hides the thumb. The merge (||) keeps a JSON null
+  // and str() maps it to "" — no migration needed. RLS: Storage delete needs
+  // scanner/admin (0021); the row merge needs asset UPDATE rights.
+  async function deleteAssetImage(itemId, imageUrl) {
+    if (!itemId) return { ok: false };
+    let paths = [];
+    const m = String(imageUrl || "").match(/\/asset-images\/(.+?)([?#].*)?$/);
+    if (m) paths = [decodeURIComponent(m[1])];
+    else {
+      const listed = await client().storage.from("asset-images").list(String(itemId));
+      if (listed.error) throw new Error(listed.error.message);
+      paths = (listed.data || []).filter((f) => f.id).map((f) => String(itemId) + "/" + f.name);
+    }
+    if (paths.length) {
+      const del = await client().storage.from("asset-images").remove(paths);
+      if (del.error) throw new Error(del.error.message);
+    }
+    const { error } = await client().rpc("asset_extra_merge", {
+      p_item_id: String(itemId),
+      p_patch: { image_url: null },
+    });
+    if (error) throw sbError(error);
+    return { ok: true };
+  }
+
 
   // ---------- Asset events (issues / repairs / transfers / maintenance) ----------
   async function listAssetEvents(itemId) {
@@ -769,6 +795,7 @@
     completePasswordChange,
     uploadAssetImage,
     attachAssetImage,
+    deleteAssetImage,
     listItDocuments,
     uploadItDocument,
     deleteItDocument,

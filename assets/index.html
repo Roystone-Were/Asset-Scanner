@@ -73,6 +73,15 @@
   .detail-top{display:flex;align-items:center;gap:12px}
   .detail-top h2{margin:0;flex:1;min-width:0}
   .detail-hero{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--hairline);background:var(--card2);flex:0 0 auto}
+  /* icon bar at the bottom of the thumb: ✎ writers, 🗑 admins only */
+  .thumb-wrap{position:relative;flex:0 0 auto;line-height:0}
+  .thumb-actions{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:6px;padding:4px 2px;background:linear-gradient(transparent,rgba(0,0,0,.5));border-radius:0 0 10px 10px;opacity:0;transition:opacity .15s ease;line-height:1}
+  .thumb-wrap:hover .thumb-actions,.thumb-wrap:focus-within .thumb-actions{opacity:1}
+  @media(hover:none){.thumb-actions{opacity:1}}
+  .icon-btn{border:1px solid rgba(255,255,255,.35);background:rgba(20,24,30,.65);color:#fff;border-radius:7px;padding:3px 7px;font-size:.75rem;cursor:pointer;line-height:1}
+  .icon-btn:hover{background:rgba(20,24,30,.9)}
+  .thumb-empty{width:84px;height:84px;border-radius:10px;border:1.5px dashed var(--border);background:transparent;color:var(--muted);font-size:1.6rem;font-weight:400;cursor:pointer;flex:0 0 auto}
+  .thumb-empty:hover{border-color:var(--accent);color:var(--accent)}
   .msg{padding:10px;border-radius:8px;text-align:center;font-size:.85rem}
   .err{background:rgba(209,52,56,.12);color:#fca5a5;border:1px solid rgba(209,52,56,.2)}
   .ok{background:rgba(34,197,94,.12);color:#86efac;border:1px solid rgba(34,197,94,.2)}
@@ -562,14 +571,21 @@ function renderTable(){
 function showDetail(it){
   const c=statusColor(it.status);
   const detail=document.getElementById("detail");
-  const heroImg=it.imageUrl?'<img class="detail-hero" src="'+esc(it.imageUrl)+'" alt="" loading="lazy" />':'';
-  const titleHtml='<h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>';
-  const topHtml=it.imageUrl?'<div class="detail-top">'+titleHtml+heroImg+'</div>':titleHtml;
   // Read-only roles (asset_viewer only — e.g. finance) get the identical card
   // minus every write affordance: no edit hover/tap, no Scan again, no Clone,
-  // no Verify, no image upload. RLS blocks those writes anyway; hiding them
+  // no Verify, no image icons. RLS blocks those writes anyway; hiding them
   // keeps the page honest instead of offering buttons that fail.
   const w=canWrite();
+  const admin=rolesIncludeAdmin();
+  const heroImg=it.imageUrl?'<img class="detail-hero" src="'+esc(it.imageUrl)+'" alt="Asset photo" loading="lazy" />':'';
+  const heroBtns='<div class="thumb-actions">'
+    +(w?'<button class="icon-btn" id="imgEditBtn" type="button" title="'+(it.imageUrl?"Change photo":"Add photo")+'">✎</button>':'')
+    +(admin&&it.imageUrl?'<button class="icon-btn" id="imgDelBtn" type="button" title="Remove photo">🗑</button>':'')
+    +'</div>';
+  const thumb=it.imageUrl?'<div class="thumb-wrap">'+heroImg+((w||admin)?heroBtns:'')+'</div>'
+    :(w?'<button class="thumb-empty" id="imgEditBtn" type="button" title="Add photo">+</button>':'');
+  const titleHtml='<h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>';
+  const topHtml='<div class="detail-top">'+titleHtml+thumb+'</div>';
   const erow=w?"row editrow":"row";
   detail.innerHTML='<div class="card" id="assetCard">'+topHtml+
     '<div class="hint">'+(w?"Tap any value to change it. Edits save to the register and mirror to SharePoint.":"View only. You can open and read every asset; contact IT to change any of these values.")+'</div>'+
@@ -654,48 +670,53 @@ function showDetail(it){
     await loadEvents(current,evPanel);
     this.textContent="Hide events";
   });
-  // Image — add/change photo on the existing asset (uses same storage+merge as add-asset)
-  if(canWrite()){
+  // Photo actions — ✎ edit for writers, 🗑 delete for admins only. The icons
+  // live in a hover bar at the bottom of the thumb (or a + placeholder when
+  // no photo yet); the file picker stays hidden on the card.
+  if(w){
     const card=document.getElementById("assetCard");
-    const hintEl=card.querySelector(".hint");
-    const imgBar=document.createElement("div");
-    imgBar.style.cssText="margin:10px 0 2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap";
-    imgBar.innerHTML='<input type="file" id="detailImageInput" accept="image/*" style="display:none"><button class="btn secondary" id="detailImageBtn" type="button">'+(it.imageUrl?"Change image":"Add image")+'</button><span id="detailImageStatus" style="font-size:.78rem;color:var(--muted)"></span>';
-    hintEl.after(imgBar);
-    document.getElementById("detailImageBtn").addEventListener("click",()=>document.getElementById("detailImageInput").click());
-    document.getElementById("detailImageInput").addEventListener("change", async e=>{
+    const fileInput=document.createElement("input");
+    fileInput.type="file"; fileInput.accept="image/*"; fileInput.style.display="none";
+    card.appendChild(fileInput);
+    document.getElementById("imgEditBtn")?.addEventListener("click",()=>fileInput.click());
+    fileInput.addEventListener("change", async e=>{
       const f=e.target.files&&e.target.files[0]; if(!f) return;
-      const status=document.getElementById("detailImageStatus"); status.textContent="Compressing…";
+      toast("Uploading photo…",false);
       try{
         const dataUrl=await compressImageToDataUrl(f);
-        status.textContent="Uploading…";
         const safeName=(f.name||"asset").replace(/\.\w+$/, "")+".jpg";
         const url=await XanaSupabase.uploadAssetImage(current.id, dataUrl, safeName);
         if(!url) throw new Error("no URL");
         await XanaSupabase.attachAssetImage(current.id, url);
         current.imageUrl=url; it.imageUrl=url;
-        let heroEl=card.querySelector(".detail-hero");
-        if(heroEl){ heroEl.src=url; } else {
-          const nh=document.createElement("img"); nh.className="detail-hero"; nh.src=url; nh.alt=""; nh.loading="lazy";
-          const top=document.createElement("div"); top.className="detail-top";
-          const h2=card.querySelector("h2");
-          card.insertBefore(top, h2);
-          top.appendChild(h2); top.appendChild(nh);
-          document.getElementById("detailImageBtn").textContent="Change image";
-        }
-        status.textContent="✓ Saved";
-        toast("Image updated",false);
         // refresh in-memory list so list view also knows
         const found=allItems.find(x=>String(x.id)===String(current.id));
         if(found) found.imageUrl=url;
-        // ensure persist is visible on next full load
-        // small delay then reload in background
-        setTimeout(()=> load().catch(()=>{}), 800);
+        showDetail(it);
+        // same storage path on re-upload: bust the browser cache for this view
+        const heroEl=document.querySelector("#assetCard .detail-hero");
+        if(heroEl) heroEl.src=url+(url.includes("?")?"&":"?")+"v="+Date.now();
+        toast("Photo updated",false);
       }catch(err){
-        status.textContent="";
         toast("Image upload failed: "+(err.message||err), true);
         console.warn(err);
       }
+    });
+    document.getElementById("imgDelBtn")?.addEventListener("click",()=>{
+      showConfirm(
+        "Remove photo",
+        'Delete the photo for <b style="color:var(--text)">'+esc(it.tag||"#"+it.id)+'</b>? It is removed from storage and cannot be restored.',
+        "Remove","#dc2626",
+        async()=>{
+          await XanaSupabase.deleteAssetImage(current.id, current.imageUrl);
+          current.imageUrl=""; it.imageUrl="";
+          const found=allItems.find(x=>String(x.id)===String(current.id));
+          if(found) found.imageUrl="";
+          showDetail(it);
+          setTimeout(()=> load().catch(()=>{}), 800);
+          toast("Photo removed",false);
+        }
+      );
     });
   }
   // Glide down to the card. A guarded corrective snap follows: if the
