@@ -186,6 +186,11 @@ work on top of it, grouped by theme.
 - Three genuine duplicate serials, plus placeholder serials (`0000`, `-`,
   `N/A`) on 28 rows.
 
+## Employee name consolidation (2026-09-14)
+
+- **Migration `0033` applied (HTTP 201):** 15 rows across approved groups B (Githurai typos), C (Liquour typo), D (Lumumba Drive majority), F (Server Romm typo), G (till case/spacing, branches preserved). Old variants verified at 0, zero sync failures.
+- Rejected in review and untouched: A (Deli Ruiru vs Deli Syokimau are distinct counters), E (Pharmacy Syokimau), H (TRM Pharmacy).
+
 ## Model name consolidation, pass 2 (2026-09-14)
 
 - **Migration `0032` applied (HTTP 201):** 7 rows — `Hp Desktop 290 G9` + `HP Pro Tower 290 G9` into `HP Pro Tower 290 G9 Desktop PC` (now 8), `400 G9 PCI Desktop` into `... Desktop PC` (now 3), `TPA-P001K` into `HP TPA-P001K` (now 3), `HP TPAP001M` hyphen fix into `HP TPA-P001M` (now 2), `CD36030U00` into `CD-3603U-B` (now 10). Old variants verified at 0, zero sync failures.
