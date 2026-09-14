@@ -703,6 +703,30 @@
   }
 
 
+  // ---------- Presence heartbeat ----------
+  // touch_last_seen() is SECURITY DEFINER and stamps only the caller's own
+  // profiles row, so no RLS change is needed. Pages call
+  // startPresenceHeartbeat() once after auth: it stamps immediately, then
+  // every 5 min while the tab is visible. Failures stay silent — presence
+  // must never interrupt the app.
+  let _presenceTimer = null;
+  async function touchLastSeen() {
+    try {
+      const { error } = await client().rpc("touch_last_seen");
+      if (error) throw error;
+      return { ok: true };
+    } catch (_) {
+      return { ok: false };
+    }
+  }
+  function startPresenceHeartbeat() {
+    if (_presenceTimer) return;
+    touchLastSeen();
+    _presenceTimer = setInterval(() => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") touchLastSeen();
+    }, 5 * 60 * 1000);
+  }
+
   // ---------- Asset events (issues / repairs / transfers / maintenance) ----------
   async function listAssetEvents(itemId) {
     const { data, error } = await client()
@@ -796,6 +820,8 @@
     uploadAssetImage,
     attachAssetImage,
     deleteAssetImage,
+    touchLastSeen,
+    startPresenceHeartbeat,
     listItDocuments,
     uploadItDocument,
     deleteItDocument,

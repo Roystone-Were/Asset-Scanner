@@ -74,7 +74,7 @@
   .detail-top h2{margin:0;flex:1;min-width:0}
   .detail-hero{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--hairline);background:var(--card2);flex:0 0 auto}
   /* icon bar at the bottom of the thumb: ✎ writers, 🗑 admins only */
-  .thumb-wrap{position:relative;flex:0 0 auto;line-height:0}
+  .thumb-wrap{position:relative;flex:0 0 auto;line-height:0;cursor:zoom-in}
   .thumb-actions{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:6px;padding:4px 2px;background:linear-gradient(transparent,rgba(0,0,0,.5));border-radius:0 0 10px 10px;opacity:0;transition:opacity .15s ease;line-height:1}
   .thumb-wrap:hover .thumb-actions,.thumb-wrap:focus-within .thumb-actions{opacity:1}
   @media(hover:none){.thumb-actions{opacity:1}}
@@ -577,7 +577,7 @@ function showDetail(it){
   // keeps the page honest instead of offering buttons that fail.
   const w=canWrite();
   const admin=rolesIncludeAdmin();
-  const heroImg=it.imageUrl?'<img class="detail-hero" src="'+esc(it.imageUrl)+'" alt="Asset photo" loading="lazy" />':'';
+  const heroImg=it.imageUrl?'<img class="detail-hero" src="'+esc(it.imageUrl)+'" alt="Asset photo" title="View full size" loading="lazy" />':'';
   const heroBtns='<div class="thumb-actions">'
     +(w?'<button class="icon-btn" id="imgEditBtn" type="button" title="'+(it.imageUrl?"Change photo":"Add photo")+'">✎</button>':'')
     +(admin&&it.imageUrl?'<button class="icon-btn" id="imgDelBtn" type="button" title="Remove photo">🗑</button>':'')
@@ -717,6 +717,13 @@ function showDetail(it){
           toast("Photo removed",false);
         }
       );
+    });
+  }
+  // Click the thumb to view full size (all roles — icon clicks excluded).
+  if(it.imageUrl){
+    document.querySelector("#assetCard .thumb-wrap")?.addEventListener("click",(e)=>{
+      if(e.target.closest(".icon-btn,input")) return;
+      openPhotoViewer(it.imageUrl, it.tag);
     });
   }
   // Glide down to the card. A guarded corrective snap follows: if the
@@ -1041,6 +1048,22 @@ function cloneIntoForm(it){
 function closeDetail(){
   const d=document.getElementById("detail");
   if(d)d.innerHTML="";
+}
+// Full-size photo viewer — click the thumb to open, click out / Close / Esc.
+function openPhotoViewer(url, tag){
+  closeModal();
+  document.getElementById("photoViewer")?.remove();
+  const ov=document.createElement("div");
+  ov.id="photoViewer";
+  ov.style.cssText="position:fixed;inset:0;z-index:90;background:rgba(8,10,14,.87);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:20px;opacity:0;transition:opacity .18s ease;cursor:zoom-out";
+  ov.innerHTML='<img src="'+esc(url)+'" alt="Asset photo" style="max-width:92vw;max-height:80vh;border-radius:12px;object-fit:contain" />'
+    +'<div style="display:flex;gap:10px;align-items:center"><span style="color:#fff;font-size:.85rem;font-weight:600">'+esc(tag||"Asset")+'</span><button class="btn secondary" id="photoClose" type="button">Close</button></div>';
+  document.body.appendChild(ov);
+  requestAnimationFrame(()=>{ov.style.opacity="1";});
+  const close=()=>{ov.style.opacity="0";setTimeout(()=>ov.remove(),180);document.removeEventListener("keydown",onKey);};
+  const onKey=(e)=>{if(e.key==="Escape")close();};
+  document.addEventListener("keydown",onKey);
+  ov.addEventListener("click",(e)=>{if(e.target===ov||e.target.closest("#photoClose"))close();});
 }
 
 // Client-side image compression (Canvas 2D downsample + JPEG DCT encode).
@@ -1609,6 +1632,7 @@ async function startApp(){
   }
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").classList.remove("hidden");
+  XanaSupabase.startPresenceHeartbeat();
   // Copy link / Export view: the filtered register, shareable and portable.
   // Export covers every matching row, not just the page of 30 on screen.
   document.getElementById("btnCopyView").addEventListener("click",async()=>{

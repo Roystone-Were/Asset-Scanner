@@ -84,6 +84,7 @@ const DEP_COLORS = {
     document.getElementById("userInfo").style.display = "flex";
     document.getElementById("signOutBtn").onclick = async () => { await XanaSupabase.signOut(); location.href = "/login"; };
     showMain(); load();
+    XanaSupabase.startPresenceHeartbeat();
   }
 
   // ---------- API helpers ----------

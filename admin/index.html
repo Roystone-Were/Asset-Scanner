@@ -438,9 +438,9 @@ document.getElementById("docsList").addEventListener("click",(e)=>{
 });
 
 // ---------- users ----------
-// Last SIGN-IN time, not live presence -- a session can sit open and idle
-// for hours and still show "recent". The dot is a cheap proxy (signed in
-// within the last 30 min), not a real online/offline signal.
+// Last ACTIVITY in the app (heartbeat on page load + every 5 min while
+// visible), falling back to last sign-in for users who haven't opened a
+// page since tracking shipped. The dot means active within 30 min.
 function fmtLastSeen(iso){
   if(!iso)return{text:"Never signed in",recent:false};
   const mins=(Date.now()-new Date(iso).getTime())/60000;
@@ -469,10 +469,10 @@ async function loadUsers(){
       users.map(u=>{
         const initial=esc((u.full_name||u.email||"?").trim().charAt(0).toUpperCase());
         const boxes=ROLES.map(([val,label])=>'<label class="chk"><input type="checkbox" data-role="'+val+'" data-user="'+u.id+'" '+(u.roles.includes(val)?"checked":"")+"/> "+label+"</label>").join("");
-        const seen=fmtLastSeen(u.lastSignInAt);
+        const seen=fmtLastSeen(u.lastSeenAt);
         return "<tr>"+
           "<td><div class='ucell'><span class='uavatar'>"+initial+"</span><div><b>"+esc(u.email)+"</b><span class='uname'>"+esc(u.full_name||"—")+"</span></div></div></td>"+
-          "<td><span class='dot' style='background:"+(seen.recent?"var(--accent)":"var(--muted)")+"' title='Last sign-in — not live presence'></span> "+esc(seen.text)+"</td>"+
+          "<td><span class='dot' style='background:"+(seen.recent?"var(--accent)":"var(--muted)")+"' title='Last activity in the app'></span> "+esc(seen.text)+"</td>"+
           "<td>"+boxes+"</td>"+
           "<td><label class='chk'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+"/> Active</label></td>"+
           "<td class='uactions'><button class='small secondary' data-resetpw='"+u.id+"'>Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
@@ -834,6 +834,7 @@ async function loadSync(){
   state.textContent="Signed in as "+account.username;
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").style.display="block";
+  XanaSupabase.startPresenceHeartbeat();
   const boot=document.getElementById("boot");
   if(boot){boot.style.opacity="0";setTimeout(()=>boot.remove(),260);}
   await Promise.all([loadUsers(),loadChoices()]);

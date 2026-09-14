@@ -72,13 +72,15 @@ async function authLastSeenMap() {
 
 async function stitchUsers() {
   const [profiles, roles, lastSeen] = await Promise.all([
-    sb("profiles?select=id,email,full_name,active,invited_by,created_at&order=created_at.asc"),
+    sb("profiles?select=id,email,full_name,active,invited_by,created_at,last_seen&order=created_at.asc"),
     sb("user_roles?select=user_id,role"),
     authLastSeenMap(),
   ]);
   const byUser = {};
   for (const r of roles || []) (byUser[r.user_id] = byUser[r.user_id] || []).push(r.role);
-  return (profiles || []).map((p) => ({ ...p, roles: byUser[p.id] || [], lastSignInAt: lastSeen[p.id] ?? null }));
+  // lastSeenAt prefers the in-app heartbeat (0035) and falls back to the
+  // auth sign-in time for users who haven't opened a page since it shipped.
+  return (profiles || []).map((p) => ({ ...p, roles: byUser[p.id] || [], lastSignInAt: lastSeen[p.id] ?? null, lastSeenAt: (p.last_seen || lastSeen[p.id]) ?? null }));
 }
 
 // Exact-match lookup across all pages - never trusts server-side ?email=
