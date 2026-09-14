@@ -186,6 +186,11 @@ work on top of it, grouped by theme.
 - Three genuine duplicate serials, plus placeholder serials (`0000`, `-`,
   `N/A`) on 28 rows.
 
+## Model name consolidation, pass 2 (2026-09-14)
+
+- **Migration `0032` applied (HTTP 201):** 7 rows — `Hp Desktop 290 G9` + `HP Pro Tower 290 G9` into `HP Pro Tower 290 G9 Desktop PC` (now 8), `400 G9 PCI Desktop` into `... Desktop PC` (now 3), `TPA-P001K` into `HP TPA-P001K` (now 3), `HP TPAP001M` hyphen fix into `HP TPA-P001M` (now 2), `CD36030U00` into `CD-3603U-B` (now 10). Old variants verified at 0, zero sync failures.
+- Untouched per review: RP31/32, `HP Pro Tower 290` + `290 E PCI` (generation unconfirmed), `HP TPAD001M` vs `TPA-D005K`, `CD07I132`, P24 monitor family, bare-brand models.
+
 ## Model name consolidation (2026-09-14)
 
 - **Migration `0031` applied (HTTP 201):** 5 typo-level merges, 8 rows — `Brother-QL820NWB` to `Brother QL-820NWB`, `HP HP Pro Tower 290 G9 Desktop PC` (doubled prefix) to single-HP, `DEL DELL P2419H` to `DELL P2419H`, `Hp TPA-L001K` case fix, `HPN HP 322pv` stray-N fix. Old variants verified at 0 after apply. Mirror drained via outbox (no failures).
