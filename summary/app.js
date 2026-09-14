@@ -270,8 +270,8 @@ const DEP_COLORS = {
     main.innerHTML =
       `<div class="kpis">
         ${kpi("Total Assets", t.total, "across " + Object.keys(d.byLocation || {}).length + " branches", null, "neutral")}
-        ${kpi("Purchase Value", moneyKpi(t.purchaseValue), t.missingPurchase + " missing", t.missingPurchase > t.total * 0.3 ? "warn" : "neutral", "", true)}
-        ${kpi("Book Value", moneyKpi(t.bookValue), t.estimatePendingCount > 0 ? "incl. " + t.estimatePendingCount + " estimate-pending · confirmed " + money(t.confirmedBookValue) : "after depreciation", "acc", "", true)}
+        ${kpi("Purchase Value", moneyKpi(t.purchaseValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices (awaiting Finance)" : t.missingPurchase + " missing date", t.estimatePendingCount > t.total * 0.3 || t.missingPurchase > t.total * 0.3 ? "warn" : "neutral", "", true)}
+        ${kpi("Book Value (confirmed)", moneyKpi(t.confirmedBookValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices excluded · incl. pending " + money(t.bookValue) : "after depreciation", "acc", "", true)}
         ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
         ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
       </div>
@@ -370,8 +370,8 @@ const DEP_COLORS = {
       '<div class="ep-date">Refrontier Group · as of ' + new Date().toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", year: "numeric", month: "long", day: "numeric" }) + '</div></div>' +
       '<div class="ep-kpis">' +
       '<div class="ep-kpi"><div class="l">Portfolio size</div><div class="v">' + t.total + '</div><div class="n">assets on register</div></div>' +
-      '<div class="ep-kpi"><div class="l">Original cost</div><div class="v">' + money(t.purchaseValue) + '</div><div class="n">total purchase value</div></div>' +
-      '<div class="ep-kpi"><div class="l">Current value</div><div class="v">' + money(t.bookValue) + '</div><div class="n">net book value today</div></div>' +
+      '<div class="ep-kpi"><div class="l">Original cost</div><div class="v">' + money(t.purchaseValue) + '</div><div class="n">total purchase value' + (t.estimatePendingCount ? " · " + t.estimatePendingCount + " pending invoices" : "") + '</div></div>' +
+      '<div class="ep-kpi"><div class="l">Current value (confirmed)</div><div class="v">' + money(t.confirmedBookValue != null ? t.confirmedBookValue : t.bookValue) + '</div><div class="n">net book value, pending invoices excluded' + (t.estimatePendingCount ? " · incl. pending " + money(t.bookValue) : "") + '</div></div>' +
       '<div class="ep-kpi"><div class="l">Value lost to age</div><div class="v">' + money((t.purchaseValue - t.bookValue)) + '</div><div class="n">accumulated depreciation</div></div>' +
       '</div>' +
       '<table class="ep-fin"><thead><tr><th>Financial position</th><th></th><th></th></tr></thead><tbody>' +
@@ -379,7 +379,7 @@ const DEP_COLORS = {
       finRow("Replacement due within 12 months", f.replacementDue12mo + " assets · " + money(f.replacementCost12mo), "budget planning figure") +
       finRow("Idle stock (unassigned)", f.idleAssets + " assets · " + money(f.idleBookValue), "redeploy before buying new") +
       finRow("Lost assets", f.lostAssets + " · " + money(f.lostCost), "write-off exposure") +
-      finRow("Missing purchase records", String(h.missingPurchase ?? "—"), "limits valuation accuracy") +
+      finRow("Missing purchase records", String(h.missingPurchase ?? "—") + (t.estimatePendingCount ? " · " + t.estimatePendingCount + " pending invoices (awaiting Finance)" : ""), "limits valuation accuracy") +
       "</tbody></table>" +
       '<div class="ep-cols">' +
       '<div><h3>Status</h3>' + topList(d.byStatus) + '</div>' +
