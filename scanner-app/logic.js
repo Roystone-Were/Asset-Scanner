@@ -182,7 +182,6 @@
     "Laptop",
     "CPU",
     "Monitor",
-    "Desktop",
     "Printer",
     "Scanner",
     "Mouse",

@@ -187,9 +187,9 @@ it's just no longer used by any browser code (see §1):
 | `Index-LookupFields.ps1` | Indexes `SerialNumber`/`Title` for `$filter`. |
 | `Health-Check.ps1` + `.github/workflows/data-health.yml` | Monthly data-health report (cert auth) → GitHub issue, optional SMTP email. |
 | `Add-LastVerifiedColumn.ps1` / `Add-LastVerifiedByColumn.ps1` | Idempotent column-add scripts, already applied to the live list. |
-| `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | DEPRECATED — `Barcode` column removed Aug 2026; kept for history. |
+| `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | REMOVED 2026-09-14 (`Barcode` column gone since Aug 2026; history in git). |
 | `generate-cert.ps1` | Created the client cert. `ocr.ps1` — Windows OCR helper for screenshots. |
-| `labels/` | Deprecated QR label generator (backup only). |
+| `labels/` | REMOVED 2026-09-14 (deprecated QR label generator; local `assets.json` snapshot stays on disk, gitignored; history in git). |
 | `docs/` | `APP_WHAT_IT_DOES.md`, `Exec_Briefing_2026-09-04.md`, `IT_Manager_Handoff.md`, `decisions/ADR-001..005`. |
 | `references/session-aug25-2026-session2.md` | Prior session notes. |
 | `README.md` | Setup/deploy docs. `PROGRESS.md` | Migration log. `HANDOFF.md` | This file. |

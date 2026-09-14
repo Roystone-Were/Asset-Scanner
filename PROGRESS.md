@@ -186,6 +186,11 @@ work on top of it, grouped by theme.
 - Three genuine duplicate serials, plus placeholder serials (`0000`, `-`,
   `N/A`) on 28 rows.
 
+## Dead code removal (2026-09-14)
+
+- **Migration `0034` applied (HTTP 201):** unused `Desktop` asset type removed from the Admin dropdown (zero live assets; guarded re-runnable). `USEFUL_LIFE_BY_TYPE.Desktop` stays as a depreciation fallback. Legacy `ASSET_TYPE_CHOICES` fallbacks in `logic.js` + `assets/index.html` updated to match.
+- **Deleted:** `labels/` QR generator (`asset-labels.html`, `make-labels.mjs`, `package.json`, 164KB — nothing referenced it; local `assets.json` snapshot stays on disk, gitignored) and the deprecated `Add/Remove-BarcodeColumn.ps1` (column gone since Aug 2026). All recoverable from git history; HANDOFF inventory updated.
+
 ## Employee name consolidation (2026-09-14)
 
 - **Migration `0033` applied (HTTP 201):** 15 rows across approved groups B (Githurai typos), C (Liquour typo), D (Lumumba Drive majority), F (Server Romm typo), G (till case/spacing, branches preserved). Old variants verified at 0, zero sync failures.

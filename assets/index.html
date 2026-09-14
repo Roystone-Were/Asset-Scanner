@@ -1611,7 +1611,7 @@ async function startApp(){
   try{
     const atSel=document.getElementById("addType");
     if(atSel&&!atSel.options.length){
-      const types=(typeof Xana!=='undefined'&&Xana.ASSET_TYPE_CHOICES)?Xana.ASSET_TYPE_CHOICES:["Laptop","CPU","Monitor","Desktop","Printer","Mouse","Keyboard","Tablet","Phone","Server","Tower","Other"];
+      const types=(typeof Xana!=='undefined'&&Xana.ASSET_TYPE_CHOICES)?Xana.ASSET_TYPE_CHOICES:["Laptop","CPU","Monitor","Printer","Mouse","Keyboard","Tablet","Phone","Server","Tower","Other"];
       for(const t of types)atSel.insertAdjacentHTML("beforeend",'<option>'+esc(t)+'</option>');
     }
   }catch(e){}
