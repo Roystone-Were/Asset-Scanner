@@ -271,7 +271,7 @@ const DEP_COLORS = {
       `<div class="kpis">
         ${kpi("Total Assets", t.total, "across " + Object.keys(d.byLocation || {}).length + " branches", null, "neutral")}
         ${kpi("Purchase Value", moneyKpi(t.purchaseValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices (awaiting Finance)" : t.missingPurchase + " missing date", t.estimatePendingCount > t.total * 0.3 || t.missingPurchase > t.total * 0.3 ? "warn" : "neutral", "", true)}
-        ${kpi("Book Value (confirmed)", moneyKpi(t.confirmedBookValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices excluded · incl. pending " + money(t.bookValue) : "after depreciation", "acc", "", true)}
+        ${kpi("Book Value (confirmed)", moneyKpi(t.confirmedBookValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices excluded · incl. pending " + money(t.bookValue) : "after depreciation", "acc", "", true, t.estimatePendingCount > 0 ? "Confirmed = only assets with a known purchase price. Excludes " + t.estimatePendingCount + " assets awaiting past invoices from Finance. Full total including those pending: " + money(t.bookValue) + "." : "Confirmed = every asset has a known purchase price, so this is the full book value.")}
         ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
         ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
       </div>
@@ -485,10 +485,10 @@ const DEP_COLORS = {
 
   // valueIsHtml: only for values this file builds itself (moneyKpi). Anything
   // derived from asset data must stay escaped.
-  function kpi(l, v, h, status, extraClass, valueIsHtml) {
+  function kpi(l, v, h, status, extraClass, valueIsHtml, tooltip) {
     const statusClass = status || "neutral";
     const val = valueIsHtml ? v : esc(v);
-    return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"><div class="label">' + esc(l) + '</div><div class="value">' + val + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
+    return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"' + (tooltip ? ' title="' + esc(tooltip) + '"' : "") + '><div class="label">' + esc(l) + '</div><div class="value">' + val + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
   function panel(i, t, cls) { return '<div class="panel ' + (cls || "") + '"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
   // Bucket assets by lastVerified age: fresh <=30d, recent <=90d, overdue >90d,

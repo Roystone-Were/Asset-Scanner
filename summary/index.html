@@ -88,6 +88,8 @@
      rather than each floating its content at a different height */
   .kpi .hint { color:var(--muted); font-size:.75rem; margin-top:auto; padding-top:8px; }
   .kpi.acc .value { color:var(--book); }
+  /* only the confirmed book-value KPI carries a title tooltip — hint affordance */
+  .kpi[title] { cursor:help; }
 
   /* KPI accent - subtle, not AI obvious */
   .kpi { border-left: 2px solid var(--line); position:relative; }
@@ -295,7 +297,7 @@
   document.getElementById("moreDialogClose")?.addEventListener("click",()=>moreDialog.close());
   moreDialog?.addEventListener("click",(e)=>{ if(e.target===moreDialog) moreDialog.close(); }); // backdrop click
 </script>
-  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=11"></script>
+  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=12"></script>
 </body>
 </html>
 
