@@ -1190,7 +1190,7 @@ document.getElementById("addSerial")?.addEventListener("input",e=>{
   const w=document.getElementById("serialWarn");
   const t=serialCollisionText(e.target.value||"");
   if(!w) return;
-  if(t){w.textContent="⚠ "+t;w.style.display="block";}
+  if(t){w.textContent=t;w.style.display="block";}
   else{w.textContent="";w.style.display="none";}
 });
 document.getElementById("addSave")?.addEventListener("click", async()=>{
