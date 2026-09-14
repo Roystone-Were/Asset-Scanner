@@ -186,6 +186,11 @@ work on top of it, grouped by theme.
 - Three genuine duplicate serials, plus placeholder serials (`0000`, `-`,
   `N/A`) on 28 rows.
 
+## Model name consolidation (2026-09-14)
+
+- **Migration `0031` applied (HTTP 201):** 5 typo-level merges, 8 rows — `Brother-QL820NWB` to `Brother QL-820NWB`, `HP HP Pro Tower 290 G9 Desktop PC` (doubled prefix) to single-HP, `DEL DELL P2419H` to `DELL P2419H`, `Hp TPA-L001K` case fix, `HPN HP 322pv` stray-N fix. Old variants verified at 0 after apply. Mirror drained via outbox (no failures).
+- Types, statuses, locations, departments already clean — no variants left. Ambiguous SKU groups (P24 monitors, 290 vs 400 towers, RP31/32, CD-3603U-B vs CD36030U00, TPA-D/P printers) left for IT eyeball.
+
 ## Serial duplicate guard (2026-09-14)
 
 - **`isPlaceholderSerial` + `findSerialCollision` in `scanner-app/logic.js`** (tested, 49/49): placeholders (`0000`, `-`, `N/A`, blanks) never collide; everything else checks serial-vs-serial then serial-vs-tag (tags win scans, so a serial matching another asset's tag is a routing trap).
