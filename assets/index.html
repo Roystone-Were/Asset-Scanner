@@ -69,12 +69,10 @@
   .btn.secondary:hover{border-color:var(--muted)}
   .btn.book{background:var(--book);color:#fff}
   .card{background:var(--card);border:1px solid var(--hairline);border-radius:var(--radius);padding:20px;margin-top:14px;box-shadow:var(--shadow-ambient), var(--inner-highlight)}
-  /* detail card product image — compact thumb, floated right on wide screens */
-  .detail-hero{display:block;width:100%;max-height:160px;object-fit:cover;border-radius:12px;margin:0 0 14px;border:1px solid var(--hairline);background:var(--card2)}
-  #assetCard::after{content:"";display:block;clear:both}
-  @media(min-width:900px){
-    .detail-hero{float:right;width:220px;height:160px;margin:0 0 12px 16px}
-  }
+  /* detail card product image — small thumb beside the title */
+  .detail-top{display:flex;align-items:center;gap:12px}
+  .detail-top h2{margin:0;flex:1;min-width:0}
+  .detail-hero{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--hairline);background:var(--card2);flex:0 0 auto}
   .msg{padding:10px;border-radius:8px;text-align:center;font-size:.85rem}
   .err{background:rgba(209,52,56,.12);color:#fca5a5;border:1px solid rgba(209,52,56,.2)}
   .ok{background:rgba(34,197,94,.12);color:#86efac;border:1px solid rgba(34,197,94,.2)}
@@ -564,15 +562,16 @@ function renderTable(){
 function showDetail(it){
   const c=statusColor(it.status);
   const detail=document.getElementById("detail");
-  const hero=it.imageUrl?'<img class="detail-hero" src="'+esc(it.imageUrl)+'" alt="" loading="lazy" />':'';
+  const heroImg=it.imageUrl?'<img class="detail-hero" src="'+esc(it.imageUrl)+'" alt="" loading="lazy" />':'';
+  const titleHtml='<h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>';
+  const topHtml=it.imageUrl?'<div class="detail-top">'+titleHtml+heroImg+'</div>':titleHtml;
   // Read-only roles (asset_viewer only — e.g. finance) get the identical card
   // minus every write affordance: no edit hover/tap, no Scan again, no Clone,
   // no Verify, no image upload. RLS blocks those writes anyway; hiding them
   // keeps the page honest instead of offering buttons that fail.
   const w=canWrite();
   const erow=w?"row editrow":"row";
-  detail.innerHTML='<div class="card" id="assetCard">'+hero+
-    '<h2>'+esc(it.tag||"Asset")+' <span class="pill" style="background:'+c+'">'+esc(it.status||"")+'</span></h2>'+
+  detail.innerHTML='<div class="card" id="assetCard">'+topHtml+
     '<div class="hint">'+(w?"Tap any value to change it. Edits save to the register and mirror to SharePoint.":"View only. You can open and read every asset; contact IT to change any of these values.")+'</div>'+
     '<div class="detail-grid">'+
     '<div class="'+erow+'"><span>Serial No.</span><span data-edit="SerialNumber">'+(esc(it.serial||"")||"—")+'</span></div>'+
@@ -678,7 +677,10 @@ function showDetail(it){
         let heroEl=card.querySelector(".detail-hero");
         if(heroEl){ heroEl.src=url; } else {
           const nh=document.createElement("img"); nh.className="detail-hero"; nh.src=url; nh.alt=""; nh.loading="lazy";
-          card.insertBefore(nh, card.firstChild);
+          const top=document.createElement("div"); top.className="detail-top";
+          const h2=card.querySelector("h2");
+          card.insertBefore(top, h2);
+          top.appendChild(h2); top.appendChild(nh);
           document.getElementById("detailImageBtn").textContent="Change image";
         }
         status.textContent="✓ Saved";
