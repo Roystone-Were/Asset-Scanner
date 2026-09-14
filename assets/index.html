@@ -253,7 +253,8 @@
     <label>Asset Type</label><select id="addType"></select>
     <label>Status</label><select id="addStatus"><option value="">—</option></select>
     <label>Location</label><select id="addLocation"><option value="">—</option></select>
-    <label>Employee</label><input type="text" id="addEmployee" placeholder="Employee name" />
+    <label>Employee</label><input type="text" id="addEmployee" placeholder="Employee name" list="employeeList" autocomplete="off" />
+    <datalist id="employeeList"></datalist>
     <label>Department *</label><select id="addDept"><option value="">— select —</option></select>
     <label>Condition</label><input type="text" id="addCondition" placeholder="New" />
     <label>Purchase Date</label><input type="date" id="addPDate" />
@@ -440,10 +441,10 @@ async function load(){
   if(pid){const it=allItems.find(x=>String(x.id)===pid||String(x.tag).toLowerCase()===pid.toLowerCase()); if(it) showDetail(it);}
   applyFilters();
 }
-// Suggestions for the free-text Model and Vendor inputs, built from what the
-// register already contains. This is the cheap half of normalization: it does
-// not stop someone typing a new variant, but it makes the existing spelling
-// the path of least resistance.
+// Suggestions for the free-text Model, Vendor and Employee inputs, built from
+// what the register already contains. This is the cheap half of
+// normalization: it does not stop someone typing a new variant, but it makes
+// the existing spelling the path of least resistance.
 function refreshSuggestLists(){
   const put=(id,vals)=>{
     const dl=document.getElementById(id);
@@ -452,8 +453,12 @@ function refreshSuggestLists(){
   };
   const uniq=(sel)=>[...new Set(allItems.map(sel).map(v=>(v||"").trim()).filter(Boolean))]
     .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+  // Employee names collapse case variants ("ERASTUS maina" vs "Erastus
+  // Maina") to the most frequently used casing (Xana.canonicalSpelling,
+  // tested), so the suggestion list nudges toward one spelling per person.
   put("modelList",uniq(it=>it.model));
   put("vendorList",uniq(it=>it.vendor));
+  put("employeeList", window.Xana&&Xana.canonicalSpelling?Xana.canonicalSpelling(allItems.map(it=>it.employee)):uniq(it=>it.employee));
 }
 function applyFilters(){
   const q=(document.getElementById("search").value||"").trim().toLowerCase();

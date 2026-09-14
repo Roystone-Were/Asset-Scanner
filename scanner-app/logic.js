@@ -253,6 +253,26 @@
     return null;
   }
 
+  // Collapse spelling variants ("ERASTUS maina" vs "Erastus Maina") to the
+  // most frequently used casing per case-insensitive group, sorted for
+  // display. Powers the employee suggestion list in assets/index.html, so
+  // the dropdown nudges toward one spelling per person instead of echoing
+  // every variant ever typed. Ties break alphabetically for determinism.
+  function canonicalSpelling(values) {
+    const groups = new Map();
+    for (const v0 of values || []) {
+      const raw = String(v0 == null ? "" : v0).trim();
+      if (!raw) continue;
+      const k = raw.toLowerCase();
+      if (!groups.has(k)) groups.set(k, new Map());
+      const m = groups.get(k);
+      m.set(raw, (m.get(raw) || 0) + 1);
+    }
+    return [...groups.values()]
+      .map((m) => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0])
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }
+
   // Filter history entries to those newer than ttl ms. Legacy string entries
   // (no timestamp) are treated as fresh from `now`.
   function filterHistory(raw, now, ttl) {
@@ -533,6 +553,7 @@
     PLACEHOLDER_SERIALS,
     isPlaceholderSerial,
     findSerialCollision,
+    canonicalSpelling,
     csvCell,
     toCsv,
   };

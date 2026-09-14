@@ -487,3 +487,16 @@ test("findSerialCollision catches serial and tag collisions, ignores placeholder
   assert.strictEqual(X.findSerialCollision(items, "9CP541RLNV", "17").item.id, "94");
   assert.strictEqual(X.findSerialCollision([{ id: "1", tag: "XL-1", serial: "ABC" }], "abc", "1"), null);
 });
+
+test("canonicalSpelling collapses case variants to the most-used casing", () => {
+  assert.deepStrictEqual(
+    X.canonicalSpelling(["ERASTUS maina", "Erastus Maina", "Erastus Maina", "  ", null, "amina"]),
+    ["amina", "Erastus Maina"],
+  );
+  // a lone variant keeps its observed casing — never invent a spelling
+  assert.deepStrictEqual(X.canonicalSpelling(["amina"]), ["amina"]);
+  // tie breaks alphabetically so output is deterministic
+  assert.deepStrictEqual(X.canonicalSpelling(["bob", "Bob"]), ["bob"]);
+  assert.deepStrictEqual(X.canonicalSpelling([]), []);
+  assert.deepStrictEqual(X.canonicalSpelling(null), []);
+});
