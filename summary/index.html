@@ -88,8 +88,28 @@
      rather than each floating its content at a different height */
   .kpi .hint { color:var(--muted); font-size:.75rem; margin-top:auto; padding-top:8px; }
   .kpi.acc .value { color:var(--book); }
-  /* only the confirmed book-value KPI carries a title tooltip — hint affordance */
-  .kpi[title] { cursor:help; }
+  /* Styled tooltip for the confirmed book-value KPI (replaces native title).
+     Card stays in place; bubble appears below it on hover or keyboard focus. */
+  .kpi[data-tip] { cursor:help; }
+  .kpi[data-tip]::after {
+    content:attr(data-tip);
+    position:absolute; top:calc(100% + 10px); left:50%;
+    transform:translateX(-50%) translateY(4px);
+    width:max-content; max-width:min(260px, 78vw);
+    white-space:normal; text-align:left;
+    background:var(--text); color:var(--bg);
+    font-size:.78rem; font-weight:400; line-height:1.5;
+    padding:10px 12px; border-radius:12px;
+    box-shadow:var(--shadow-lifted);
+    opacity:0; pointer-events:none; z-index:20;
+    transition:opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+  }
+  .kpi[data-tip]:hover::after, .kpi[data-tip]:focus-visible::after {
+    opacity:1; transform:translateX(-50%) translateY(0);
+  }
+  .kpi[data-tip]:focus { outline:none; }
+  .kpi[data-tip]:focus-visible { outline:2px solid var(--book); outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce) { .kpi[data-tip]::after { transition:none; } }
 
   /* KPI accent - subtle, not AI obvious */
   .kpi { border-left: 2px solid var(--line); position:relative; }
@@ -297,7 +317,7 @@
   document.getElementById("moreDialogClose")?.addEventListener("click",()=>moreDialog.close());
   moreDialog?.addEventListener("click",(e)=>{ if(e.target===moreDialog) moreDialog.close(); }); // backdrop click
 </script>
-  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=12"></script>
+  <script src="/scanner-app/lib/supabase.min.js"></script><script src="/js/supabase-client.js"></script><script src="/summary/app.js?v=13"></script>
 </body>
 </html>
 

@@ -484,11 +484,15 @@ const DEP_COLORS = {
   }
 
   // valueIsHtml: only for values this file builds itself (moneyKpi). Anything
-  // derived from asset data must stay escaped.
+  // derived from asset data must stay escaped. tooltip renders as a styled
+  // CSS bubble via [data-tip] (summary/index.html), not a native title.
   function kpi(l, v, h, status, extraClass, valueIsHtml, tooltip) {
     const statusClass = status || "neutral";
     const val = valueIsHtml ? v : esc(v);
-    return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"' + (tooltip ? ' title="' + esc(tooltip) + '"' : "") + '><div class="label">' + esc(l) + '</div><div class="value">' + val + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
+    const tip = tooltip
+      ? ' data-tip="' + esc(tooltip) + '" tabindex="0" aria-label="' + esc(l + ". " + tooltip) + '"'
+      : "";
+    return '<div class="kpi ' + (extraClass || "") + " kpi-" + statusClass + '"' + tip + '><div class="label">' + esc(l) + '</div><div class="value">' + val + "</div>" + (h ? '<div class="hint">' + esc(h) + "</div>" : "") + "</div>";
   }
   function panel(i, t, cls) { return '<div class="panel ' + (cls || "") + '"><h2>' + esc(t) + "</h2>" + i + "</div>"; }
   // Bucket assets by lastVerified age: fresh <=30d, recent <=90d, overdue >90d,
