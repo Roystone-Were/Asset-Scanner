@@ -216,6 +216,43 @@
     return dups.sort((a, b) => a.serial.localeCompare(b.serial));
   }
 
+  // Placeholder serials carry no identity ("to be added later") and are
+  // deliberately exempt from duplicate enforcement, in the add form and in
+  // migration 0030's partial unique index. Both lists must stay in sync:
+  // lowercase, trimmed. Live counts 2026-09-14: 0000 x21, "-" x6, "n/a" x4.
+  const PLACEHOLDER_SERIALS = ["0000", "-", "n/a"];
+  function isPlaceholderSerial(s) {
+    const v = String(s == null ? "" : s).trim().toLowerCase();
+    if (!v) return true;
+    return PLACEHOLDER_SERIALS.indexOf(v) > -1;
+  }
+
+  // Would `serial` collide if added to `items` (enriched rows
+  // { id, tag, serial })? Returns null when clean, otherwise
+  // { type: "serial", item } (another asset already carries it) or
+  // { type: "tag", item } (it matches another asset's tag, so a serial scan
+  // would open that asset instead — tags win per findAssetByCode).
+  // Placeholders never collide. Case-insensitive, trimmed. `ignoreId`
+  // exempts one row (edit flows reuse this helper later).
+  function findSerialCollision(items, serial, ignoreId) {
+    const clean = String(serial == null ? "" : serial).trim().toLowerCase();
+    if (!clean || isPlaceholderSerial(clean)) return null;
+    const ignore = ignoreId == null ? null : String(ignoreId);
+    for (const it of items || []) {
+      if (ignore !== null && String(it && it.id) === ignore) continue;
+      if (String((it && it.serial) || "").trim().toLowerCase() === clean) {
+        return { type: "serial", item: it };
+      }
+    }
+    for (const it of items || []) {
+      if (ignore !== null && String(it && it.id) === ignore) continue;
+      if (String((it && it.tag) || "").trim().toLowerCase() === clean) {
+        return { type: "tag", item: it };
+      }
+    }
+    return null;
+  }
+
   // Filter history entries to those newer than ttl ms. Legacy string entries
   // (no timestamp) are treated as fresh from `now`.
   function filterHistory(raw, now, ttl) {
@@ -493,6 +530,9 @@
     REGION_CHOICES,
     ASSET_TYPE_CHOICES,
     findDuplicateSerials,
+    PLACEHOLDER_SERIALS,
+    isPlaceholderSerial,
+    findSerialCollision,
     csvCell,
     toCsv,
   };

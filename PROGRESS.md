@@ -186,6 +186,13 @@ work on top of it, grouped by theme.
 - Three genuine duplicate serials, plus placeholder serials (`0000`, `-`,
   `N/A`) on 28 rows.
 
+## Serial duplicate guard (2026-09-14)
+
+- **`isPlaceholderSerial` + `findSerialCollision` in `scanner-app/logic.js`** (tested, 49/49): placeholders (`0000`, `-`, `N/A`, blanks) never collide; everything else checks serial-vs-serial then serial-vs-tag (tags win scans, so a serial matching another asset's tag is a routing trap).
+- **`/assets` add form:** live orange warning while typing + hard block on save, including bundle component rows and within-bundle dupes.
+- **`insertAsset()`:** 23505 retry narrowed to `item_id` races only; serial/tag collisions surface immediately with a plain-language error.
+- **Migration `0030` applied (HTTP 201):** index build SKIPPED by design — 3 genuine dupe groups still live (`312023090012` XL-97/XL-99, `9cp541rlnv` XL-17/XL-94, `xl-98` XL-134/XL-172). Resolve those rows, re-run the file (`if not exists` = safe no-op once clean). 4 tag-collision rows (XL-131/132/133/171) stay frontend-only.
+
 ## Remaining roadmap
 
 - [x] Site URL + uri_allow_list fixed via Management API (was localhost) — emailed links now land correctly

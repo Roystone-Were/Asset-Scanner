@@ -453,10 +453,26 @@
       if (!error) return { id: String(data.item_id) };
       lastErr = error;
       if (error.code !== "23505") break;
+      // 23505 covers every unique index. Only item_id races are worth
+      // retrying (someone else took the freshly allocated id); a serial or
+      // tag collision (migration 0022/0030) will never succeed on retry, so
+      // surface it immediately instead of burning 4 attempts + backoff.
+      if (!/item_id|assets_pkey/i.test(String((error && error.message) || ""))) break;
       // unique violation: someone else took that id — small backoff, recompute
       await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
     }
     const err = lastErr || new Error("insert failed");
+    // Translate the raw Postgres constraint failure into something actionable
+    // at the single save choke point (covers single + bundle inserts, and the
+    // scan-miss flow, which all come through here).
+    if (err && err.code === "23505" && /assets_live_serial_unique_idx/i.test(String(err.message || ""))) {
+      const serial = fields && fields.SerialNumber ? String(fields.SerialNumber) : "";
+      throw new Error("Serial Number “" + serial + "” is already in use — open that asset instead of adding it again.");
+    }
+    if (err && err.code === "23505" && /assets_live_tag_unique_idx/i.test(String(err.message || ""))) {
+      const tag = fields && fields.Title ? String(fields.Title) : "";
+      throw new Error("Asset Tag “" + tag + "” is already in use — pick a unique tag.");
+    }
     throw sbError(err);
   }
 

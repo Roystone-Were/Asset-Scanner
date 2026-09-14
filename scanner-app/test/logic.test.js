@@ -449,3 +449,41 @@ test("csvCell neutralises spreadsheet formulas", () => {
   // ordinary text is untouched
   assert.strictEqual(X.csvCell("HP Pro Tower"), [34, 72].map(c => String.fromCharCode(c)).join("") + "P Pro Tower" + String.fromCharCode(34));
 });
+
+test("isPlaceholderSerial exempts blanks and known placeholders only", () => {
+  for (const p of [null, undefined, "", "   ", "0000", " 0000 ", "-", "N/A", "n/a", "N/a"]) {
+    assert.strictEqual(X.isPlaceholderSerial(p), true, JSON.stringify(p) + " should be a placeholder");
+  }
+  for (const real of ["9CP541RLNV", "XL-98", "CN-09094X", "312023090012", "--", "none"]) {
+    assert.strictEqual(X.isPlaceholderSerial(real), false, real + " should NOT be a placeholder");
+  }
+});
+
+test("findSerialCollision catches serial and tag collisions, ignores placeholders", () => {
+  const items = [
+    { id: "17", tag: "XL-17", serial: "9CP541RLNV" },
+    { id: "94", tag: "XL-94", serial: "9CP541RLNV" },
+    { id: "124", tag: "XL-171", serial: "XL-94" },
+  ];
+  // exact serial dupe, case-insensitive
+  const hit = X.findSerialCollision(items, " 9cp541rlnv ");
+  assert.strictEqual(hit && hit.type, "serial");
+  assert.strictEqual(hit && String(hit.item.id), "17");
+  // serial matching another asset's tag (scan would open that asset instead)
+  const tagHit = X.findSerialCollision(items, "xl-171");
+  assert.strictEqual(tagHit && tagHit.type, "tag");
+  assert.strictEqual(tagHit && String(tagHit.item.id), "124");
+  // serial hit wins over tag hit
+  const both = X.findSerialCollision(items, "XL-94");
+  assert.strictEqual(both && both.type, "serial");
+  // placeholders and blanks never collide
+  for (const p of ["", "0000", "-", "N/A"]) {
+    assert.strictEqual(X.findSerialCollision(items, p), null, JSON.stringify(p));
+  }
+  // clean serial passes
+  assert.strictEqual(X.findSerialCollision(items, "SN-UNIQUE-001"), null);
+  assert.strictEqual(X.findSerialCollision([], "SN-UNIQUE-001"), null);
+  // ignoreId exempts one row (edit flows)
+  assert.strictEqual(X.findSerialCollision(items, "9CP541RLNV", "17").item.id, "94");
+  assert.strictEqual(X.findSerialCollision([{ id: "1", tag: "XL-1", serial: "ABC" }], "abc", "1"), null);
+});

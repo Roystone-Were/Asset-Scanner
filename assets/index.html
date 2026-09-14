@@ -247,6 +247,7 @@
     <h2>+ Add Asset <button type="button" class="theme-toggle" id="addClose">✕</button></h2>
     <label>Asset Tag *</label><input type="text" id="addTag" placeholder="e.g. MICL0048" />
     <label>Serial Number *</label><input type="text" id="addSerial" placeholder="Serial" />
+    <div id="serialWarn" style="display:none;font-size:.78rem;color:#ff8c00;margin-top:4px;line-height:1.4"></div>
     <label>Model</label><input type="text" id="addModel" placeholder="Lenovo L13" list="modelList" autocomplete="off" />
     <datalist id="modelList"></datalist>
     <label>Asset Type</label><select id="addType"></select>
@@ -1017,7 +1018,7 @@ const addSheet=document.getElementById("addSheet");
 // Single choke point for the add sheet — the toolbar button, Clone and the
 // scan-miss "+ Add it" toast all come through here, so one guard covers a
 // read-only role no matter how it is reached.
-function openAdd(){if(!canWrite())return;addSheet.classList.add("open");}
+function openAdd(){if(!canWrite())return;const w=document.getElementById("serialWarn");if(w){w.textContent="";w.style.display="none";}addSheet.classList.add("open");}
 function closeAdd(){addSheet.classList.remove("open");setTimeout(()=>{if(!addSheet.classList.contains("open")){document.getElementById("addMsg").innerHTML="";}},320);}
 document.getElementById("btnAdd")?.addEventListener("click",openAdd);
 document.getElementById("addClose")?.addEventListener("click",closeAdd);
@@ -1174,6 +1175,24 @@ bundleRowsEl.addEventListener("click",e=>{
   nextBundleTags();allocateBundlePrices();
 });
 document.getElementById("addPrice").addEventListener("input",()=>{allocateBundlePrices();});
+// ---------- Serial duplicate guard ----------
+// Pure check lives in scanner-app/logic.js (Xana.findSerialCollision, tested);
+// this is the thin UI layer: live warning while typing, hard block on save.
+// Placeholders (0000, -, N/A) never collide — see Xana.isPlaceholderSerial.
+function serialCollisionText(serial){
+  const hit=window.Xana&&Xana.findSerialCollision?Xana.findSerialCollision(allItems,serial):null;
+  if(!hit) return "";
+  const other=hit.item.tag||("#"+hit.item.id);
+  if(hit.type==="serial") return "Serial “"+serial.trim()+"” is already used by "+other+" — open that asset instead, or use a different serial.";
+  return "“"+serial.trim()+"” matches the tag of "+other+" — a scan would open that asset instead of this one.";
+}
+document.getElementById("addSerial")?.addEventListener("input",e=>{
+  const w=document.getElementById("serialWarn");
+  const t=serialCollisionText(e.target.value||"");
+  if(!w) return;
+  if(t){w.textContent="⚠ "+t;w.style.display="block";}
+  else{w.textContent="";w.style.display="none";}
+});
 document.getElementById("addSave")?.addEventListener("click", async()=>{
   const tagInput=document.getElementById("addTag");
   const tag=(tagInput.value||"").trim();
@@ -1196,6 +1215,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
   if(!tag) problems.push("Asset Tag is required.");
   else if(allItems.some(x=>(x.tag||"").toLowerCase()===tag.toLowerCase())) problems.push("Asset Tag \u201C"+tag+"\u201D is already in use — pick a unique tag.");
   if(!serial) problems.push("Serial Number is required.");
+  else{const dup=serialCollisionText(serial);if(dup) problems.push(dup);}
   if(!dept) problems.push("Department is required.");
   if(pPrice===""&&!est) problems.push("Purchase Price is required — or tick \u201Cestimate pending\u201D.");
   else if(parseFloat(pPrice)<0) problems.push("Purchase Price cannot be negative.");
@@ -1211,11 +1231,30 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
       const rprice=(row.querySelector(".b-price").value||"").trim();
       const label=rtype||("Component "+(i+1));
       if(!rtag) problems.push(label+": Tag is required.");
+      else if(allItems.some(x=>(x.tag||"").toLowerCase()===rtag.toLowerCase())) problems.push(label+": Tag “"+rtag+"” is already in use — pick a unique tag.");
       if(!rtype) problems.push(label+": Type is required.");
+      if(rserial){const dup=serialCollisionText(rserial);if(dup) problems.push(label+": "+dup);}
       if(rprice===""||!isFinite(parseFloat(rprice))) problems.push(label+": Price is required.");
       else if(parseFloat(rprice)<0) problems.push(label+": Price cannot be negative.");
       components.push({tag:rtag,serial:rserial,model:rmodel,type:rtype,price:rprice});
     });
+    // within-batch dupes: two new rows claiming the same tag, or the same
+    // real (non-placeholder) serial — the per-row checks above only see
+    // allItems, not each other.
+    {
+      const seenTags=new Set([tag.toLowerCase()]);
+      const seenSerials=new Set();
+      if(serial&&!(window.Xana&&Xana.isPlaceholderSerial&&Xana.isPlaceholderSerial(serial))) seenSerials.add(serial.toLowerCase());
+      for(const c of components){
+        const lt=(c.tag||"").toLowerCase();
+        if(lt){if(seenTags.has(lt)) problems.push("Tag “"+c.tag+"” is used twice in this bundle — tags must be unique.");else seenTags.add(lt);}
+        const ls=(c.serial||"").trim().toLowerCase();
+        if(ls&&!(window.Xana&&Xana.isPlaceholderSerial&&Xana.isPlaceholderSerial(ls))){
+          if(seenSerials.has(ls)) problems.push("Serial “"+c.serial+"” is used twice in this bundle — serials must be unique.");
+          else seenSerials.add(ls);
+        }
+      }
+    }
     // the tower books the residual of the total after the component rows
     let rowSum=0;
     for(const c of components){const v=parseFloat(c.price);if(isFinite(v))rowSum+=v;}
@@ -1272,6 +1311,7 @@ document.getElementById("addSave")?.addEventListener("click", async()=>{
     pendingImage=null; document.getElementById("imgPreview").style.display="none"; document.getElementById("imgName").textContent="";
     // reset form
     ["addSerial","addModel","addType","addEmployee","addDept","addCondition","addPrice"].forEach(id=> document.getElementById(id).value="");
+    {const w=document.getElementById("serialWarn");if(w){w.textContent="";w.style.display="none";}}
     document.getElementById("addPDate").value="";
     document.getElementById("addPriceEstimate").checked=false;
     tagInput.value="";
