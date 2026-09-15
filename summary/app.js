@@ -369,6 +369,10 @@ const DEP_COLORS = {
   }
 
   // ---------- KPI Animation ----------
+  function durationMs() {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 0;
+    return 800;
+  }
   function animateKpis() {
     const kpiEls = document.querySelectorAll(".kpi .value");
     kpiEls.forEach(el => {
@@ -381,8 +385,34 @@ const DEP_COLORS = {
       const prefix = text.substring(0, text.indexOf(numMatch[0]));
       const suffix = text.substring(text.indexOf(numMatch[0]) + numMatch[0].length);
 
+      // Money KPIs render as <span class="cur">KES</span>4,715,820 — the span
+      // carries the margin that separates currency from figure. Rewriting
+      // el.textContent would destroy that span and leave "KES4,715,820"
+      // jammed together, so animate only the number text node instead.
+      const curEl = el.querySelector(".cur");
+      if (curEl) {
+        let numNode = curEl.nextSibling;
+        if (!numNode || numNode.nodeType !== 3) {
+          numNode = document.createTextNode("");
+          el.appendChild(numNode);
+        }
+        const node = numNode;
+        const dur = durationMs();
+        if (dur <= 0) { node.textContent = target.toLocaleString() + suffix; return; }
+        const start = performance.now();
+        const tickCur = (now) => {
+          const eased = 1 - Math.pow(1 - Math.min((now - start) / dur, 1), 3);
+          node.textContent = Math.round(target * eased).toLocaleString() + suffix;
+          if ((now - start) < dur) requestAnimationFrame(tickCur);
+          else node.textContent = target.toLocaleString() + suffix;
+        };
+        requestAnimationFrame(tickCur);
+        return;
+      }
+
+      const duration = durationMs();
+      if (duration <= 0) { el.textContent = prefix + target.toLocaleString() + suffix; return; }
       let current = 0;
-      const duration = 800;
       const start = performance.now();
 
       function tick(now) {
