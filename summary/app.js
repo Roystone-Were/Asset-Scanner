@@ -290,6 +290,10 @@ const DEP_COLORS = {
 
     // Animate KPI numbers and bars
     animateKpis();
+    fitKpiValues();
+    // Numbers grow during the count-up, so re-fit once they land. Extra
+    // setTimeout covers slower frames; each run is idempotent.
+    setTimeout(fitKpiValues, 900);
     requestAnimationFrame(() => requestAnimationFrame(animateBars));
   }
 
@@ -429,6 +433,26 @@ const DEP_COLORS = {
       requestAnimationFrame(tick);
     });
   }
+  // Shrink any overflowing KPI value until it fits its card. Full-size
+  // "KES 3,212,256" is wider than the old small-prefix style, so on narrow
+  // 5-across columns it spilled past the card edge. The CSS ellipsis is only
+  // a last resort; this keeps the whole figure visible, just slightly smaller.
+  function fitKpiValues() {
+    document.querySelectorAll(".kpi .value").forEach((el) => {
+      el.style.fontSize = "";
+      let size = parseFloat(getComputedStyle(el).fontSize) || 0;
+      let guard = 12;
+      while (guard-- > 0 && size > 14 && el.scrollWidth > el.clientWidth + 1) {
+        size -= 1;
+        el.style.fontSize = size + "px";
+      }
+    });
+  }
+  let fitResizeT = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(fitResizeT);
+    fitResizeT = setTimeout(fitKpiValues, 150);
+  });
   // ---------- Fleet age and refresh ----------
   // A planning view, not an instruction to spend: age is not condition, and
   // the cost shown is what things originally cost, not what replacing them
