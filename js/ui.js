@@ -31,8 +31,8 @@
     return cur + " " + (v < 0 ? "-" : "") + Math.round(Math.abs(v)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
-  // KPI-sized money: currency becomes a small muted prefix so the number
-  // leads and the pair never wraps. Value is built by this file, hence HTML.
+  // KPI-sized money: currency stays full-size and inherits the value color,
+  // with the gap carried by .cur margin so the pair never wraps. Value is built by this file, hence HTML.
   function moneyKpi(n, currency) {
     var full = money(n, currency);
     var sp = full.indexOf(" ");
