@@ -834,7 +834,7 @@ async function loadSync(){
   state.textContent="Signed in as "+account.username;
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").style.display="block";
-  XanaSupabase.startPresenceHeartbeat();
+  XanaSupabase.startPresenceHeartbeat?.();
   const boot=document.getElementById("boot");
   if(boot){boot.style.opacity="0";setTimeout(()=>boot.remove(),260);}
   await Promise.all([loadUsers(),loadChoices()]);

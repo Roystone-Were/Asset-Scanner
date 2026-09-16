@@ -84,7 +84,7 @@ const DEP_COLORS = {
     document.getElementById("userInfo").style.display = "flex";
     document.getElementById("signOutBtn").onclick = async () => { await XanaSupabase.signOut(); location.href = "/login"; };
     showMain(); load();
-    XanaSupabase.startPresenceHeartbeat();
+    XanaSupabase.startPresenceHeartbeat?.();
   }
 
   // ---------- API helpers ----------
@@ -141,6 +141,14 @@ const DEP_COLORS = {
       .map(i => ({ i, w: warrantyExpiry(i) }))
       .filter(x => x.w && x.w.days <= WARRANTY_AHEAD_DAYS && x.w.days >= -WARRANTY_BEHIND_DAYS)
       .sort((a, b) => a.w.days - b.w.days);
+    // stash for the CSV export wired in render()
+    window._warrantyRows = rows;
+    const critical = rows.filter(x => x.w.days <= 30 && x.w.days >= 0).length;
+    const expired = rows.filter(x => x.w.days < 0).length;
+    const head = document.getElementById("warrantyHead");
+    if (head) head.textContent = rows.length
+      ? rows.length + " in window · " + critical + " ≤30d · " + expired + " expired"
+      : "All clear";
     // a warranty with no purchase date can never be dated, so it would
     // silently never appear here. Say so rather than hide it.
     const undatable = items.filter(i => i.warrantyMonths && !i.purchaseDate).length;
@@ -264,7 +272,7 @@ const DEP_COLORS = {
       // on its own content height, so no more row-height coupling.
       `<div class="grid"><div class="gcol">${panel(statusBars(d.byStatus) + statusFreshnessBlock, "Status")}${panel(bars(d.byLocation, "#3b82f6", 6, "location"), "By Location")}</div><div class="gcol">${panel(bars(d.byType, "#0d9488", 6, "type"), "By Type")}${panel(bars(d.byDepartment, "#8b5cf6", 6, "department"), "By Department")}</div></div>` +
       healthStrip(h) +
-      `<div class="panel" id="warrantyPanel"><h2>Warranty expiries</h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
+      `<div class="panel" id="warrantyPanel"><h2>Warranty expiries <span id="warrantyHead" style="font-size:.72rem;color:var(--muted);font-weight:400"></span><button class="btn-quiet" id="warrantyExport" style="float:right;padding:5px 12px;font-size:.76rem">Export</button></h2><div id="warrantyBody" style="font-size:.85rem;color:var(--muted)">Loading…</div></div>` +
       `<div class="panel"><h2>Asset Register</h2><div id="tblInfo" style="margin-bottom:6px;font-size:.82rem;color:var(--muted);"></div><div class="tbl-scroll" id="tblBody"></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="btn-quiet" id="prevBtn" onclick="changePage(-1)">Prev</button><button class="btn-quiet" id="nextBtn" onclick="changePage(1)">Next</button><button class="btn-outline" id="exportDep" style="margin-left:auto;">Depreciation export</button><button class="btn-outline" id="exportCsv">Export CSV</button></div></div>`;
 
     // Now populate the table after the DOM elements exist
@@ -275,6 +283,8 @@ const DEP_COLORS = {
     if (exportBtn) exportBtn.onclick = exportToCsv;
     const depBtn = document.getElementById("exportDep");
     if (depBtn) depBtn.onclick = exportDepreciationCsv;
+    const wExp = document.getElementById("warrantyExport");
+    if (wExp) wExp.onclick = exportWarrantyCsv;
 
     // Build the print-only exec one-pager and enable its button
     mountExecPage(d);
@@ -667,6 +677,26 @@ const DEP_COLORS = {
   window.changePage = (dir) => { currentPage = Math.max(0, currentPage + dir); if (currentPage * PAGE_SIZE >= lastItems.length) currentPage = Math.max(0, Math.floor((lastItems.length - 1) / PAGE_SIZE)); renderTable(); };
 
   // ---------- CSV Export ----------
+  function exportWarrantyCsv() {
+    const rows = window._warrantyRows || [];
+    if (!rows.length) return;
+    const headers = ["Tag", "Type", "Model", "Serial", "Employee", "Location", "Purchase Date", "Warranty Months", "Expiry", "Days Left"];
+    const body = rows.map(({ i, w }) => [
+      i.tag, i.type, i.model, i.serial, i.employee, i.location,
+      i.purchaseDate, i.warrantyMonths,
+      w.expiry.toISOString().slice(0, 10), w.days
+    ].map(csvCell).join(","));
+    const csv = [headers.join(","), ...body].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "warranty-expiries-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
   function exportToCsv() {
     if (!lastItems.length) return;
     const headers = ["Tag", "Type", "Model", "Serial", "Employee", "Location", "Status", "Purchase Date", "Purchase Price", "Book Value", "Depreciation Status"];

@@ -7,9 +7,9 @@
 <title>Assets - Detailed · Xana</title>
 <link rel="icon" href="/scanner-app/icon-192.png" />
 <script src="/scanner-app/lib/supabase.min.js"></script>
-<script src="/js/supabase-client.js"></script>
-<script src="/js/ui.js"></script>
-<script src="/scanner-app/logic.js"></script>
+<script src="/js/supabase-client.js?v=16"></script>
+<script src="/js/ui.js?v=16"></script>
+<script src="/scanner-app/logic.js?v=16"></script>
 <script src="/scanner-app/lib/html5-qrcode.min.js"></script>
 <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/nav.css" />
@@ -105,7 +105,7 @@
   .fpop .fbtns{display:flex;gap:6px;margin-top:8px}
   .pill{padding:2px 8px;border-radius:999px;color:#fff;font-size:.65rem;font-weight:700;white-space:nowrap}
   #authState{font-size:.75rem;color:var(--muted);margin-bottom:8px}
-  .editrow{cursor:pointer;border-radius:6px;margin:0 -6px;padding-left:6px;padding-right:6px;transition:background .12s ease}
+  .editrow{cursor:pointer;border-radius:6px;transition:background .12s ease}
   .editrow:hover{background:rgba(22,163,74,.06)}
   .editrow:hover>span:first-child{color:var(--text)}
   .editrow:hover>span:last-child::after{content:" ✎";font-size:.7rem;color:var(--accent)}
@@ -120,9 +120,9 @@
   .hwho{color:var(--accent);font-weight:600;min-width:180px}
   .hwhat{flex:1;min-width:200px}
   .hwhen{color:var(--muted);font-size:.72rem;margin-left:auto}
-  .detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:0}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:0;align-items:start}
   @media(max-width:700px){.detail-grid{grid-template-columns:1fr}}
-  .row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--hairline);font-size:.85rem}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px;margin:0 -6px;padding:10px 6px;border-bottom:1px solid var(--hairline);font-size:.85rem}
   .row:last-child{border:0}
   .row span:first-child{color:var(--muted)}
   .row span:last-child{font-weight:600;text-align:right;word-break:break-word;letter-spacing:-.01em}
@@ -299,6 +299,11 @@
         <span>Hits <b id="walkHits">0</b></span><span>Miss <b id="walkMiss">0</b></span><span id="walkLast"></span>
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <select id="auditLocation" style="flex:1;min-width:140px" title="Limit audit to one branch"></select>
+      <span id="auditStats" class="hint" style="margin:0"></span>
+      <button type="button" class="btn secondary" id="auditExport" title="Download Found/Missing list for the selected branch">Export audit</button>
+    </div>
     <div id="scanStatus" class="hint" style="margin-top:8px"></div>
     <div class="hint" style="margin-top:4px">Matches Asset Tag or Serial. A USB wedge scanner works anywhere on this page — no button needed.</div>
   </div>
@@ -445,6 +450,7 @@ function openFunnelPop(fkey,anchorEl){
 }
 async function load(){
   allItems=await XanaSupabase.listAssetsDetailed();
+  refreshAuditLocationOptions();
   const pid=new URLSearchParams(location.search).get("id");
   if(pid){const it=allItems.find(x=>String(x.id)===pid||String(x.tag).toLowerCase()===pid.toLowerCase()); if(it) showDetail(it);}
   applyFilters();
@@ -607,7 +613,7 @@ function showDetail(it){
     '<div class="row"><span>Useful Life</span><span>'+esc(it.usefulLife||"")+' yrs</span></div>'+
     '<div class="row"><span>Warranty</span><span id="warrantyVal">'+warrantyText(it)+'</span></div>'+
     '<div class="row"><span>Last Verified</span><span id="lastVerifiedVal">'+(fmtWhen(it.lastVerified)||"—")+'</span></div>'+
-    '</div><div id="editBar"></div><div class="detail-actions">'+(w?'<button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button><button class="btn secondary" id="verifyBtn">✓ Verify</button>':'')+'<span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Events</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
+    '</div><div id="editBar"></div><div class="detail-actions">'+(w?'<button class="btn secondary" id="rescanBtn">Scan again</button><button class="btn secondary" id="cloneBtn">Clone</button><button class="btn secondary" id="verifyBtn">✓ Verify</button><button class="btn secondary" id="reportBtn">Report problem</button>':'')+'<span class="spacer"></span><button class="btn secondary" id="histToggle">History</button><button class="btn secondary" id="evToggle">Events</button><button class="btn danger" onclick="document.getElementById(&quot;detail&quot;).innerHTML=&quot;&quot;">Close</button>'+(rolesIncludeAdmin()?'<button class="btn danger" id="delBtn">Delete</button>':'')+'</div><div id="histPanel"></div><div id="evPanel"></div></div>';
   document.getElementById("openAdd2")?.addEventListener("click",e=>{e.preventDefault();openAdd();});
   // Clone — open the add form prefilled with this asset's shared attributes
   // (Tag + Serial left blank; they are unique per item).
@@ -669,6 +675,17 @@ function showDetail(it){
     evPanel.dataset.open="1";evPanel.dataset.mode="list";
     await loadEvents(current,evPanel);
     this.textContent="Hide events";
+  });
+  // Report problem — one-tap entry to an open issue. Writers only; the button
+  // is not rendered for read-only roles and RLS refuses the insert anyway.
+  document.getElementById("reportBtn")?.addEventListener("click",async ()=>{
+    if(evPanel.dataset.open!=="1"){
+      evPanel.dataset.open="1";evPanel.dataset.mode="list";
+      await loadEvents(current,evPanel);
+      document.getElementById("evToggle").textContent="Hide events";
+    }
+    renderEventForm(evPanel,current);
+    evPanel.scrollIntoView({behavior:"smooth",block:"nearest"});
   });
   // Photo actions — ✎ edit for writers, 🗑 delete for admins only. The icons
   // live in a hover bar at the bottom of the thumb (or a + placeholder when
@@ -1495,6 +1512,50 @@ document.getElementById("people").addEventListener("click",async(e)=>{
 // typing in a field.
 let _qrScanner=null,_scanning=false,_walk=false,_walkHits=0,_walkMiss=0;
 const _walkSeen=new Map();
+// Audit mode: branch-scoped stock-take. _auditScanned holds item ids seen in
+// this audit pass; the location filter scopes Expected, stats and export.
+let _auditLocation="",_auditScanned=new Set();
+function auditExpected(){
+  if(!_auditLocation) return allItems;
+  return allItems.filter(it=>String(it.location||"")===_auditLocation);
+}
+function updateAuditStats(){
+  const el=document.getElementById("auditStats");
+  if(!el) return;
+  const exp=auditExpected();
+  const found=exp.filter(it=>_auditScanned.has(String(it.id))).length;
+  el.textContent="Found "+found+" of "+exp.length+" · Missing "+(exp.length-found);
+}
+function refreshAuditLocationOptions(){
+  const sel=document.getElementById("auditLocation");
+  if(!sel) return;
+  const locs=[...new Set(allItems.map(it=>String(it.location||"").trim()).filter(Boolean))].sort();
+  const cur=sel.value||_auditLocation;
+  sel.innerHTML='<option value="">All branches ('+allItems.length+')</option>'+
+    locs.map(l=>'<option value="'+esc(l)+'">'+esc(l)+' ('+allItems.filter(it=>String(it.location||"")===l).length+')</option>').join("");
+  sel.value=locs.includes(cur)?cur:"";
+  _auditLocation=sel.value||"";
+  updateAuditStats();
+}
+function exportAuditCsv(){
+  const exp=auditExpected();
+  if(!exp.length){toast("Nothing to export in this audit view",true);return;}
+  const cols=[
+    ["Asset Tag","tag"],["Type","type"],["Model","model"],["Serial","serial"],
+    ["Employee","employee"],["Location","location"],["Status","status"],
+    ["Last Verified",r=>r.lastVerified?String(r.lastVerified).slice(0,10):""],
+    ["Audit Result",r=>_auditScanned.has(String(r.id))?"Found":"Missing"],
+  ];
+  const csv=Xana.toCsv(exp,cols);
+  const loc=(_auditLocation||"all").toLowerCase().replace(/[^a-z0-9]+/g,"-");
+  const blob=new Blob([String.fromCharCode(65279)+csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download="audit-"+loc+"-"+new Date().toISOString().slice(0,10)+".csv";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("Exported "+exp.length+" rows ("+_auditScanned.size+" found this pass)",false);
+}
 let _audio=null;
 function beep(freq){
   try{
@@ -1538,8 +1599,15 @@ function onDecode(text){
     const now=Date.now(),last=_walkSeen.get(text)||0;
     if(now-last<1500)return;   // dedupe the code sitting in frame
     _walkSeen.set(text,now);
-    const hit=!!Xana.findAssetByCode(allItems,text);
-    if(hit)_walkHits++;else _walkMiss++;
+    const it=Xana.findAssetByCode(allItems,text);
+    const hit=!!it;
+    if(hit){
+      _walkHits++;
+      // an audit scan IS the verification — stamp it so the 90d backlog clears
+      _auditScanned.add(String(it.id));
+      verifyAsset(it).then(r=>{if(r.ok){refreshVerifiedRow(it);}});
+      updateAuditStats();
+    }else _walkMiss++;
     document.getElementById("walkHits").textContent=_walkHits;
     document.getElementById("walkMiss").textContent=_walkMiss;
     document.getElementById("walkLast").textContent=(hit?"✓ ":"✗ ")+Xana.cleanScanInput(text);
@@ -1562,6 +1630,12 @@ function setWalk(on){
   document.getElementById("walkStats").style.display=on?"flex":"none";
 }
 document.getElementById("walkToggle")?.addEventListener("click",()=>{beep(_walk?440:880);setWalk(!_walk);});
+document.getElementById("auditLocation")?.addEventListener("change",e=>{
+  _auditLocation=e.target.value||"";
+  _auditScanned=new Set();   // new branch = new pass, avoids cross-branch counts
+  updateAuditStats();
+});
+document.getElementById("auditExport")?.addEventListener("click",exportAuditCsv);
 document.getElementById("scanClose")?.addEventListener("click",stopScan);
 document.getElementById("scanBackdrop")?.addEventListener("click",stopScan);
 function refreshVerifiedRow(it){
@@ -1584,6 +1658,11 @@ function handleScanHit(raw){
     const code=Xana.cleanScanInput(raw);
     toast("No asset matches \u201C"+code+"\u201D",true,{label:"+ Add it",onClick:()=>openAddWithScannedCode(code)});
     return;
+  }
+  // record in the current audit pass when it falls inside the branch filter
+  if(!_auditLocation||String(it.location||"")===_auditLocation){
+    _auditScanned.add(String(it.id));
+    updateAuditStats();
   }
   showDetail(it);
   toast("Opened "+(it.tag||"asset #"+it.id),false);
@@ -1632,7 +1711,9 @@ async function startApp(){
   }
   XanaSupabase.applyRoleNav(roles);
   document.getElementById("gate").classList.remove("hidden");
-  XanaSupabase.startPresenceHeartbeat();
+  // Optional-chaining: a cached older supabase-client.js without the
+  // heartbeat must degrade to no-presence, never abort startApp before load().
+  XanaSupabase.startPresenceHeartbeat?.();
   // Copy link / Export view: the filtered register, shareable and portable.
   // Export covers every matching row, not just the page of 30 on screen.
   document.getElementById("btnCopyView").addEventListener("click",async()=>{

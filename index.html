@@ -292,7 +292,7 @@ function esc(s){return window.XanaUI.esc(s);}
   let roles = [];
   try { roles = await XanaSupabase.myRoles(); } catch (e) {}
   XanaSupabase.applyRoleNav(roles);
-  XanaSupabase.startPresenceHeartbeat();
+  XanaSupabase.startPresenceHeartbeat?.();
 
   who.classList.add("show");
   who.innerHTML = '<span class="who-label">Signed in as</span> <b>' + esc(email) + '</b>' +
