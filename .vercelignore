@@ -1,0 +1,43 @@
+# Files Vercel must not serve.
+#
+# Until 2026-09-20 the whole repo was reachable on the production domain:
+# https://xana-assets.vercel.app/HANDOFF.md returned the runbook (tenant ids,
+# Entra client id, cert thumbprint, admin emails), /supabase/migrations/*.sql
+# returned the full schema and RLS, /docs/IT_Manager_Handoff.md and
+# /scripts/backfill.mjs were readable, and /scanner-app/test/fixtures/assets.json
+# exposed employee names with serials and locations. The only .vercelignore in
+# the repo sat inside scanner-app/ and is not applied by Vercel.
+#
+# Verify after every deploy:
+#   curl -o /dev/null -w '%{http_code}\n' https://xana-assets.vercel.app/HANDOFF.md   # expect 404
+#   curl -o /dev/null -w '%{http_code}\n' https://xana-assets.vercel.app/assets      # expect 200
+#
+# Keep: index.html, login/, assets/, admin/, summary/, js/, css/, fonts/, api/,
+# scanner-app/lib/, scanner-app/*.png, scanner-app/logic.js (loaded by /assets).
+
+*.md
+docs/
+references/
+supabase/
+scripts/
+backfill/
+labels/
+images/
+health-history.json
+.github/
+.hermes/
+.claude/
+.agents/
+.opencode/
+*.ps1
+*.pfx
+*.cer
+*.b64
+.env*
+
+# vendored test fixtures + snapshots (fixtures carry employee names and serials)
+scanner-app/test/
+scanner-app/assets.json
+scanner-app/assets.csv
+scanner-app/photo.js
+scanner-app/.vercelignore

@@ -13,7 +13,7 @@ kept in step automatically.
 | `/assets` | The register: search, filter, scan, edit, People/offboarding | `asset_viewer`, `scanner`, admins |
 | `/dashboard` | Portfolio value, depreciation, warranty and activity KPIs | `dashboard_viewer`, admins |
 | `/admin` | Users and roles, dropdown lists, sync health, recycle bin, IT documents | `admin`, `super_admin` |
-| `/login` | Magic link or password | anyone |
+| `/login` | Legacy shim — redirects to `/`, where sign-in lives | anyone |
 
 `/scan` permanently redirects to `/assets`; scanning lives inside the register.
 
@@ -216,6 +216,10 @@ They carry employee names and serials and are gitignored.
   awaited. Scanning handles this by preferring tags, but reports should not
   assume a serial is a serial.
 - `assets.json` and `assets.csv` under `scanner-app/` are local snapshots
-  containing employee names. `.vercelignore` keeps them off the deployment.
+  containing employee names; they are gitignored, so they never reach a
+  deployment. The **root** `.vercelignore` keeps the rest of the repo off it too
+  (docs, migrations, scripts, test fixtures) — until 2026-09-20 the whole repo
+  was readable on the production domain. Verify after every deploy with the two
+  `curl` commands written at the top of that file.
 - Motion respects `prefers-reduced-motion` on every page. Keep it that way when
   adding animation.

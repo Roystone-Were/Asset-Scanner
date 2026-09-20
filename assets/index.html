@@ -453,7 +453,7 @@ async function load(){
   refreshAuditLocationOptions();
   const pid=new URLSearchParams(location.search).get("id");
   if(pid){const it=allItems.find(x=>String(x.id)===pid||String(x.tag).toLowerCase()===pid.toLowerCase()); if(it) showDetail(it);}
-  applyFilters();
+  applyFilters(true);
 }
 // Suggestions for the free-text Model, Vendor and Employee inputs, built from
 // what the register already contains. This is the cheap half of
@@ -474,7 +474,7 @@ function refreshSuggestLists(){
   put("vendorList",uniq(it=>it.vendor));
   put("employeeList", window.Xana&&Xana.canonicalSpelling?Xana.canonicalSpelling(allItems.map(it=>it.employee)):uniq(it=>it.employee));
 }
-function applyFilters(){
+function applyFilters(keepPage){
   const q=(document.getElementById("search").value||"").trim().toLowerCase();
   filtered=allItems.filter(it=>{
     const hay=(it.tag+" "+it.serial+" "+it.model+" "+it.employee+" "+it.type).toLowerCase();
@@ -492,9 +492,19 @@ function applyFilters(){
     if(cmp) return cmp*sortDir;
     return String(a.item_id||"").localeCompare(String(b.item_id||""),undefined,{numeric:true})*sortDir;
   });
-  currentPage=0; renderTable(); refreshSuggestLists(); viewToUrl();
+  // keepPage: the reload after a save must not bounce the user back to page 1.
+  // A filter/sort change still resets, and either way the page is clamped to
+  // the rows that survived the current filter.
+  if(!keepPage) currentPage=0;
+  const lastPage=Math.max(0,Math.ceil(filtered.length/PAGE_SIZE)-1);
+  if(currentPage>lastPage) currentPage=lastPage;
+  renderTable(); refreshSuggestLists(); viewToUrl();
 }
 const VIEW_KEYS=["type","location","status","department"];
+// Sort keys the table actually renders — a stale ?sort=purchase link (the
+// column used to carry a key no row has) is ignored instead of sorting on a
+// field that does not exist.
+const SORT_KEYS=["tag","type","model","serial","employee","department","location","status","purchaseDate","condition"];
 // The filtered view is expressed in the URL so it can be bookmarked and
 // sent to someone. replaceState, not pushState: filtering is continuous and
 // should not fill the Back stack with every keystroke.
@@ -505,6 +515,10 @@ function viewToUrl(){
   for(const k of VIEW_KEYS){ if(colFilters[k].size)p.set(k,[...colFilters[k]].join(",")); }
   if(sortKey!=="tag")p.set("sort",sortKey);
   if(sortDir!==1)p.set("dir","desc");
+  // an open asset card is part of the view: keeping ?id= here is what lets
+  // Copy link reproduce it (and what load() needs to re-render the card).
+  const pid=new URLSearchParams(location.search).get("id");
+  if(pid)p.set("id",pid);
   const qs=p.toString();
   try{history.replaceState(null,"",location.pathname+(qs?"?"+qs:""));}catch(e){}
 }
@@ -521,7 +535,7 @@ function urlToView(){
     any=true;
   }
   const sort=p.get("sort");
-  if(sort){sortKey=sort;any=true;}
+  if(sort&&SORT_KEYS.indexOf(sort)>-1){sortKey=sort;any=true;}
   if(p.get("dir")==="desc"){sortDir=-1;any=true;}
   return any;
 }
@@ -545,7 +559,7 @@ function renderTable(){
   }
   const start=currentPage*PAGE_SIZE, end=Math.min(start+PAGE_SIZE, filtered.length);
   const slice=filtered.slice(start,end);
-  const COLS=[["Tag","tag"],["Type","type"],["Model","model"],["Serial","serial"],["Employee","employee"],["Department","department"],["Location","location"],["Status","status"],["Purchase","purchase"],["Condition","condition"]];
+  const COLS=[["Tag","tag"],["Type","type"],["Model","model"],["Serial","serial"],["Employee","employee"],["Department","department"],["Location","location"],["Status","status"],["Purchase","purchaseDate"],["Condition","condition"]];
   const FUNNEL_ICON='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>';
   const head=COLS.map(([label,key])=>{
     const fkey=FILTERABLE[label];
@@ -885,7 +899,7 @@ function renderEventForm(histPanel,current){
 let _choices=null;
 async function getChoices(){
   if(_choices) return _choices;
-  _choices={status:["In Use","Available","Retired","Left With","Lost"],location:["Syokimau","Katani","Ruiru","Githurai","Lumumba Dr","TRM Dr"],type:["Laptop","CPU","Monitor","Desktop","Printer","Scanner","Mouse","Keyboard","Phone","POS","Cash Drawer","Scale","Speaker/Mic","Router","Switch","UNVR","TV"],department:[]};
+  _choices={status:["In Use","Available","Retired","Left With","Lost","In Repair","Under Investigation"],location:["Syokimau","Katani","Ruiru","Githurai","Lumumba Dr","TRM Dr"],type:["Laptop","CPU","Monitor","Printer","Scanner","Mouse","Keyboard","Phone","POS","Cash Drawer","Scale","Speaker/Mic","Router","Switch","UNVR","TV","Camera"],department:[]};
   try{
     const {data,error}=await XanaSupabase.client().from("app_choices").select("category,value");
     if(error) throw error;
@@ -958,14 +972,26 @@ function closeEditor(save){
     }
   }
   XanaSupabase.updateAsset(id,patch)
-    .then(()=>{
-      if(bar){bar.innerHTML='<div class="msg ok">Saved ✓</div>';setTimeout(()=>{const m=bar.querySelector(".msg");if(m)m.remove();},2500);}
+    .then(async ()=>{
       // employee/location moves are transfers — log them to the event trail
       if(name==="Employee"||name==="Location"){
         const label=name==="Employee"?"Assigned to":"Location";
         XanaSupabase.logTransfer(id,label,orig,val);
       }
-      load();          // refresh table + history source quietly
+      try{ await load(); }catch(err){
+        if(bar){bar.innerHTML='<div class="msg err">'+esc("Saved, but the view did not refresh: "+err.message)+'</div>';}
+        return;
+      }
+      // The card is not re-rendered by load(), so without this the pill, book
+      // value, dep status and Last Verified keep showing pre-edit values while
+      // the row behind them is already updated.
+      const fresh=allItems.find(x=>String(x.id)===String(id));
+      if(fresh&&document.getElementById("assetCard"))showDetail(fresh);
+      const bar2=document.getElementById("editBar");
+      if(bar2){
+        bar2.innerHTML='<div class="msg ok">Saved ✓</div>';
+        setTimeout(()=>{const m=bar2.querySelector(".msg");if(m)m.remove();},2500);
+      }
     })
     .catch(err=>{
       cell.textContent=orig;   // roll back display on failure
@@ -1065,6 +1091,11 @@ function cloneIntoForm(it){
 function closeDetail(){
   const d=document.getElementById("detail");
   if(d)d.innerHTML="";
+  // the card is addressable (?id=), so closing it must drop that from the URL
+  try{
+    const p=new URLSearchParams(location.search);
+    if(p.has("id")){p.delete("id");const qs=p.toString();history.replaceState(null,"",location.pathname+(qs?"?"+qs:""));}
+  }catch(e){}
 }
 // Full-size photo viewer — click the thumb to open, click out / Close / Esc.
 function openPhotoViewer(url, tag){
@@ -1510,14 +1541,19 @@ document.getElementById("people").addEventListener("click",async(e)=>{
 // stock-takes. A wedge scanner (keyboard mode) works globally: fast bursts
 // ending in Enter are classified by Xana.classifyKeyBurst, except while
 // typing in a field.
-let _qrScanner=null,_scanning=false,_walk=false,_walkHits=0,_walkMiss=0;
+let _qrScanner=null,_scanning=false,_walk=false,_walkHits=0,_walkMiss=0,_scanHandling=false;
 const _walkSeen=new Map();
 // Audit mode: branch-scoped stock-take. _auditScanned holds item ids seen in
 // this audit pass; the location filter scopes Expected, stats and export.
 let _auditLocation="",_auditScanned=new Set();
+// Location is compared trimmed on every audit surface: stored values carry
+// stray whitespace (the same rust logic.js matchFields trims for), and an
+// untrimmed comparison silently drops those assets out of Expected/Found and
+// out of the audit export — a stock take that quietly ignores devices.
+const locOf=it=>String((it&&it.location)||"").trim();
 function auditExpected(){
   if(!_auditLocation) return allItems;
-  return allItems.filter(it=>String(it.location||"")===_auditLocation);
+  return allItems.filter(it=>locOf(it)===_auditLocation);
 }
 function updateAuditStats(){
   const el=document.getElementById("auditStats");
@@ -1529,10 +1565,10 @@ function updateAuditStats(){
 function refreshAuditLocationOptions(){
   const sel=document.getElementById("auditLocation");
   if(!sel) return;
-  const locs=[...new Set(allItems.map(it=>String(it.location||"").trim()).filter(Boolean))].sort();
+  const locs=[...new Set(allItems.map(locOf).filter(Boolean))].sort();
   const cur=sel.value||_auditLocation;
   sel.innerHTML='<option value="">All branches ('+allItems.length+')</option>'+
-    locs.map(l=>'<option value="'+esc(l)+'">'+esc(l)+' ('+allItems.filter(it=>String(it.location||"")===l).length+')</option>').join("");
+    locs.map(l=>'<option value="'+esc(l)+'">'+esc(l)+' ('+allItems.filter(it=>locOf(it)===l).length+')</option>').join("");
   sel.value=locs.includes(cur)?cur:"";
   _auditLocation=sel.value||"";
   updateAuditStats();
@@ -1568,6 +1604,7 @@ function beep(freq){
 }
 async function startScan(){
   document.getElementById("scanOverlay").classList.add("open");
+  _scanHandling=false;
   const status=document.getElementById("scanStatus");
   try{
     if(!window.Html5Qrcode) throw new Error("camera library not loaded");
@@ -1602,10 +1639,15 @@ function onDecode(text){
     const it=Xana.findAssetByCode(allItems,text);
     const hit=!!it;
     if(hit){
+      const id=String(it.id);
+      // an audit scan IS the verification — stamp it so the 90d backlog clears.
+      // Once per asset per pass: a barcode left in the camera's view re-decodes
+      // about every 1.5s, and each write costs an asset_history row plus a
+      // SharePoint sync row, so a stock take used to generate hundreds of them.
+      const firstThisPass=!_auditScanned.has(id);
       _walkHits++;
-      // an audit scan IS the verification — stamp it so the 90d backlog clears
-      _auditScanned.add(String(it.id));
-      verifyAsset(it).then(r=>{if(r.ok){refreshVerifiedRow(it);}});
+      _auditScanned.add(id);
+      if(firstThisPass) verifyAsset(it).then(r=>{if(r.ok){refreshVerifiedRow(it);}});
       updateAuditStats();
     }else _walkMiss++;
     document.getElementById("walkHits").textContent=_walkHits;
@@ -1615,7 +1657,13 @@ function onDecode(text){
     if(navigator.vibrate)navigator.vibrate(hit?30:[30,50,30]);
     return;
   }
-  stopScan();handleScanHit(text);
+  // The decoder fires per frame and stopScan() is asynchronous: without this
+  // latch a second decode in the same window runs handleScanHit twice for one
+  // physical scan (two verify writes, two toasts, two card renders).
+  if(_scanHandling)return;
+  _scanHandling=true;
+  stopScan().finally(()=>{_scanHandling=false;});
+  handleScanHit(text);
 }
 async function stopScan(){
   const s=_qrScanner;_qrScanner=null;_scanning=false;
@@ -1624,8 +1672,18 @@ async function stopScan(){
   const ov=document.getElementById("scanOverlay");
   if(ov)ov.classList.remove("open");
 }
+// Hit/Miss are per stock-take, not per tab: the counters used to keep growing
+// for the life of the page while the branch stats beside them reset.
+function resetWalkCounts(){
+  _walkHits=0;_walkMiss=0;_walkSeen.clear();
+  const a=document.getElementById("walkHits"),b=document.getElementById("walkMiss"),c=document.getElementById("walkLast");
+  if(a)a.textContent="0";
+  if(b)b.textContent="0";
+  if(c)c.textContent="";
+}
 function setWalk(on){
   _walk=on;
+  if(on)resetWalkCounts();
   document.getElementById("walkToggle").classList.toggle("active",on);
   document.getElementById("walkStats").style.display=on?"flex":"none";
 }
@@ -1633,6 +1691,7 @@ document.getElementById("walkToggle")?.addEventListener("click",()=>{beep(_walk?
 document.getElementById("auditLocation")?.addEventListener("change",e=>{
   _auditLocation=e.target.value||"";
   _auditScanned=new Set();   // new branch = new pass, avoids cross-branch counts
+  resetWalkCounts();
   updateAuditStats();
 });
 document.getElementById("auditExport")?.addEventListener("click",exportAuditCsv);
@@ -1660,7 +1719,7 @@ function handleScanHit(raw){
     return;
   }
   // record in the current audit pass when it falls inside the branch filter
-  if(!_auditLocation||String(it.location||"")===_auditLocation){
+  if(!_auditLocation||locOf(it)===_auditLocation){
     _auditScanned.add(String(it.id));
     updateAuditStats();
   }
@@ -1743,7 +1802,11 @@ async function startApp(){
     URL.revokeObjectURL(url);
     toast("Exported "+filtered.length+" asset"+(filtered.length===1?"":"s"),false);
   });
-  document.getElementById("search").addEventListener("input",applyFilters);
+  // One place decides what a keystroke means. In the People view the listener
+  // added with the People panel renders the list, so the register must not be
+  // re-filtered — and must not write the person's name into the register's URL
+  // filter set (which used to hijack Copy link / Export view).
+  document.getElementById("search").addEventListener("input",()=>{ if(view!=="people") applyFilters(); });
   // View-only roles (asset_viewer with no scanner/admin) get the register,
   // search, filters, People, history and events — and nothing that writes.
   // Inline styles, not a class: .btn sets its own display.
@@ -1769,14 +1832,17 @@ async function startApp(){
       fill("addLocation",byCat.location);
     }catch(e){/* choices unavailable — static fallbacks below still apply */}
   })();
-  // Asset Type fallback if app_choices has none
-  try{
+  // Asset Type fallback only when app_choices came back empty (offline / RLS
+  // hiccup). The previous version ran before the async fetch resolved, so the
+  // dropdown listed the fallback list AND then the DB list, and every bundle
+  // row copied the doubled options.
+  choicesP.then(()=>{
     const atSel=document.getElementById("addType");
-    if(atSel&&!atSel.options.length){
-      const types=(typeof Xana!=='undefined'&&Xana.ASSET_TYPE_CHOICES)?Xana.ASSET_TYPE_CHOICES:["Laptop","CPU","Monitor","Printer","Mouse","Keyboard","Tablet","Phone","Server","Tower","Other"];
-      for(const t of types)atSel.insertAdjacentHTML("beforeend",'<option>'+esc(t)+'</option>');
-    }
-  }catch(e){}
+    if(!atSel||atSel.options.length)return;
+    const types=(typeof Xana!=="undefined"&&Xana.ASSET_TYPE_CHOICES)?Xana.ASSET_TYPE_CHOICES:
+      ["Laptop","CPU","Monitor","Printer","Scanner","Mouse","Keyboard","Phone","POS","Cash Drawer","Scale","Speaker/Mic","Router","Switch","UNVR","TV","Camera"];
+    for(const t of types)atSel.insertAdjacentHTML("beforeend",'<option>'+esc(t)+'</option>');
+  }).catch(()=>{});
   // Restore an incoming saved view BEFORE the first load. load() ends in
   // applyFilters(), which serialises the current (empty) filters back into
   // the URL -- so reading the link afterwards found it already wiped.

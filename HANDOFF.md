@@ -176,7 +176,7 @@ it's just no longer used by any browser code (see §1):
 | `scanner-app/` | No longer a page — vendored libs (`lib/supabase.min.js`, `lib/html5-qrcode.min.js`), pure logic (`logic.js`) + its test suite, icons/logo. |
 | `api/sharepoint-sync.js` | Outbox drain worker: claim-based concurrency, 429/5xx backoff, Graph create/patch/delete. |
 | `api/admin-users.js` | Invite / set_roles / set_active / delete_user — verifies caller JWT + admin server-side. |
-| `supabase/migrations/0001..0022` | Schema, outbox, RBAC, `asset_history`, `asset_events`, `recycle_bin`, image storage, unique tag index. |
+| `supabase/migrations/0001..0037` | Schema, outbox, RBAC, `asset_history`, `asset_events`, `recycle_bin`, image storage, unique tag index, security hardening (0036), representation hygiene (0037). |
 | `scripts/` | `backfill.mjs`, `apply-migration.mjs`, `health-check-db.mjs`, several `e2e-*.mjs` and `debug-*.mjs` harnesses. |
 | `backfill/Backfill-PurchaseData.ps1`, `backfill/Export-MissingPurchase.ps1` | CSV-driven Purchase Date/Price backfill pass (export blanks → fill → re-import). |
 | `Add-MonitorRows.ps1` | One-off: splits monitor rows out of CPU host "Results" CSVs into separate assets. |
@@ -203,13 +203,16 @@ it's just no longer used by any browser code (see §1):
 - GitHub → Vercel auto-deploy: every push to `main` on
   `github.com/Roystone-Were/Asset-Scanner` deploys. `test` workflow
   (`.github/workflows/test.yml`) runs scanner unit tests + syntax-checks the
-  two `api/*.js` functions on every push/PR.
+  two `api/*.js` functions on every push/PR. `node scripts/check-syntax.mjs`
+  (parses every page's inline script) is run before pushing — wiring it into
+  the workflow needs a push token with the `workflow` scope.
 - The **legacy two-project split** (`xana-asset-lookup.vercel.app` scanner,
   `asset-scanner-iota.vercel.app` dashboard) predates the unified app —
   archive both in the Vercel dashboard once nobody's bookmarked them, and
   delete any old immutable deployments that still serve `assets.csv`/`.json`
-  publicly (privacy fix, see git history — `.vercelignore` now prevents new
-  ones but old deployment URLs are immutable).
+  or repo files publicly (privacy fix, see git history — the root
+  `.vercelignore` added 2026-09-20 stops *new* deployments from serving the
+  repo, but URLs deployed before it are immutable and still leak).
 
 ## 9. OPEN ITEMS (ranked, reconciled against `docs/IT_Manager_Handoff.md` §12 and `PROGRESS.md`)
 
@@ -294,4 +297,51 @@ Full detail in `PROGRESS.md`. The headlines a tenant-side reader needs:
 - **Asset events work**: issues, repairs, maintenance, transfers and notes with
   costs, logged and closed from the asset card. The table had existed unused
   since 0017.
-- **Migrations now run to 0029.** Any recovery drill should apply 0001 to 0029.
+- **Migrations ran to 0029 at that date** — the set is now 0001–0037 (§12). Any
+  recovery drill should apply the current directory, not a fixed number.
+
+## 12. Security pass — 2026-09-20
+
+Full detail in `PROGRESS.md`. What a tenant-side reader needs:
+
+- **The production domain was serving the whole repo.** `xana-assets.vercel.app/HANDOFF.md`
+  returned this file, `/supabase/migrations/*.sql` the schema, and
+  `/scanner-app/test/fixtures/assets.json` employee names with serials. A root
+  `.vercelignore` now excludes docs, migrations, scripts and test fixtures.
+  Deployments created **before** 2026-09-20 keep serving those files forever —
+  delete them in the Vercel dashboard (still open item 1 above).
+- **Two anonymous write paths are closed** (migration 0036): `asset_extra_merge`
+  and `next_asset_item_id` were callable with the public key alone (the merge
+  RPC bypasses RLS because it is SECURITY DEFINER and `assets` is not
+  FORCE ROW LEVEL SECURITY), and `requeue_failed_sync_rows` could be called by
+  anyone to re-drive the SharePoint mirror. All three now require a role (or
+  service_role) and refuse `anon`.
+- **Storage listing is no longer anonymous.** The `asset-images` /
+  `it-documents` SELECT policies were `to public`, and Storage's object LIST
+  route honoured them: an anonymous request returned the real filenames of the
+  internal IT forms. Object **URLs** stay public (ADR-002); listing now needs a
+  signed-in account (`it-documents` needs an admin). Residual: a leaked or
+  guessed `it-documents` URL still resolves — making that bucket private needs
+  the admin page to move to signed URLs, which is not done yet.
+- **Deactivation now revokes writes too.** `is_allowed_scanner()`, `is_admin()`
+  and `is_super_admin()` require an active profile (`has_app_role()`), so the
+  reverse of 0029 is closed: before this, a deactivated account kept PostgREST
+  write access. Four auth accounts left over from the August harness runs had no
+  `profiles` row at all (invisible in `/admin`) and two of them still held
+  `scanner`; those role rows were removed.
+- **Self-service profile edits are limited** to what the app needs
+  (`must_change_password`, `last_seen`): `active` and `email` are
+  administrator-managed, so a deactivated account can no longer re-enable
+  itself.
+- **The recycle bin is admin-only end to end.** 0020 covered the hard delete;
+  the soft delete the UI uses was a scanner-writable `UPDATE deleted_at`. A
+  guard trigger now refuses non-admin transitions.
+- **Audit-trail repair (0037):** 27 transfer/move events logged as *open*
+  (they only closed for issues after that fix) are closed, and
+  `extra.purchase_price` is stored as a number everywhere (was 92 strings / 42
+  numbers).
+- **New checks.** `node scripts/check-guards.mjs` asserts the whole posture
+  (anon-executable RPCs, storage policies, guard triggers, unique indexes) and
+  reports the still-missing serial index; `scripts/check-syntax.mjs` parses
+  every page's inline script and is run before each push (adding it to CI needs
+  a token with the `workflow` scope).

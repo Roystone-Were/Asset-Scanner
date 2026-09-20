@@ -222,3 +222,182 @@ work on top of it, grouped by theme.
 - [ ] USER ACCEPTANCE: sign-in at /login · invite a colleague from /admin · verify role gating · scan an asset · confirm it mirrors to SharePoint
 - [ ] Optional cleanup: index SupabaseId column (SP UI) · delete old MSAL lib files · retire api/summary.js once dashboard confirmed stable
 - [ ] Monitor outbox 1 week
+
+## Security + correctness pass (2026-09-20)
+
+Full audit first (5 parallel read-only scans of the pages, the API functions,
+the migrations, the pipeline and the docs), then the fixes below. Every claim
+here was checked against the live project with a read-only probe before and
+after, not inferred from the docs.
+
+### Exposure: the production domain served the whole repo
+
+Verified live before the fix, with no session:
+
+| URL | Result |
+|---|---|
+| `/HANDOFF.md` | 200, 18,550 bytes |
+| `/supabase/migrations/0007_rbac_core.sql` | 200 |
+| `/docs/IT_Manager_Handoff.md` | 200, 11,319 bytes |
+| `/scripts/backfill.mjs` | 200 |
+| `/scanner-app/test/fixtures/assets.json` | 200, employee names + serials + SharePoint URLs |
+
+Leaked: tenant/Entra ids, cert thumbprint, admin emails, full schema and RLS,
+staff names. The only `.vercelignore` sat in `scanner-app/` and Vercel does not
+apply a subdirectory's ignore file. `.env.local` and `package.json` correctly
+404'd (`.gitignore`, not the ignore file, as the docs claimed).
+
+- **Added a root `.vercelignore`** covering `*.md`, `docs/`, `references/`,
+  `supabase/`, `scripts/`, `backfill/`, `labels/`, `images/`, `.github/`,
+  `.hermes/`, `.claude/`, `.agents/`, `.opencode/`, `*.ps1`, cert material,
+  `.env*`, `scanner-app/test/` and the local snapshots. The two `curl` commands
+  to verify are in the file's header. **Deployments created before this are
+  immutable and still serve those files** — deleting them in the Vercel
+  dashboard is still open.
+
+### Migration `0036_security_hardening.sql` (applied, HTTP 201)
+
+Verified before: `POST /rest/v1/rpc/asset_extra_merge` with only the publishable
+key returned **HTTP 204**; `pg_proc` showed `anon` EXECUTE on it, on
+`next_asset_item_id` and on `requeue_failed_sync_rows`; the function owner is the
+`assets` owner and `assets` is not FORCE ROW LEVEL SECURITY, so the `SECURITY
+DEFINER` body ran with no RLS and no role check — the opposite of what
+`0010:17`'s comment claimed. `POST /storage/v1/object/list/it-documents` (anon)
+returned the real filenames of the internal IT forms; `asset-images` listed its
+`item_id` folders. Four auth accounts from the Aug-22/23 harness runs
+(`e2e-test+`, `pwd-test+`, `audit5+`, `del-test+`) had no `profiles` row — so
+`/admin` cannot show them — and two still held `scanner`, i.e. write access.
+
+- `asset_extra_merge` keeps its definer body but gates the caller
+  (`is_super_admin() or is_allowed_scanner()`, service_role and no-claims SQL
+  pass); `revoke execute … from public, anon` on it, on `next_asset_item_id`
+  (keep `authenticated`) and on `requeue_failed_sync_rows` (service_role only).
+- Storage SELECT policies are no longer `to public`: `asset-images` needs a
+  signed-in account (the app's `.list()` calls still work; public object URLs
+  are untouched, so `<img>` still renders), `it-documents` needs an admin.
+  Residual and deliberate: a known `it-documents` URL still resolves because the
+  bucket is public — making it private means moving `/admin` to signed URLs.
+- `is_allowed_scanner()`, `is_admin()` and `is_super_admin()` now require an
+  active profile (`has_app_role()`), closing the reverse of 0029: deactivation
+  used to revoke reads but leave writes. Role rows for profile-less ghost
+  accounts were deleted.
+- `profiles`: a BEFORE UPDATE trigger refuses self-service changes to `active`
+  and `email` (must_change_password and last_seen still work — `touch_last_seen`
+  and `completePasswordChange` were both re-checked).
+- `assets`: a BEFORE UPDATE trigger requires admin for any `deleted_at`
+  transition (0020 only covered the hard delete).
+- Dropped `allowed_scanners`' `using (true)` read policy (superseded in 0007,
+  it only exposed the legacy email list).
+
+### Migration `0037_representation_hygiene.sql` (applied, HTTP 201)
+
+- `extra.purchase_price`: 92 rows were JSON strings (add sheet writes the text
+  input through) against 42 numbers (inline editor sends `Number()`). All 92
+  were plain digits; normalized to numbers so `jsonb_typeof`, ordering and any
+  future SQL aggregate agree. The 90 rows with no price are untouched.
+- 27 transfer/move events logged before `addAssetEvent` learned that only
+  issues stay open were still `resolved=false` and sat in the IT open-issue view
+  forever. Closed.
+
+### `/assets` fixes (verified-live bugs)
+
+- **The detail card went stale on every save.** `load()` only re-rendered the
+  card when the URL carried `?id=`, and `viewToUrl()` stripped `id` on the first
+  render — edit Status and the row said Retired while the pill still said In Use;
+  Book Value / Dep Status / Last Verified never updated either. The card is now
+  re-rendered from the reloaded register after a save, `?id=` survives
+  `viewToUrl()` (so Copy link reproduces an open card) and `closeDetail()` drops
+  it.
+- **Audit mode silently ignored assets** whose Location carries stray
+  whitespace: `auditExpected()`, the branch counts and the scan-time scope check
+  compared raw values while the dropdown used trimmed ones. All three now share
+  one trimmed comparison.
+- **Walk mode rewrote LastVerified on a loop.** A barcode left in the camera's
+  view re-decoded every ~1.5 s and every decode wrote a verification (one
+  `asset_history` row + one SharePoint sync row each). A repeat scan in the same
+  pass still counts as a hit; it no longer writes.
+- **Hit/Miss counters were tab-lifetime** while the Found/Missing stats beside
+  them reset per branch; both now reset on walk-mode entry and on branch change.
+- **One physical scan could run twice** (decoder fires per frame, `stopScan()` is
+  async): a latch now drops the second decode.
+- **The Purchase column sorted on a key no row has** (`purchase`), so clicking it
+  did nothing; it sorts on `purchaseDate` and unknown `?sort=` values from old
+  links are ignored.
+- **Editing bounced the table to page 1** on every save (`applyFilters` reset
+  `currentPage`); the refresh after a save keeps the page, filter changes still
+  reset, and the page is clamped to the surviving rows.
+- **The People view hijacked the register**: two `input` listeners on `#search`
+  meant each keystroke also re-filtered and re-rendered the hidden register *and*
+  wrote the person's name into the URL filter set (breaking Copy link / Export
+  view). One dispatcher now decides per view.
+- **Asset Type dropdown listed every type twice** — the fallback ran
+  synchronously before the `app_choices` fetch resolved, and bundle rows copy
+  `#addType.innerHTML`. The fallback now runs after the fetch and only when it
+  returned nothing. The `getChoices()` fallback lists were also stale (offered
+  `Desktop`, deleted by 0034, and lacked `Camera`); they now mirror live
+  `app_choices`.
+
+### `js/supabase-client.js`
+
+- **A write that changed nothing reported success.** `updateAsset`,
+  `restoreAsset` and `purgeAsset` ignored affected rows, and PostgREST answers
+  204/200 with zero rows and no error when RLS filters the row out — a read-only
+  role or an expired session produced "Saved ✓" over an unchanged asset. They
+  now `.select("item_id")` and raise a plain-language error when nothing was
+  written.
+- Tag/serial unique violations are translated on the **update** path too (they
+  were only translated on insert), and restoring a binned asset whose tag has
+  since been reissued now says so instead of printing a raw 23505.
+- **Placeholder serials** ("0000" only) now use the canonical list
+  (`0000`, `-`, `n/a`, blank) that `logic.js` and 0030's index predicate define,
+  so duplicate checks, health counts and deep links agree.
+- `landingFor()` returned `/scan`, which 308-redirects to `/assets` — scanners
+  took a pointless extra hop on every sign-in. Nav allow-map updated to match.
+- `mustChangePassword()` still fails open by design, but a failed check is now
+  logged instead of silent.
+
+### Tooling
+
+- **`scripts/check-syntax.mjs`** parses the inline `<script>` blocks of all five
+  pages plus `js/`, `summary/app.js`, `scanner-app/*.js`. Nothing parsed them
+  before — a typo there shipped with a green CI check. Run it before pushing;
+  adding it as a CI job still needs a push token carrying the `workflow` scope
+  (the current PAT is rejected when a commit touches `.github/workflows/`),
+  which is why it is a script and not a workflow step yet.
+- **`scripts/check-guards.mjs`** asserts the security posture directly against
+  the database (no `anon`-executable RPCs, no PUBLIC storage policy, guard
+  triggers present, tag index present, serial index reported, event/price
+  hygiene) so a guard can never silently skip again — the 0030 lesson.
+
+### Verification (this pass)
+
+- `node scripts/check-syntax.mjs` → all files parse; `npm --prefix scanner-app test` → 59/59.
+- RLS + anonymous probe (rolled-back transactions, live project): **22/22** —
+  scanner can merge extra, viewer cannot, deactivated scanner writes 0 rows,
+  scanner cannot soft-delete, admin can, `profiles.active` self-change refused,
+  `service_role` unaffected, and `anon` refused on all three RPCs and both
+  storage listings.
+- Real API path with a temporary scanner account (created and deleted by the
+  probe, `Prefer: return=representation` exactly as the adapter sends):
+  **9/9** — PATCH returns the row, a write to a missing asset returns 0 rows,
+  soft delete is refused with 42501, merge and id allocation still work.
+- `node scripts/e2e-view-only-test.mjs` → **27/27** (reader role unchanged).
+- `node scripts/check-guards.mjs` → all guard checks pass; serial index still
+  reported missing (see below).
+
+### Still open after this pass (needs a decision, not a fix)
+
+- **3 duplicate serial groups** (`312023090012` XL-97/XL-99, `9cp541rlnv`
+  XL-17/XL-94, `xl-98` XL-134/XL-172) — which row is right needs a physical
+  check. Until they are resolved, re-running 0030 cannot create
+  `assets_live_serial_unique_idx`, so there is **no** DB-level duplicate-serial
+  guard and the client's friendly error for it stays dormant. `check-guards.mjs`
+  reports this on every run.
+- **90 of 231 assets still have no purchase price** — finance data, not code.
+- `it-documents` objects remain readable by direct URL (public bucket); making
+  it private requires signed URLs in `/admin`.
+- No SP↔Supabase reconciliation job; outbox rows that reach `failed` are not
+  retried by the 5-minute sweep (it only claims `pending`) and
+  `requeue_failed_sync_rows()` does not reset `attempts`.
+- `mustChangePassword()` is only consulted on the password sign-in branch, so a
+  temp password still survives a magic-link arrival.

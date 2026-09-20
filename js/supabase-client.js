@@ -110,6 +110,23 @@
     return r.includes("admin") || r.includes("super_admin");
   }
 
+  // Friendly text for the two unique indexes (0022 tag, 0030 serial), shared by
+  // create and update so an edit cannot surface a raw
+  // 'duplicate key value violates unique constraint' string.
+  function uniqueViolationError(err, fields) {
+    if (!err || err.code !== "23505") return null;
+    const msg = String(err.message || "");
+    if (/assets_live_serial_unique_idx/i.test(msg)) {
+      const serial = fields && fields.SerialNumber ? String(fields.SerialNumber) : "";
+      return new Error("Serial Number “" + serial + "” is already in use — open that asset instead of adding it again.");
+    }
+    if (/assets_live_tag_unique_idx/i.test(msg)) {
+      const tag = fields && fields.Title ? String(fields.Title) : "";
+      return new Error("Asset Tag “" + tag + "” is already in use — pick a unique tag.");
+    }
+    return null;
+  }
+
   function fieldsToRow(fields) {
     const row = {};
     const extraPatch = {};
@@ -197,10 +214,19 @@
     return {
       id: String(row.item_id),
       tag: str(row.asset_tag) || str(row.title),
-      // "0000" is a deliberate placeholder ("serial to be added later"),
-      // not a real serial — normalize it away so duplicate checks,
-      // health stats and deep-links don't treat it as an identity.
-      serial: (() => { const s = str(row.serial); return s === "0000" ? "" : s; })(),
+      // Placeholders ("0000", "-", "n/a", blank) mean "serial not recorded
+      // yet", not an identity — normalize them away so duplicate checks,
+      // health stats and deep-links agree. The canonical list lives in
+      // scanner-app/logic.js (isPlaceholderSerial) and in 0030's index
+      // predicate; the inline copy only serves pages that do not load
+      // logic.js (summary/index.html).
+      serial: (() => {
+        const s = str(row.serial);
+        const isPlaceholder = window.Xana && window.Xana.isPlaceholderSerial
+          ? window.Xana.isPlaceholderSerial(s)
+          : ["0000", "-", "n/a"].indexOf(s.toLowerCase()) > -1;
+        return isPlaceholder ? "" : s;
+      })(),
       model: str(row.model),
       employee: str(row.employee),
       department: str(extra.department),
@@ -465,14 +491,8 @@
     // Translate the raw Postgres constraint failure into something actionable
     // at the single save choke point (covers single + bundle inserts, and the
     // scan-miss flow, which all come through here).
-    if (err && err.code === "23505" && /assets_live_serial_unique_idx/i.test(String(err.message || ""))) {
-      const serial = fields && fields.SerialNumber ? String(fields.SerialNumber) : "";
-      throw new Error("Serial Number “" + serial + "” is already in use — open that asset instead of adding it again.");
-    }
-    if (err && err.code === "23505" && /assets_live_tag_unique_idx/i.test(String(err.message || ""))) {
-      const tag = fields && fields.Title ? String(fields.Title) : "";
-      throw new Error("Asset Tag “" + tag + "” is already in use — pick a unique tag.");
-    }
+    const friendly = uniqueViolationError(err, fields);
+    if (friendly) throw friendly;
     throw sbError(err);
   }
 
@@ -489,26 +509,54 @@
       delete row.extra;
     }
     if (!Object.keys(row).length) return { ok: true };
-    const { error } = await client().from("assets").update(row).eq("item_id", String(id));
-    if (error) throw sbError(error)
+    // .select() so a write that changes nothing is visible: PostgREST answers
+    // 204 with zero rows and no error when RLS filters the row out (read-only
+    // role, expired session, wrong item_id), which the UI used to report as
+    // "Saved ✓".
+    const { data, error } = await client()
+      .from("assets")
+      .update(row)
+      .eq("item_id", String(id))
+      .select("item_id");
+    if (error) {
+      const friendly = uniqueViolationError(error, patch);
+      if (friendly) throw friendly;
+      throw sbError(error)
+    }
+    if (!data || !data.length) {
+      throw new Error("Nothing was saved — your role cannot edit assets, or this asset no longer exists.");
+    }
     return { ok: true };
   }
 
   // Soft delete — moves to recycle bin (restorable). The outbox/audit
   // triggers fire on UPDATE too, so the mirror sees it like any change.
+  // Admin-only since 0036: the guard trigger refuses a non-admin transition of
+  // deleted_at (0020 only covered the hard delete path).
   async function deleteAsset(id) {
     return updateAsset(id, { _softDelete: true });
   }
 
   async function restoreAsset(id) {
-    const { error } = await client().from("assets").update({ deleted_at: null }).eq("item_id", String(id));
-    if (error) throw sbError(error)
+    const { data, error } = await client()
+      .from("assets")
+      .update({ deleted_at: null })
+      .eq("item_id", String(id))
+      .select("item_id");
+    if (error) {
+      if (error.code === "23505" && /assets_live_tag_unique_idx/i.test(String(error.message || ""))) {
+        throw new Error("Can't restore: that asset tag has been reissued to another asset since this one was binned. Re-tag one of them first.");
+      }
+      throw sbError(error)
+    }
+    if (!data || !data.length) throw new Error("Nothing was restored — your role cannot restore assets, or this asset no longer exists.");
     return { ok: true };
   }
 
   async function purgeAsset(id) {
-    const { error } = await client().from("assets").delete().eq("item_id", String(id));
+    const { data, error } = await client().from("assets").delete().eq("item_id", String(id)).select("item_id");
     if (error) throw sbError(error)
+    if (!data || !data.length) throw new Error("Nothing was deleted — only an administrator can delete an asset, and the row must still exist.");
     return { ok: true };
   }
 
@@ -556,7 +604,7 @@
   async function landingFor() {
     const roles = await myRoles();
     if (isAdminRole(roles)) return "/dashboard";
-    if (roles.includes("scanner")) return "/scan";
+    if (roles.includes("scanner")) return "/assets";
     if (roles.includes("asset_viewer")) return "/assets";
     if (roles.includes("dashboard_viewer")) return "/dashboard";
     return "";
@@ -566,8 +614,7 @@
   function applyRoleNav(roles) {
     const r = roles || [];
     const allow = {
-      "/scan": r.includes("scanner") || isAdminRole(r),
-      "/assets": r.includes("asset_viewer") || isAdminRole(r),
+      "/assets": r.includes("scanner") || r.includes("asset_viewer") || isAdminRole(r),
       "/dashboard": r.includes("dashboard_viewer") || isAdminRole(r),
       "/admin": isAdminRole(r),
     };
@@ -592,13 +639,18 @@
     const s = await getSession();
     if (!s || !s.user) return false;
     try {
-      const { data } = await client()
+      const { data, error } = await client()
         .from("profiles")
         .select("must_change_password")
         .eq("id", s.user.id)
         .single();
+      // Fails open by design (a transient read error must not lock someone out
+      // of the app) — but it must not be silent, or a forced password change
+      // can be skipped without anyone noticing.
+      if (error) console.warn("[auth] could not read must_change_password:", error.message);
       return !!(data && data.must_change_password);
     } catch (e) {
+      console.warn("[auth] could not read must_change_password:", e && e.message);
       return false;
     }
   }
