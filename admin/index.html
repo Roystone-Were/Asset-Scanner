@@ -7,8 +7,8 @@
   <title>Admin · Xana</title>
   <link rel="icon" href="/scanner-app/icon-192.png" />
   <script src="/scanner-app/lib/supabase.min.js"></script>
-  <script src="/js/supabase-client.js"></script>
-  <script src="/js/ui.js"></script>
+  <script src="/js/supabase-client.js?v=17"></script>
+  <script src="/js/ui.js?v=17"></script>
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/nav.css" />
   <style>
@@ -57,11 +57,11 @@
     .err{background:rgba(209,52,56,.12);color:#dc2626}
     .ok{background:rgba(34,197,94,.12);color:#16a34a}
     .info{background:rgba(37,99,235,.10);color:var(--blue)}
-    /* wraps every dynamically-rendered <table> (users/bin/docs/sync) so a
+    /* wraps every dynamically-rendered <table> (users/bin/docs/sync/audit) so a
        wide table scrolls within its own box on mobile instead of blowing
        out the page width -- same pattern as .tbl-scroll on /assets and
        /summary; admin just never got tables wide enough to notice until
-       the users table's 4 inline role checkboxes did. */
+       the users table's inline role checkboxes did. */
     .tbl-scroll{overflow:auto;max-height:480px;margin-top:10px;border:1px solid var(--hairline);border-radius:14px;background:var(--card)}
     table{width:100%;border-collapse:collapse;font-size:.85rem}
     th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--hairline);vertical-align:middle}
@@ -138,6 +138,8 @@
     .uactions{white-space:nowrap;text-align:right}
     td.num{font-variant-numeric:tabular-nums}
     td.err-cell{color:var(--red);font-size:.75rem;max-width:280px;white-space:normal}
+    /* Audit detail is a quiet one-liner; .err-cell's red would read as a fault. */
+    td.detail-cell{color:var(--muted);font-size:.75rem;max-width:340px;white-space:normal}
     .pill.st-pending{background:rgba(217,119,6,.12);border-color:rgba(217,119,6,.3);color:#d97706}
     .pill.st-processing{background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.3);color:var(--blue)}
     .pill.st-failed{background:rgba(220,38,38,.1);border-color:rgba(220,38,38,.3);color:var(--red)}
@@ -209,15 +211,14 @@
   <p class="sub">Manage who can access what, and the dropdown lists used across the apps.</p>
   <div id="authState">Checking session…</div>
 
-  <div id="denied" class="hidden"></div>
-
   <div id="gate" style="display:none">
     <div class="seg" id="tabs" role="tablist" aria-label="Admin sections">
       <div class="tab active" data-tab="users" role="tab">Users</div>
       <div class="tab" data-tab="lists" role="tab">Lists</div>
-      <div class="tab" data-tab="sync" role="tab">Sync health</div>
+      <div class="tab" data-tab="sync" role="tab">Sync health<span class="countchip" id="syncFailChip" style="display:none;background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.3);color:var(--red)"></span></div>
       <div class="tab" data-tab="bin" role="tab">Recycle bin</div>
       <div class="tab" data-tab="docs" role="tab">Documents</div>
+      <div class="tab" data-tab="audit" role="tab">Audit</div>
     </div>
 
     <!-- ================= USERS ================= -->
@@ -225,7 +226,19 @@
       <div class="card">
         <div class="cardhead">
           <h3>All users <span class="countchip" id="userCount">–</span></h3>
-          <button id="btnOpenInvite">+ Invite user</button>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="secondary" id="btnExportUsers">Export CSV</button>
+            <button id="btnOpenInvite">+ Invite user</button>
+          </div>
+        </div>
+        <!-- Bulk bar: appears once rows are ticked. Roles are applied to every
+             selected account at once (each one still goes through its own
+             set_roles call so a failure can be traced to a user). -->
+        <div id="bulkBar" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;margin-bottom:10px;border:1px solid var(--hairline);border-radius:12px;background:var(--card2)">
+          <b id="bulkCount" style="font-size:.82rem"></b>
+          <span id="bulkRoles" style="display:flex;flex-wrap:wrap;gap:2px 10px"></span>
+          <button type="button" class="small" id="btnBulkApply">Apply roles to selected</button>
+          <button type="button" class="small secondary" id="btnBulkClear">Clear</button>
         </div>
         <div id="usersList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px"></div></div>
       </div>
@@ -242,8 +255,11 @@
     <section id="pane-sync" style="display:none">
       <div id="syncAlert" class="sync-alert" role="alert"></div>
       <div class="card">
-        <h3>SharePoint mirror queue</h3>
-        <p class="sub" style="margin-top:4px">Rows pending/failed = not yet mirrored to SharePoint. Failed rows stop retrying after 5 attempts.</p>
+        <div class="cardhead">
+          <h3>SharePoint mirror queue</h3>
+          <button type="button" class="secondary" id="btnRequeue">Requeue failed</button>
+        </div>
+        <p class="sub" style="margin-top:4px">Rows pending/failed = not yet mirrored to SharePoint. The mirror worker retries failed rows and the database re-queues them every 15 minutes, up to 20 attempts each.</p>
         <div id="syncList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div></div>
       </div>
     </section>
@@ -263,9 +279,18 @@
           <button type="button" id="btnUploadDoc">+ Upload</button>
           <input type="file" id="docUpload" style="display:none" />
         </div>
-        <p class="sub" style="margin-top:4px">Reference forms — audit checklist, issuance/return forms. Anyone with the link can view; only admins can add or remove.</p>
+        <p class="sub" style="margin-top:4px">Reference forms — audit checklist, issuance/return forms. The bucket is private, so each link is a signed URL that expires after an hour; only admins can add or remove.</p>
         <div id="docsList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div></div>
         <div id="docsMsg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- ================= AUDIT ================= -->
+    <section id="pane-audit" style="display:none">
+      <div class="card">
+        <h3>Admin activity <span class="countchip" id="auditCount">–</span></h3>
+        <p class="sub" style="margin-top:4px">The last 200 accepted changes to who can access what — every invite, role change, deactivation, removal, password reset and sync requeue, with who did it and when.</p>
+        <div id="auditList"><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div><div class="skel" style="height:30px;margin-bottom:8px"></div></div>
       </div>
     </section>
 
@@ -312,33 +337,42 @@ function applyTheme(){const s=localStorage.getItem(STORAGE_THEME)||"light";docum
 applyTheme();document.getElementById("themeToggle")?.addEventListener("click",()=>{const c=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",c);localStorage.setItem(STORAGE_THEME,c);document.getElementById("themeToggle").setAttribute("aria-checked",c==="dark");});
 
 function esc(s){return window.XanaUI.esc(s);}
-let account=null, accessToken=null;
-const ROLES=[["admin","Admin"],["scanner","Scanner"],["asset_viewer","Assets"],["dashboard_viewer","Dashboard"]];
+let account=null;
+let _users=[];                    // last `list` payload, for the CSV export
+// super_admin is a real role (0029/0036). It was missing here while the API
+// returned it, so a super admin's row rendered with every box unticked and one
+// tick on any box saved a role set that dropped super_admin entirely.
+const ROLES=[["admin","Admin"],["super_admin","Super admin"],["scanner","Scanner"],["asset_viewer","Assets"],["dashboard_viewer","Dashboard"]];
 
 async function api(action,payload){
   // Re-read the session each call: supabase-js auto-refreshes the stored
   // token, so a page left open past expiry must not keep the stale bearer.
   const s=await XanaSupabase.getSession().catch(()=>null);
   if(!s){location.href="/login?next=/admin";throw new Error("Session expired — redirecting to sign-in.");}
-  accessToken=s.access_token;
   const r=await fetch("/api/admin-users",{
     method:"POST",
-    headers:{Authorization:"Bearer "+accessToken,"Content-Type":"application/json"},
+    headers:{Authorization:"Bearer "+s.access_token,"Content-Type":"application/json"},
     body:JSON.stringify({action,...payload})
   });
   const d=await r.json().catch(()=>({}));
   if(r.status===401){await XanaSupabase.signOut().catch(()=>{});location.href="/login?next=/admin";throw new Error("Session expired — redirecting to sign-in.");}
-  if(!r.ok) throw new Error(d.error||("HTTP "+r.status));
+  // Callers need the parsed body (409 + needsReactivate, ok:false + partial),
+  // not just the message, so hang it off the error.
+  if(!r.ok){const e=new Error(d.error||("HTTP "+r.status));e.status=r.status;e.body=d;throw e;}
   return d;
 }
 
 // ---------- tabs ----------
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
-  ["users","lists","sync","bin","docs"].forEach(n=>{document.getElementById("pane-"+n).style.display=t.dataset.tab===n?"block":"none";});
+  ["users","lists","sync","bin","docs","audit"].forEach(n=>{document.getElementById("pane-"+n).style.display=t.dataset.tab===n?"block":"none";});
+  // Poll only while the mirror pane is on screen: a stale failed count left
+  // ticking in the background is worse than no count at all.
+  setSyncPolling(t.dataset.tab==="sync");
   if(t.dataset.tab==="sync") loadSync();
   if(t.dataset.tab==="bin") loadBin();
   if(t.dataset.tab==="docs") loadDocs();
+  if(t.dataset.tab==="audit") loadAudit();
 }));
 
 // ---------- invite sheet ----------
@@ -348,7 +382,19 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
 function resetInviteRoles(){
   document.querySelectorAll("#invRoles input[type=checkbox]").forEach(c=>{c.checked=(c.value==="asset_viewer");});
 }
-function openInvite(){resetInviteRoles();document.getElementById("inviteSheet").classList.add("open");setTimeout(()=>document.getElementById("invEmail").focus(),350);}
+// The manual-password pane used to stay on the page between opens with the
+// typed password still in the box — one click from creating the next account
+// with the previous person's password. Reset it with the roles.
+function resetInviteSheet(){
+  resetInviteRoles();
+  const pass=document.getElementById("manualPass");
+  if(pass)pass.value="";
+  const box=document.getElementById("manualBox");
+  if(box)box.style.display="none";
+  const m=document.getElementById("invMsg");
+  if(m){m.className="msg";m.textContent="";}
+}
+function openInvite(){resetInviteSheet();document.getElementById("inviteSheet").classList.add("open");setTimeout(()=>document.getElementById("invEmail").focus(),350);}
 function closeInvite(){document.getElementById("inviteSheet").classList.remove("open");}
 document.getElementById("btnOpenInvite").addEventListener("click",openInvite);
 document.getElementById("invClose").addEventListener("click",closeInvite);
@@ -410,7 +456,7 @@ async function loadDocs(){
       return;
     }
     el.innerHTML="<div class='tbl-scroll'><table><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>"+
-      docs.map(d=>"<tr><td><a href='"+esc(d.publicUrl)+"' target='_blank' rel='noopener'>"+esc(d.name.replace(/^\d+_/,""))+"</a></td><td class='num'>"+fmtBytes(d.size)+"</td><td class='num'>"+(d.updatedAt?new Date(d.updatedAt).toLocaleString():"—")+"</td>"+
+      docs.map(d=>"<tr><td><a href='"+esc(d.url||d.publicUrl)+"' target='_blank' rel='noopener'>"+esc(d.name.replace(/^\d+_/,""))+"</a></td><td class='num'>"+fmtBytes(d.size)+"</td><td class='num'>"+(d.updatedAt?new Date(d.updatedAt).toLocaleString():"—")+"</td>"+
         "<td style='white-space:nowrap'><button class='small danger' data-delete-doc='"+esc(d.name)+"'>Delete</button></td></tr>").join("")+
       "</tbody></table></div>";
   }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
@@ -459,26 +505,105 @@ async function loadUsers(){
     el.innerHTML=SKEL_ROWS(4);
     const d=await api("list");
     const users=d.users||[];
+    _users=users;
     document.getElementById("userCount").textContent=users.length;
     if(!users.length){
       el.innerHTML='<div class="empty"><h3>No users yet</h3><p>Invite your first teammate — they get an email that signs them straight in.</p><button id="emptyInvite">Invite a user</button></div>';
       document.getElementById("emptyInvite")?.addEventListener("click",openInvite);
+      updateBulkBar();
       return;
     }
-    el.innerHTML='<div class="tbl-scroll"><table><thead><tr><th>User</th><th>Last seen</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
+    el.innerHTML='<div class="tbl-scroll"><table><thead><tr><th><input type="checkbox" id="selAll" title="Select every editable user" /> User</th><th>Last seen</th><th>Roles (auto-saved)</th><th>Active</th><th></th></tr></thead><tbody>'+
       users.map(u=>{
+        const self=u.id===account.id;
+        const superRow=u.roles.includes("super_admin");
+        // The API refuses both of these with a 400 (self-lockout, and only a
+        // super admin may touch another super admin), so don't render controls
+        // that can only fail.
+        const locked=self||(superRow&&!account.isSuper);
+        const lockTitle=self?"You cannot change your own account here":"Only a super admin can change another super admin";
         const initial=esc((u.full_name||u.email||"?").trim().charAt(0).toUpperCase());
-        const boxes=ROLES.map(([val,label])=>'<label class="chk"><input type="checkbox" data-role="'+val+'" data-user="'+u.id+'" '+(u.roles.includes(val)?"checked":"")+"/> "+label+"</label>").join("");
+        const boxes=ROLES.map(([val,label])=>{
+          // Granting super_admin is itself super-admin-only (API: assertCanGrant).
+          const boxLocked=locked||(val==="super_admin"&&!account.isSuper);
+          return '<label class="chk"'+(boxLocked?' title="'+lockTitle+'"':"")+'><input type="checkbox" data-role="'+val+'" data-user="'+u.id+'" '+(u.roles.includes(val)?"checked":"")+(boxLocked?" disabled":"")+"/> "+label+"</label>";
+        }).join("");
         const seen=fmtLastSeen(u.lastSeenAt);
+        // A disabled account gets a red dot whatever the heartbeat says: the
+        // last-seen time is meaningless when sign-in is switched off.
+        const dot=!u.active?{c:"var(--red)",t:"Account disabled"}:{c:seen.recent?"var(--accent)":"var(--muted)",t:"Last activity in the app"};
         return "<tr>"+
-          "<td><div class='ucell'><span class='uavatar'>"+initial+"</span><div><b>"+esc(u.email)+"</b><span class='uname'>"+esc(u.full_name||"—")+"</span></div></div></td>"+
-          "<td><span class='dot' style='background:"+(seen.recent?"var(--accent)":"var(--muted)")+"' title='Last activity in the app'></span> "+esc(seen.text)+"</td>"+
+          "<td><div class='ucell'><input type='checkbox' data-sel data-user='"+u.id+"'"+(locked?" disabled title='"+lockTitle+"'":"")+" /><span class='uavatar'>"+initial+"</span><div><b>"+esc(u.email)+"</b>"+(self?" <span class='pill'>you</span>":"")+"<span class='uname'>"+esc(u.full_name||"—")+"</span></div></div></td>"+
+          "<td><span class='dot' style='background:"+dot.c+"' title='"+dot.t+"'></span> "+esc(seen.text)+"</td>"+
           "<td>"+boxes+"</td>"+
-          "<td><label class='chk'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+"/> Active</label></td>"+
-          "<td class='uactions'><button class='small secondary' data-resetpw='"+u.id+"'>Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'>Remove</button></td></tr>";
+          "<td><label class='chk' title='"+lockTitle+"'><input type='checkbox' data-active data-user='"+u.id+"' "+(u.active?"checked":"")+(locked?" disabled":"")+"/> Active</label></td>"+
+          "<td class='uactions'><button class='small secondary' data-resetpw='"+u.id+"'"+(locked?" disabled title='"+lockTitle+"'":"")+">Reset password</button> <button class='small danger' data-del='"+u.id+"' data-email='"+esc(u.email)+"'"+(locked?" disabled title='"+lockTitle+"'":"")+">Remove</button></td></tr>";
       }).join("")+"</tbody></table></div>";
+    const sa=document.getElementById("selAll");
+    if(sa)sa.addEventListener("change",()=>{
+      document.querySelectorAll("#usersList input[data-sel]:not(:disabled)").forEach(c=>{c.checked=sa.checked;});
+      updateBulkBar();
+    });
+    updateBulkBar();
   }catch(e){el.innerHTML='<div class="msg err show">'+esc(e.message)+"</div>";}
 }
+
+// ---------- bulk roles + export ----------
+function selectedIds(){return [...document.querySelectorAll("#usersList input[data-sel]:checked")].map(c=>c.dataset.user);}
+function updateBulkBar(){
+  const n=selectedIds().length;
+  const bar=document.getElementById("bulkBar");
+  bar.style.display=n?"flex":"none";
+  document.getElementById("bulkCount").textContent=n+" selected";
+  const sa=document.getElementById("selAll");
+  if(sa){const boxes=[...document.querySelectorAll("#usersList input[data-sel]:not(:disabled)")];sa.checked=!!boxes.length&&n===boxes.length;}
+}
+function renderBulkRoles(){
+  // Same role names as the grid, minus super_admin unless the caller may grant
+  // it — a bulk tick must not become a way around assertCanGrant.
+  document.getElementById("bulkRoles").innerHTML=ROLES.filter(([v])=>v!=="super_admin"||account.isSuper)
+    .map(([v,l])=>'<label class="chk"><input type="checkbox" value="'+v+'" /> '+l+"</label>").join("");
+}
+async function applyBulkRoles(){
+  const ids=selectedIds();
+  const roles=[...document.querySelectorAll("#bulkRoles input:checked")].map(c=>c.value);
+  if(!ids.length){toast("Select at least one user first",true);return;}
+  if(!roles.length){toast("Tick the roles to apply",true);return;}
+  showDialog({
+    title:"Apply roles to "+ids.length+" user"+(ids.length===1?"":"s")+"?",
+    body:"Each selected account's roles become <b>"+esc(roles.join(", "))+"</b>. Every other role they hold is removed.",
+    confirmText:"Apply roles",
+    danger:true,
+    onConfirm:async()=>{
+      for(const userId of ids)await api("set_roles",{userId,roles});
+      document.querySelectorAll("#bulkRoles input").forEach(c=>{c.checked=false;});
+      await loadUsers();
+      return{message:"Roles applied to "+ids.length+" user"+(ids.length===1?"":"s")};
+    },
+  });
+}
+document.getElementById("btnBulkApply").addEventListener("click",applyBulkRoles);
+document.getElementById("btnBulkClear").addEventListener("click",()=>{
+  document.querySelectorAll("#usersList input[data-sel]").forEach(c=>{c.checked=false;});
+  updateBulkBar();
+});
+document.getElementById("usersList").addEventListener("change",e=>{
+  if(e.target.matches("input[data-sel]"))updateBulkBar();
+});
+function exportUsersCsv(){
+  if(!_users.length){toast("Nothing to export yet",true);return;}
+  const cell=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const lines=[["email","roles","active","last_seen"].join(",")];
+  for(const u of _users)lines.push([u.email,u.roles.join(" "),u.active?"yes":"no",u.lastSeenAt||""].map(cell).join(","));
+  // The BOM keeps Excel from reading the UTF-8 as mojibake.
+  const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="xana-users-"+new Date().toISOString().slice(0,10)+".csv";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+document.getElementById("btnExportUsers").addEventListener("click",exportUsersCsv);
 document.getElementById("btnInvite").addEventListener("click",async()=>{
   const email=(document.getElementById("invEmail").value||"").trim().toLowerCase();
   const name=(document.getElementById("invName").value||"").trim();
@@ -492,10 +617,33 @@ document.getElementById("btnInvite").addEventListener("click",async()=>{
     msgEl.className="msg ok show";
     msgEl.textContent = d.emailed
       ? "✓ "+email+" invited ("+roles.join(", ")+"). Invite email sent — they tap the button inside it and land signed-in."
-      : "✓ "+email+" updated ("+roles.join(", ")+"). Account already existed — no email sent; they can sign in at /login.";
+      : "✓ "+email+" re-enabled ("+roles.join(", ")+").";
     document.getElementById("invEmail").value="";document.getElementById("invName").value="";
     await loadUsers();
-  }catch(e){msgEl.className="msg err show";msgEl.textContent=e.message;}
+  }catch(e){
+    if(e.body&&e.body.needsReactivate){
+      // The API refuses to touch a live account on a plain invite: doing it
+      // silently would turn an offboarded person back on and swap their roles.
+      msgEl.className="msg err show";
+      msgEl.textContent="That email already has an account — confirm to re-enable it.";
+      showDialog({
+        title:"Re-enable this account?",
+        body:"<b>"+esc(email)+"</b> already has an account (it may have been offboarded). Continuing turns sign-in back on and <b>replaces their roles</b> with the ones ticked here.",
+        confirmText:"Re-enable & update",
+        danger:true,
+        onConfirm:async()=>{
+          await api("invite",{email,fullName:name,roles,reactivate:true});
+          msgEl.className="msg ok show";
+          msgEl.textContent="✓ "+email+" re-enabled ("+roles.join(", ")+").";
+          document.getElementById("invEmail").value="";document.getElementById("invName").value="";
+          await loadUsers();
+          return{message:"Account re-enabled"};
+        },
+      });
+      return;
+    }
+    msgEl.className="msg err show";msgEl.textContent=e.message;
+  }
 });
 
 // Manual-password onboarding (no email involved)
@@ -516,7 +664,9 @@ document.getElementById("btnManualSave").addEventListener("click",async()=>{
   try{
     const d=await api("create_with_password",{email,fullName:name,roles,password});
     msgEl.className="msg ok show";
-    msgEl.textContent="✓ "+email+" created ("+roles.join(", ")+"). Give them the password in person/phone — they must choose a new one at first sign-in.";
+    msgEl.textContent=d.existing
+      ? "✓ "+email+" already had an account — its password was replaced and its roles set to "+roles.join(", ")+". Give them the password in person/phone — they must choose a new one at first sign-in."
+      : "✓ "+email+" created ("+roles.join(", ")+"). Give them the password in person/phone — they must choose a new one at first sign-in.";
     document.getElementById("invEmail").value="";document.getElementById("invName").value="";
     document.getElementById("manualPass").value="";
     document.getElementById("manualBox").style.display="none";
@@ -524,17 +674,41 @@ document.getElementById("btnManualSave").addEventListener("click",async()=>{
   }catch(e){msgEl.className="msg err show";msgEl.textContent=e.message;}
 });
 
+// One debounced save for the whole grid. Every tick used to fire its own
+// request, and two in flight could land out of order — the box you just ticked
+// was the one that got dropped. Each save now carries the row's complete
+// checked set, 400 ms after the last tick.
+const _roleSaves=new Map();     // userId -> roles[]
+let _roleTimer=null;
+function queueRoleSave(userId,roles){
+  _roleSaves.set(userId,roles);
+  clearTimeout(_roleTimer);
+  _roleTimer=setTimeout(flushRoleSaves,400);
+}
+async function flushRoleSaves(){
+  const batch=[..._roleSaves];
+  _roleSaves.clear();
+  if(!batch.length)return;
+  try{
+    for(const [userId,roles] of batch)await api("set_roles",{userId,roles});
+  }catch(err){
+    toast("Save failed: "+err.message,true);
+    await loadUsers();   // put the boxes back to what the server actually has
+  }
+}
+
 document.getElementById("usersList").addEventListener("change",async(e)=>{
   const t=e.target;
-  try{
-    if(t.matches("input[data-role]")){
-      const row=t.closest("tr");
-      const roles=[...row.querySelectorAll("input[data-role]:checked")].map(c=>c.dataset.role);
-      await api("set_roles",{userId:t.dataset.user,roles});
-    }else if(t.hasAttribute("data-active")){
-      await api("set_active",{userId:t.dataset.user,active:t.checked});
-    }
-  }catch(err){toast("Save failed: "+err.message,true);loadUsers();}
+  if(t.matches("input[data-role]")){
+    const row=t.closest("tr");
+    const roles=[...row.querySelectorAll("input[data-role]:checked")].map(c=>c.dataset.role);
+    queueRoleSave(t.dataset.user,roles);
+    return;
+  }
+  if(t.hasAttribute("data-active")){
+    try{await api("set_active",{userId:t.dataset.user,active:t.checked});}
+    catch(err){toast("Save failed: "+err.message,true);loadUsers();}
+  }
 });
 
 // ---------- in-page dialog (replaces browser confirm/alert/prompt) ----------
@@ -590,8 +764,11 @@ document.getElementById("usersList").addEventListener("click",async(e)=>{
       confirmText:"Delete user",
       danger:true,
       onConfirm:async()=>{
-        await api("delete_user",{userId:del.dataset.del});
+        const d=await api("delete_user",{userId:del.dataset.del});
         await loadUsers();
+        // Sign-in is gone but the profile row survived: say so instead of
+        // reporting a clean removal the /admin list would still contradict.
+        if(d&&d.partial)throw new Error(d.error);
         return {message:"User deleted"};
       }
     });
@@ -656,6 +833,7 @@ function rememberOpen(cat,isOpen){
   try{localStorage.setItem(OPEN_KEY,JSON.stringify([...s]));}catch(e){}
 }
 let _usage={};   // usage[category][value] = assets using it (view choice_usage, migration 0028)
+let _usageErr="";// non-empty when the usage guard query failed (see `used` below)
 async function loadChoices(){
   const host=document.getElementById("listsHost");
   try{
@@ -666,11 +844,19 @@ async function loadChoices(){
     ]);
     if(error)throw error;
     _usage={};
-    for(const u of usage.data||[])(_usage[u.category]=_usage[u.category]||{})[u.value]=u.n;
+    _usageErr=usage.error?String(usage.error.message||usage.error):"";
+    if(_usageErr)console.warn("[admin] choice_usage failed, removals blocked:",_usageErr);
+    else for(const u of usage.data||[])(_usage[u.category]=_usage[u.category]||{})[u.value]=u.n;
     const byCat={};
     for(const r of data||[])(byCat[r.category]=byCat[r.category]||[]).push(r);
     const open=openCats();
-    host.innerHTML=CATS.map(c=>{
+    // Usage counts come from a view, and a failed query reads as 0 — which the
+    // delete dialog then called "Nothing is using it, so this is safe". When
+    // the guard query fails, say the count is unknown and block the removal.
+    const usageNote=_usageErr
+      ? "<div class='msg err show' style='margin-bottom:10px'>Usage counts are unavailable ("+esc(_usageErr)+"), so removals are blocked — an unknown count can't be called safe.</div>"
+      : "";
+    host.innerHTML=usageNote+CATS.map(c=>{
       const rows=byCat[c.key]||[];
       // Asset types carry a depreciation life; without one they fall back to
       // 3 years, which is rarely right for anything but a laptop.
@@ -679,13 +865,15 @@ async function loadChoices(){
         "data-ul='"+esc(v.value)+"' value='"+(v.useful_life==null?"":v.useful_life)+"' />";
       // usage count doubles as the "is this safe to delete" signal
       const used=v=>{
+        if(_usageErr)return "<span class='lc-use' title='Usage check failed — unknown'>?</span>";
         const n=(_usage[c.key]||{})[v.value]||0;
         return "<span class='lc-use"+(n?"":" zero")+"' title='"+(n?n+" asset"+(n===1?"":"s")+" use this":"nothing uses this")+"'>"+n+"</span>";
       };
       const body=rows.length
         ? "<div class='choice-wrap'>"+rows.map(v=>
             "<div class='choice-row' data-name='"+esc(String(v.value).toLowerCase())+"'><span>"+esc(v.value)+"</span>"+used(v)+life(v)+
-            "<button class='small danger' title='Remove' data-cat='"+c.key+"' data-val='"+esc(v.value)+"'>✕</button></div>").join("")+"</div>"
+            "<button class='small danger' title='"+(_usageErr?"Usage unknown — removal blocked":"Remove")+"' data-cat='"+c.key+"' data-val='"+esc(v.value)+"'"+
+            (_usageErr?" disabled":"")+">✕</button></div>").join("")+"</div>"
         : "<div class='lc-empty'>No "+esc(c.noun)+"s yet.</div>";
       const filter=rows.length>=FILTER_FROM
         ? "<input type='text' class='lc-filter' data-filter='"+c.key+"' placeholder='Filter "+esc(c.label.toLowerCase())+"…' />" : "";
@@ -764,6 +952,9 @@ document.querySelectorAll("#pane-lists").forEach(p=>p.addEventListener("click",a
   // an asset type's useful_life goes with it -- so depreciation quietly
   // reverts. Same dialog the other destructive admin actions use.
   const cat=b.dataset.cat, val=b.dataset.val;
+  // The buttons are disabled in this state; re-check anyway, because the whole
+  // point is that "safe to delete" must never be claimed from a failed query.
+  if(_usageErr){showListMsg("Usage counts are unavailable ("+_usageErr+") — removals are blocked until they load.",true);return;}
   const n=(_usage[cat]||{})[val]||0;
   const years=cat==="asset_type"
     ? (b.closest(".choice-row").querySelector(".ul-input")||{}).value : "";
@@ -793,27 +984,107 @@ function showListMsg(text,isErr){
 }
 
 // ---------- sync health ----------
+let _syncTimer=null;
+function setSyncPolling(on){
+  clearInterval(_syncTimer);
+  _syncTimer=null;
+  if(on)_syncTimer=setInterval(()=>{if(!document.hidden)loadSync();},30000);
+  return _syncTimer;
+}
+function setSyncBadge(n){
+  const chip=document.getElementById("syncFailChip");
+  if(!chip)return;
+  chip.textContent=n;
+  chip.style.display=n?"inline-flex":"none";
+  chip.title=n?n+" row"+(n===1?"":"s")+" failed to mirror to SharePoint":"";
+}
+async function refreshSyncBadge(){
+  try{const d=await api("sync_health");setSyncBadge((d.counts&&d.counts.failed)||0);}catch(e){/* the badge is advisory; a failed poll must not break boot */}
+}
 async function loadSync(){
   const el=document.getElementById("syncList");
+  const alertEl=document.getElementById("syncAlert");
   try{
     el.innerHTML=SKEL_ROWS(3);
     // sharepoint_sync is service-role only (RLS default-deny), so read it
     // through the server-verified admin API - a direct client() query would
     // return zero rows and always claim "everything is mirrored".
-    el.innerHTML=SKEL_ROWS(3);
     const d=await api("sync_health");
     const data=d.rows||[];
-    const alertEl=document.getElementById("syncAlert");
+    const counts=d.counts||{};
+    setSyncBadge(counts.failed||0);
+    const failed=counts.failed||0, pending=counts.pending||0, processing=counts.processing||0;
     if(data.length){
-      const failed=data.filter(r=>r.status==="failed").length;
       alertEl.style.display="flex";
-      alertEl.innerHTML="<span class='n'>"+data.length+"</span><span><b>"+data.length+" "+(data.length===1?"change":"changes")+" not mirrored to SharePoint</b> — "+failed+" failed · "+(data.length-failed)+" pending. Failed rows stop retrying after 5 attempts.</span>";
+      alertEl.innerHTML="<span class='n'>"+(failed||data.length)+"</span><span><b>"+(failed?failed+" change"+(failed===1?"":"s")+" failed to mirror to SharePoint":"Nothing failed — "+data.length+" change"+(data.length===1?"":"s")+" still queued")+"</b> — "+pending+" pending · "+processing+" in flight · "+failed+" failed. Retries resume automatically every 15 minutes.</span>";
     }else{
       alertEl.style.display="none";alertEl.innerHTML="";
     }
-    if(!(data||[]).length){el.innerHTML='<div class="empty"><h3>Everything is mirrored</h3><p>Every change has reached the SharePoint mirror. Failed rows stop retrying after 5 attempts and would appear here.</p></div>';return;}
-    el.innerHTML="<div class='tbl-scroll'><table><thead><tr><th>Op</th><th>Status</th><th>Tries</th><th>When</th><th>Error</th></tr></thead><tbody>"+
-      data.map(r=>"<tr><td>"+esc(r.op)+"</td><td><span class='pill st-"+esc(r.status)+"'>"+esc(r.status)+"</span></td><td class='num'>"+r.attempts+"</td><td class='num'>"+new Date(r.created_at).toLocaleString()+"</td><td class='err-cell'>"+esc(r.last_error||"")+"</td></tr>").join("")+
+    if(!data.length){el.innerHTML='<div class="empty"><h3>Everything is mirrored</h3><p>Every change has reached the SharePoint mirror. Anything that fails the mirror would show up here with the asset it belongs to.</p></div>';return;}
+    el.innerHTML="<div class='tbl-scroll'><table><thead><tr><th>Asset</th><th>Op</th><th>Status</th><th>Tries</th><th>Queued</th><th>Last try</th><th>Error</th><th></th></tr></thead><tbody>"+
+      data.map(r=>{
+        // payload is the snapshot taken when the change was queued, so it still
+        // names the asset after the live row is gone.
+        const name=r.tag||(r.item_id?"#"+r.item_id:"");
+        const assetCell=name
+          ? "<b>"+esc(name)+"</b>"+(r.tag&&r.item_id?"<span class='uname'>#"+esc(r.item_id)+"</span>":"")
+          : "<span class='uname' title='"+(r.graph_item_id?"SharePoint item "+esc(r.graph_item_id):"no asset snapshot")+"'>deleted asset</span>";
+        return "<tr><td>"+assetCell+"</td><td>"+esc(r.op)+"</td><td><span class='pill st-"+esc(r.status)+"'>"+esc(r.status)+"</span></td><td class='num'>"+r.attempts+"</td><td class='num'>"+new Date(r.created_at).toLocaleString()+"</td><td class='num'>"+(r.attempted_at?new Date(r.attempted_at).toLocaleString():"—")+"</td><td class='err-cell'>"+esc(r.last_error||"")+"</td>"+
+          "<td style='white-space:nowrap'>"+(r.status==="failed"?"<button class='small secondary' data-retry='"+r.id+"'>Retry</button>":"")+"</td></tr>";
+      }).join("")+
+      "</tbody></table></div>";
+  }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
+}
+document.getElementById("btnRequeue").addEventListener("click",async()=>{
+  try{
+    const d=await api("requeue");
+    toast(d.requeued?d.requeued+" failed row"+(d.requeued===1?"":"s")+" requeued":"No failed rows to requeue",false);
+    await loadSync();
+  }catch(err){toast(err.message,true);}
+});
+document.getElementById("syncList").addEventListener("click",async(e)=>{
+  const b=e.target.closest("[data-retry]");
+  if(!b)return;
+  try{
+    await api("retry_row",{id:b.dataset.retry});
+    toast("Row queued for another attempt",false);
+    await loadSync();
+  }catch(err){toast(err.message,true);}
+});
+
+// ---------- audit ----------
+// One line per audit row. The detail jsonb is a small object of scalars and
+// role arrays, so "key: value" pairs read better than raw JSON.
+function auditDetail(d){
+  if(!d||typeof d!=="object")return"";
+  return Object.entries(d).map(([k,v])=>{
+    const s=Array.isArray(v)?(v.length?v.join(", "):"none")
+      :(v===null||v===undefined?"—":typeof v==="object"?JSON.stringify(v):String(v));
+    return k+": "+s;
+  }).join(" · ");
+}
+const AUDIT_LABEL={
+  invite:"invite",create_with_password:"create with password",reset_password:"reset password",
+  set_roles:"roles",set_active:"active",delete_user:"delete user",requeue:"sync requeue",
+};
+async function loadAudit(){
+  const el=document.getElementById("auditList");
+  try{
+    el.innerHTML=SKEL_ROWS(4);
+    // admin_audit is admin-readable and has no insert policy: rows can only be
+    // written by the API with the service key, so this list can't be forged.
+    const {data,error}=await XanaSupabase.client().from("admin_audit")
+      .select("id,actor_email,action,target,detail,created_at")
+      .order("created_at",{ascending:false}).limit(200);
+    if(error)throw error;
+    const rows=data||[];
+    document.getElementById("auditCount").textContent=rows.length;
+    if(!rows.length){
+      el.innerHTML='<div class="empty"><h3>No admin changes recorded yet</h3><p>Invites, role changes, deactivations, removals, password resets and sync requeues are logged here as they happen.</p></div>';
+      return;
+    }
+    el.innerHTML="<div class='tbl-scroll'><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody>"+
+      rows.map(r=>"<tr><td class='num'>"+new Date(r.created_at).toLocaleString()+"</td><td>"+esc(r.actor_email||"—")+"</td><td><span class='pill'>"+esc(AUDIT_LABEL[r.action]||r.action)+"</span></td><td>"+esc(r.target||"—")+"</td><td class='detail-cell'>"+esc(auditDetail(r.detail))+"</td></tr>").join("")+
       "</tbody></table></div>";
   }catch(err){el.innerHTML='<div class="msg err show">'+esc(err.message)+"</div>";}
 }
@@ -823,21 +1094,26 @@ async function loadSync(){
   const state=document.getElementById("authState");
   const session=await XanaSupabase.getSession().catch(()=>null);
   if(!session||!session.user){location.href="/login?next=/admin";return;}
-  account={username:String(session.user.email||"").toLowerCase()};
-  accessToken=null; // api() refreshes the bearer per call now
+  // A forced password change comes first: the old password is known to whoever
+  // set it, so nothing else may happen until the user has chosen their own.
+  if(await XanaSupabase.needsPasswordChange()){location.replace("/?next="+encodeURIComponent(location.pathname+location.search));return;}
   const roles=await XanaSupabase.myRoles();
+  account={id:session.user.id,username:String(session.user.email||"").toLowerCase(),isSuper:roles.includes("super_admin")};
   if(!XanaSupabase.isAdminRole(roles)){
     const l=await XanaSupabase.landingFor();
     location.href=l||"/login";
     return;
   }
-  state.textContent="Signed in as "+account.username;
+  state.textContent="Signed in as "+account.username+(account.isSuper?" (super admin)":"");
   XanaSupabase.applyRoleNav(roles);
+  renderBulkRoles();
   document.getElementById("gate").style.display="block";
   XanaSupabase.startPresenceHeartbeat?.();
   const boot=document.getElementById("boot");
   if(boot){boot.style.opacity="0";setTimeout(()=>boot.remove(),260);}
-  await Promise.all([loadUsers(),loadChoices()]);
+  // The failed-sync badge is on the tab bar from the start, not only after the
+  // operator thinks to open the Sync health tab.
+  await Promise.all([loadUsers(),loadChoices(),refreshSyncBadge()]);
 })();
 
 const menuBtn=document.getElementById("menuBtn"), navMenu=document.getElementById("navMenu"), overlay=document.getElementById("overlay");

@@ -385,7 +385,7 @@ returned the real filenames of the internal IT forms; `asset-images` listed its
 - `node scripts/check-guards.mjs` → all guard checks pass; serial index still
   reported missing (see below).
 
-### Still open after this pass (needs a decision, not a fix)
+### Open at the end of this pass
 
 - **3 duplicate serial groups** (`312023090012` XL-97/XL-99, `9cp541rlnv`
   XL-17/XL-94, `xl-98` XL-134/XL-172) — which row is right needs a physical
@@ -394,10 +394,123 @@ returned the real filenames of the internal IT forms; `asset-images` listed its
   guard and the client's friendly error for it stays dormant. `check-guards.mjs`
   reports this on every run.
 - **90 of 231 assets still have no purchase price** — finance data, not code.
-- `it-documents` objects remain readable by direct URL (public bucket); making
-  it private requires signed URLs in `/admin`.
-- No SP↔Supabase reconciliation job; outbox rows that reach `failed` are not
-  retried by the 5-minute sweep (it only claims `pending`) and
-  `requeue_failed_sync_rows()` does not reset `attempts`.
-- `mustChangePassword()` is only consulted on the password sign-in branch, so a
-  temp password still survives a magic-link arrival.
+- The deploy no longer serves repository files, but the **GitHub repository
+  itself is public** — still open (owner's call), and pre-fix *immutable*
+  Vercel deployments keep serving whatever they were built with until deleted
+  in the dashboard.
+
+Everything else this pass left open — signing the private `it-documents` bucket
+in `/admin`, the outbox `failed`-row retry policy, and the password-change
+enforcement gap — was closed in the remediation pass below.
+
+## Full audit remediation (2026-09-20/21)
+
+Everything below the "still open" list in the previous section, plus the fixes
+that were only found while doing them. Four migrations, five independent code
+workstreams, each verified against the live project.
+
+### Migrations (all applied, recorded in `schema_migrations`)
+
+- **`0038_data_integrity.sql`** — the migration ledger itself (a skipped guard
+  can no longer hide: 0030's index was created only on 2026-09-21 because
+  nothing recorded that its build had been skipped); choice validation
+  (`status`/`asset_type`/`location`/`department` must exist in `app_choices`,
+  with a `'Available'` default on `status`, so vocabulary drift can't be typed in
+  any more); `deleted_at` added to the audit trigger's tracked columns (binning
+  and restoring an asset previously wrote nothing to `asset_history`);
+  monotonic, advisory-locked `item_id` allocation backed by
+  `asset_id_high_water` (purging the highest id used to re-issue it, handing the
+  purged asset's history and repair costs to a new asset); JWT-stamped, immutable
+  `asset_events` creation facts; a total `assets_price_or_estimate` expression
+  (the old `(extra->>'estimate_pending')::boolean` raised 22P02 on junk);
+  indexes for `deleted_at is null` and the dashboard's event queries;
+  `requeue_failed_sync_rows()` now resets `attempts` (one requeue used to buy
+  exactly one attempt) plus a bounded 15-minute sweep that revives `failed`
+  rows until they have had 20 attempts; a monthly 90-day outbox retention job
+  and `prune_operational_history()`; and `admin_audit`.
+- **`0039_storage_privacy.sql`** — `it-documents` is private (read through
+  short-lived signed URLs), both buckets carry size and MIME limits.
+- **`0040_atomic_writes.sql`** — `update_asset()` (one transaction for a column
+  patch plus an extra merge; the browser used to merge the extra first and patch
+  the columns second, so a refusal left the extra saved) and
+  `set_user_roles()` (one atomic replacement; the admin API fired
+  DELETE+INSERT per checkbox and a failure between the two left an account with
+  no roles at all).
+- **`0041_outbox_delete_identity.sql`** — the delete branch of
+  `assets_to_outbox()` snapshots `{asset_id, item_id}` into `payload`, because
+  `sharepoint_sync.asset_id` is nulled by its FK immediately after the row is
+  written (31/31 delete rows), which had left the worker unable to find — and so
+  unable ever to delete — a SharePoint item for an asset whose mirror id was
+  also missing.
+
+### Code
+
+- **Adapter / dashboard / sign-in (`js/supabase-client.js`, `summary/app.js`,
+  `index.html`)**: every edit, bin and restore is now the single `update_asset`
+  RPC; document links are signed; `needsPasswordChange()` is enforced on the
+  sign-in boot path and every page bounces to it, so a temporary password can no
+  longer reach the app by magic link or an existing session; an admin-added type
+  with no useful-life entry keeps its own name instead of silently becoming
+  "Other"; data health reports missing **price** separately from missing
+  **date** (and the score counts it); the depreciation export no longer charges
+  a phantom month for undated assets and the warranty expiry is a local date,
+  not a UTC-shifted one.
+- **Register (`assets/index.html`)**: audit/walk passes survive a reload
+  (`xana_audit_pass_v1`, 12-hour expiry, resume/finish with a missing list and
+  CSV), walk misses are collected and copyable, delete and bulk-return offer
+  Undo (bulk return also emits one summary transfer event instead of one per
+  asset), `flash()`/event labels are escaped, `load()` drops stale responses,
+  search is debounced with a cached haystack and a shared collator, the sheets
+  have dialog semantics with Esc and focus return, rows and sort headers are
+  keyboard-operable, and the dead helpers plus the duplicated "next free XL-N"
+  scans are gone.
+- **Admin API + console**: `super_admin` is a first-class role again (the grid
+  used to paint a super admin as role-less and one tick deleted the role),
+  role changes go through `set_user_roles` on one debounced save, a failed
+  password reset reports failure instead of success, deleting a user removes the
+  auth account first (no more sign-in-capable ghosts invisible to `/admin`),
+  inviting an existing deactivated account requires an explicit reactivate
+  confirm, a failed `choice_usage` query blocks removal instead of claiming
+  "nothing uses it", Sync health names the asset, shows attempts/queued/last try
+  and offers per-row Retry plus Requeue failed with a failed-count badge and a
+  30-second poll, an **Audit** tab answers "who changed whose access", mutating
+  calls are rate-limited (60/min per caller), and the Users tab gained bulk role
+  apply, a CSV export and honest disabled/self markers.
+- **Sync worker + scripts**: a Graph 404 no longer poisons a row (the stale id
+  is cleared and the item re-created), deletes resolve the fingerprint from
+  `payload.asset_id`, a binned asset is removed from the mirror and restored by
+  the same self-heal, duplicate mirror items are collapsed, the batch default is
+  10 with a 30 s function budget, `backfill.mjs` is re-runnable and
+  non-destructive (identity matched by stamp, `extra` merged with
+  `jsonb_strip_nulls`, only its own pending rows suppressed), `clean-e2e-assets.mjs`
+  is dry-run by default, the scan→mirror e2e runs again, and **new
+  `scripts/reconcile-mirror.mjs`** reports SP↔Supabase drift (it found four real
+  orphan SharePoint items on its first run).
+
+### Verification
+
+`node scripts/check-syntax.mjs` (all pages parse) · 59/59 unit tests · 29/29
+migration behaviour probes · 10/10 real-API probes · 27/27 view-only e2e ·
+`scripts/check-guards.mjs` clean apart from the serial index · the workstreams'
+own browser runs (24/24 admin DOM checks with a stubbed adapter, 13/13 register
+sequences in headless Chromium).
+
+### Still open after this pass
+
+- The serial index: 3 duplicate groups still block `0030` (`check-guards.mjs`
+  warns on every run). Needs a human to say which row is right.
+- 90 of 231 assets have no purchase price (finance data).
+- The GitHub repository is **public**, so the docs, migrations and the golden
+  fixture are still world-readable there even though the deployment no longer
+  serves them; making it private is the owner's call.
+- The CI wiring of `check-syntax.mjs` and any scheduled `check-guards.mjs` need
+  a push token with the `workflow` scope.
+- Two legacy Vercel projects still build and serve the retired dashboard, and
+  deployments created before 2026-09-20 keep serving whatever they were built
+  with — both have to be removed in the Vercel dashboard.
+- `asset-images` remains a public bucket by design (ADR-002/006); its object
+  paths are `item_id`-based.
+- `attachAssetImage`/`deleteAssetImage` still call `asset_extra_merge` directly
+  (single-statement extra writes, not the edit path).
+- `reconcile-mirror.mjs` and `check-guards.mjs` are manual: nothing runs them on
+  a schedule yet.

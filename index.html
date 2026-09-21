@@ -7,8 +7,8 @@
   <title>Xana Asset System</title>
   <link rel="icon" href="/scanner-app/icon-192.png" />
   <script src="/scanner-app/lib/supabase.min.js"></script>
-  <script src="/js/supabase-client.js"></script>
-  <script src="/js/ui.js"></script>
+  <script src="/js/supabase-client.js?v=17"></script>
+  <script src="/js/ui.js?v=17"></script>
   <link rel="stylesheet" href="/css/base.css" />
   <style>
     :root {
@@ -285,6 +285,20 @@ function esc(s){return window.XanaUI.esc(s);}
     return;
   }
 
+  // Signed in with a temporary password set by IT: the change-password step is
+  // the only thing on the page. Checked here rather than on the password
+  // sign-in branch alone, so a magic-link arrival or an already-open session
+  // cannot carry the temporary password into the app.
+  if (await XanaSupabase.needsPasswordChange()) {
+    document.getElementById("signinCard").hidden = false;
+    show(document.getElementById("stepEmail"), false);
+    show(document.getElementById("stepPasswordForm"), true);
+    document.getElementById("tiles").style.display = "none";
+    document.getElementById("tilesLabel").textContent = "Choose your own password to continue";
+    done();
+    return;
+  }
+
   // Signed in: drop the sign-in card entirely.
   document.getElementById("signinCard").remove();
 
@@ -372,7 +386,7 @@ async function pwdSignin(){
   const b=document.getElementById("btnPwdSignin");b.disabled=true;b.textContent="Signing in…";
   try{
     await XanaSupabase.signInWithPassword(email,pass);
-    if(await XanaSupabase.mustChangePassword()){
+    if(await XanaSupabase.needsPasswordChange()){
       show(document.getElementById("stepEmail"),false);
       show(document.getElementById("stepPasswordForm"),true);
       return;

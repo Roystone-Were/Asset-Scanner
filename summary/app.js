@@ -53,6 +53,12 @@ const DEP_COLORS = {
       return false;
     }
     account = { username: String(session.user.email || "").toLowerCase(), name: session.user.email };
+    // A temporary password has to be replaced before the dashboard opens, and
+    // the sign-in page owns the only form for it.
+    if (await XanaSupabase.needsPasswordChange()) {
+      location.replace("/?next=" + encodeURIComponent(location.pathname + location.search));
+      return false;
+    }
     const roles = await XanaSupabase.myRoles();
     if (!(roles.includes("dashboard_viewer") || roles.includes("admin") || roles.includes("super_admin"))) {
       const l = await XanaSupabase.landingFor();
@@ -257,10 +263,10 @@ const DEP_COLORS = {
     main.innerHTML =
       `<div class="kpis">
         ${kpi("Total Assets", t.total, "across " + Object.keys(d.byLocation || {}).length + " branches", null, "neutral")}
-        ${kpi("Purchase Value", moneyKpi(t.purchaseValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices (awaiting Finance)" : t.missingPurchase + " missing date", t.estimatePendingCount > t.total * 0.3 || t.missingPurchase > t.total * 0.3 ? "warn" : "neutral", "", true)}
+        ${kpi("Purchase Value", moneyKpi(t.purchaseValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices (awaiting Finance)" : t.missingPrice + " missing price", t.estimatePendingCount > t.total * 0.3 || t.missingPrice > t.total * 0.3 ? "warn" : "neutral", "", true)}
         ${kpi("Book Value (confirmed)", moneyKpi(t.confirmedBookValue), t.estimatePendingCount > 0 ? t.estimatePendingCount + " pending invoices excluded · incl. pending " + money(t.bookValue) : "after depreciation", "acc", "", true, t.estimatePendingCount > 0 ? "Confirmed = only assets with a known purchase price. Excludes " + t.estimatePendingCount + " assets awaiting past invoices from Finance. Full total including those pending: " + money(t.bookValue) + "." : "Confirmed = every asset has a known purchase price, so this is the full book value.")}
         ${kpi("Fully Depreciated", t.fullyDepreciated, pct(t.fullyDepreciated, t.total), t.fullyDepreciated > t.total * 0.5 ? "warn" : "neutral")}
-        ${kpi("Data Health", healthScore + "%", h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
+        ${kpi("Data Health", healthScore + "%", h.missingPrice + " missing price · " + h.unverified + " unverified 90d+", healthScore >= 80 ? "good" : healthScore >= 50 ? "warn" : "bad")}
       </div>
       <p style="font-size:.72rem;color:var(--muted);margin:-6px 0 10px">Data Health target ≥95% within 60 days · owner: Roystone</p>` +
       financePanel(d.finance) +
@@ -308,13 +314,17 @@ const DEP_COLORS = {
   }
 
   // ---------- Health Score Calculation ----------
+  // Five equally-weighted gaps. The purchase gap was one component over
+  // purchaseDate only, so an estate where 90 of 231 assets had no price still
+  // scored in the nineties; date and price are separate components now.
   function calculateHealthScore(h, total) {
     if (total === 0) return 100;
     const tagScore = Math.max(0, 100 - (h.missingTag / total) * 100);
     const serialScore = Math.max(0, 100 - (h.missingSerial / total) * 100);
-    const purchaseScore = Math.max(0, 100 - (h.missingPurchase / total) * 100);
+    const dateScore = Math.max(0, 100 - (h.missingDate / total) * 100);
+    const priceScore = Math.max(0, 100 - (h.missingPrice / total) * 100);
     const verifiedScore = Math.max(0, 100 - (h.unverified / total) * 100);
-    return Math.round((tagScore + serialScore + purchaseScore + verifiedScore) / 4);
+    return Math.round((tagScore + serialScore + dateScore + priceScore + verifiedScore) / 5);
   }
 
   function pct(part, total) {
@@ -372,7 +382,7 @@ const DEP_COLORS = {
       finRow("Replacement due within 12 months", f.replacementDue12mo + " assets · " + money(f.replacementCost12mo), "budget planning figure") +
       finRow("Idle stock (unassigned)", f.idleAssets + " assets · " + money(f.idleBookValue), "redeploy before buying new") +
       finRow("Lost assets", f.lostAssets + " · " + money(f.lostCost), "write-off exposure") +
-      finRow("Missing purchase records", String(h.missingPurchase ?? "—") + (t.estimatePendingCount ? " · " + t.estimatePendingCount + " pending invoices (awaiting Finance)" : ""), "limits valuation accuracy") +
+      finRow("Missing purchase records", h.missingDate + " with no date · " + h.missingPrice + " with no price" + (t.estimatePendingCount ? " · " + t.estimatePendingCount + " pending invoices (awaiting Finance)" : ""), "limits valuation accuracy") +
       "</tbody></table>" +
       '<div class="ep-cols">' +
       '<div><h3>Status</h3>' + topList(d.byStatus) + '</div>' +
@@ -645,7 +655,8 @@ const DEP_COLORS = {
     return (
       '<div class="health">' +
       it(ok(h.missingTag), "Missing Tag", h.missingTag) + it(ok(h.missingSerial), "Missing Serial", h.missingSerial) +
-      it(ok(h.missingPurchase), "Missing Purchase", h.missingPurchase) + it(ok(h.unverified), "Unverified 90d+", h.unverified) +
+      it(ok(h.missingDate), "Missing Purchase Date", h.missingDate) + it(ok(h.missingPrice), "Missing Purchase Price", h.missingPrice) +
+      it(ok(h.unverified), "Unverified 90d+", h.unverified) +
       "</div>");
   }
   function tableHtml(items) {
@@ -677,6 +688,12 @@ const DEP_COLORS = {
   window.changePage = (dir) => { currentPage = Math.max(0, currentPage + dir); if (currentPage * PAGE_SIZE >= lastItems.length) currentPage = Math.max(0, Math.floor((lastItems.length - 1) / PAGE_SIZE)); renderTable(); };
 
   // ---------- CSV Export ----------
+  // Local calendar date (YYYY-MM-DD). A local-midnight Date printed with
+  // toISOString() renders one day early in any UTC+ offset — Nairobi is UTC+3,
+  // so a warranty expiring 1 Mar showed as 28 Feb in the export.
+  function localDate(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
   function exportWarrantyCsv() {
     const rows = window._warrantyRows || [];
     if (!rows.length) return;
@@ -684,7 +701,7 @@ const DEP_COLORS = {
     const body = rows.map(({ i, w }) => [
       i.tag, i.type, i.model, i.serial, i.employee, i.location,
       i.purchaseDate, i.warrantyMonths,
-      w.expiry.toISOString().slice(0, 10), w.days
+      localDate(w.expiry), w.days
     ].map(csvCell).join(","));
     const csv = [headers.join(","), ...body].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -718,12 +735,15 @@ const DEP_COLORS = {
 
   // ---------- Monthly depreciation export (accounting periods) ----------
   // Straight-line monthly charge: price ÷ useful life ÷ 12, pro-rated from
-  // the purchase month. Fully-depreciated and zero-price assets contribute 0.
+  // the purchase month. Fully-depreciated, zero-price and undated assets
+  // contribute 0 (see monthlyCharge).
   function monthlyCharge(i) {
     if (!(i.purchasePrice > 0) || !(i.usefulLife > 0)) return 0;
-    if (!i.purchaseDate) return i.purchasePrice / i.usefulLife / 12;   // best effort: no proration
-    const d = new Date(i.purchaseDate + "T00:00:00");
-    if (isNaN(d.getTime())) return i.purchasePrice / i.usefulLife / 12;
+    // No usable purchase date = no period to charge into. enrichAsset gives
+    // these rows "No data" and their full book value, so charging a monthly
+    // amount here made the sheet's TOTAL irreconcilable with the dashboard.
+    const d = i.purchaseDate ? new Date(i.purchaseDate + "T00:00:00") : null;
+    if (!d || isNaN(d.getTime())) return 0;
     const now = new Date();
     const monthsOld = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
     if (monthsOld >= i.usefulLife * 12) return 0;
@@ -737,7 +757,7 @@ const DEP_COLORS = {
       "Asset Tag", "Type", "Model", "Serial", "Employee", "Location", "Status",
       "Purchase Date", "Purchase Cost", "Useful Life (Years)", "Useful Life (Months)",
       "Monthly Depreciation", "Depreciation This Year of Service", "Accumulated Depreciation",
-      "Closing Book Value", "Depreciation Status"
+      "Closing Book Value", "Depreciation Status", "Note"
     ];
     let totMonth = 0, totYtd = 0, totAccum = 0, totBook = 0;
     const rows = lastItems.map(i => {
@@ -760,12 +780,15 @@ const DEP_COLORS = {
         i.tag, i.type, i.model, i.serial, i.employee, i.location, i.status,
         i.purchaseDate || "", i.purchasePrice || "", i.usefulLife || "", (i.usefulLife || 0) * 12,
         monthly.toFixed(2), ytd.toFixed(2), accum.toFixed(2),
-        (Math.round(i.bookValue * 100) / 100).toFixed(2), i.depStatus
+        (Math.round(i.bookValue * 100) / 100).toFixed(2), i.depStatus,
+        // the row contributes 0 to the period, so say why instead of letting
+        // the reader reconcile a phantom charge against the dashboard
+        i.depStatus === "No data" ? "no purchase date" : ""
       ].map(csvCell).join(",");
     });
     const totalsRow = [
       "TOTAL", "", "", "", "", "", "", "", "", "", "",
-      totMonth.toFixed(2), totYtd.toFixed(2), totAccum.toFixed(2), (Math.round(totBook * 100) / 100).toFixed(2), ""
+      totMonth.toFixed(2), totYtd.toFixed(2), totAccum.toFixed(2), (Math.round(totBook * 100) / 100).toFixed(2), "", ""
     ].map(v => '"' + v + '"').join(",");
     const csv = [
       '"Depreciation Schedule - Period ' + periodStr + ' (generated ' + new Date().toISOString().slice(0, 10) + ')"',

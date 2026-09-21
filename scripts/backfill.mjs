@@ -1,3 +1,12 @@
+// SharePoint -> Supabase backfill. Re-runnable: rows are matched to assets by
+// the item's SupabaseId stamp (graph_item_id as fallback), the merge never
+// replaces extra, and only the outbox rows this run creates are suppressed - so
+// it is safe to run against a live register. Supabase-only extras
+// (estimate_pending, useful_life, image_url, warranty_months, vendor, po_number)
+// survive because extra is merged, and a blank SharePoint field no longer wipes
+// a value. SharePoint items that match no asset (orphans) are reported and
+// skipped - scripts/reconcile-mirror.mjs is the report for those.
+//   node scripts/backfill.mjs
 import fs from "node:fs";
 import path from "node:path";
 import pg from "pg";
@@ -74,6 +83,7 @@ function mapItem(it) {
   return {
     item_id: String(it.id),
     graph_item_id: String(it.id),
+    supabase_id: trim(f.SupabaseId), // link back to public.assets.id (identity)
     title: trim(f.Title),
     asset_tag: trim(f.Title),
     asset_type: trim(f.Asset),
@@ -120,6 +130,11 @@ function chunk(arr, n) {
 
 const COLS = ["item_id", "graph_item_id", "title", "asset_tag", "asset_type", "model", "serial", "employee", "status", "location", "extra"];
 
+// Columns the run refreshes on an existing asset, with the casts its `values`
+// list needs (parameter types are otherwise inferred from the schema).
+const UPDATE_COLS = ["graph_item_id", "title", "asset_tag", "asset_type", "model", "serial", "employee", "status", "location"];
+const COL_TYPE = { id: "uuid", graph_item_id: "text", title: "text", asset_tag: "text", asset_type: "text", model: "text", serial: "text", employee: "text", status: "text", location: "text", extra: "jsonb" };
+
 async function main() {
   const env = loadEnv();
   if (!env.CLIENT_SECRET || env.CLIENT_SECRET.includes("PASTE")) throw new Error("CLIENT_SECRET missing in .env.local");
@@ -140,36 +155,89 @@ async function main() {
   console.log(`      fetched ${items.length} items`);
 
   const rows = items.map(mapItem);
+  const skipped = [];
 
   console.log("[4/5] writing to Supabase (single transaction)…");
   await client.connect();
   await client.query("begin");
   try {
-    const pre = await client.query("select count(*)::int n from public.sharepoint_sync");
-    if (pre.rows[0].n !== 0) throw new Error(`outbox not empty (${pre.rows[0].n} rows) - aborting`);
+    // The write fires assets_to_outbox_after_iu, which would echo every
+    // backfilled row straight back to SharePoint. Remember this transaction's
+    // id: rows it creates carry it in xmin, so the suppression below removes
+    // exactly this run's rows and never the ones floor staff are creating.
+    const txid = (await client.query("select txid_current()::text as xid")).rows[0].xid;
 
-    for (const part of chunk(rows, 80)) {
+    // Identity. The SharePoint item's SupabaseId stamp is the real link; the
+    // list item id (graph_item_id) is the fallback. item_id is only a fallback
+    // for assets that were never mirrored - after go-live an app-created asset
+    // has its own item_id, and re-matching on it would overwrite an unrelated
+    // asset (and an upsert on item_id would insert duplicates).
+    const known = await client.query("select id, item_id, graph_item_id from public.assets");
+    const byStamp = new Map(known.rows.map((a) => [a.id.toLowerCase(), a.id]));
+    const byGraph = new Map(known.rows.filter((a) => a.graph_item_id).map((a) => [String(a.graph_item_id), a.id]));
+    const byItem = new Map(known.rows.map((a) => [a.item_id, a.id]));
+    const unmappedByItem = new Map(known.rows.filter((a) => !a.graph_item_id).map((a) => [a.item_id, a.id]));
+
+    const updates = [];
+    const inserts = [];
+    for (const r of rows) {
+      const id =
+        byStamp.get(String(r.supabase_id || "").toLowerCase()) ||
+        byGraph.get(String(r.graph_item_id)) ||
+        unmappedByItem.get(r.item_id);
+      if (id) updates.push({ id, row: r });
+      // An item that matches nothing, whose ids are already taken by some other
+      // (already mirrored) asset, cannot be imported without overwriting that
+      // asset or breaking the unique indexes: leave it to reconcile-mirror.
+      else if (byItem.has(r.item_id) || byGraph.has(String(r.graph_item_id))) skipped.push(r);
+      else inserts.push(r);
+    }
+
+    // Batched so the transaction's row locks are held for a moment, not for one
+    // round trip per asset (floor staff keep editing while this runs).
+    for (const part of chunk(updates, 40)) {
+      const params = [];
+      let p = 0;
+      const cols = ["id", ...UPDATE_COLS, "extra"];
+      const tuples = part.map(({ id, row }) => {
+        const vals = [id, ...UPDATE_COLS.map((k) => row[k]), JSON.stringify(row.extra)];
+        return `(${vals.map((v, i) => { params.push(v); return `$${++p}::${COL_TYPE[cols[i]]}`; }).join(",")})`;
+      });
+      await client.query(
+        `update public.assets a set
+           graph_item_id = v.graph_item_id, title = v.title, asset_tag = v.asset_tag,
+           asset_type = v.asset_type, model = v.model, serial = v.serial, employee = v.employee,
+           status = v.status, location = v.location,
+           -- Merge, never replace: Supabase-only extras (estimate_pending,
+           -- useful_life, image_url, warranty_months, vendor, po_number) are not
+           -- mirrored from SharePoint, and blank SharePoint fields must not wipe
+           -- a value (that also left rows violating assets_price_or_estimate).
+           extra = coalesce(a.extra, '{}'::jsonb) || jsonb_strip_nulls(v.extra),
+           updated_at = now()
+         from (values ${tuples.join(",")}) as v(${["id", ...UPDATE_COLS, "extra"].join(", ")})
+        where a.id = v.id`,
+        params
+      );
+    }
+
+    for (const part of chunk(inserts, 80)) {
       const values = [];
       const params = [];
       let p = 1;
       for (const r of part) {
         values.push(`(${COLS.map((c) => { params.push(c === "extra" ? JSON.stringify(r[c]) : r[c]); return `$${p++}`; }).join(",")})`);
       }
-      await client.query(
-        `insert into public.assets (${COLS.join(",")}) values ${values.join(",")}
-         on conflict (item_id) do update set
-           graph_item_id = excluded.graph_item_id, title = excluded.title, asset_tag = excluded.asset_tag,
-           asset_type = excluded.asset_type, model = excluded.model, serial = excluded.serial,
-           employee = excluded.employee, status = excluded.status, location = excluded.location,
-           extra = excluded.extra, updated_at = now()`,
-        params
-      );
+      await client.query(`insert into public.assets (${COLS.join(",")}) values ${values.join(",")}`, params);
     }
 
     const del = await client.query(
-      "delete from public.sharepoint_sync where status = 'pending' returning id"
+      "delete from public.sharepoint_sync where status = 'pending' and xmin::text = $1 returning id",
+      [txid]
     );
-    console.log(`      inserted ${rows.length} assets, suppressed ${del.rowCount} backfill outbox rows`);
+    console.log(`      ${updates.length} updated, ${inserts.length} inserted, suppressed ${del.rowCount} backfill outbox rows`);
+    for (const r of skipped) {
+      console.log(`      [skip] SharePoint item ${r.graph_item_id} (${r.title || "no title"}): no asset matches and item_id ${r.item_id} is taken - see scripts/reconcile-mirror.mjs`);
+    }
     await client.query("commit");
   } catch (e) {
     await client.query("rollback");
@@ -188,7 +256,9 @@ async function main() {
   console.log("      outbox:", JSON.stringify(outbox.rows));
   for (const s of sample.rows) console.log("      sample:", JSON.stringify(s));
 
-  const match = count.rows[0].total === items.length && count.rows[0].mirrored === items.length;
+  // Items that map to no asset are reported as [skip] above; count the rest.
+  const expected = items.length - skipped.length;
+  const match = count.rows[0].total === expected && count.rows[0].mirrored === expected;
   console.log(match ? "[done] BACKFILL VERIFIED - counts match SharePoint" : "[WARN] count mismatch - investigate");
 
   await client.end();

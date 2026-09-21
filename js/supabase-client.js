@@ -131,7 +131,6 @@
     const row = {};
     const extraPatch = {};
     for (const key of Object.keys(fields || {})) {
-      if (key === "_softDelete") { row.deleted_at = new Date().toISOString(); continue; }
       const col = FIELD_TO_COL[key];
       const val = fields[key];
       if (key === "LastVerified") extraPatch.last_verified = val === null ? null : String(val);
@@ -167,10 +166,12 @@
   // .useful_life, migration 0027). Loaded once per page load; a type with no
   // value set falls back to USEFUL_LIFE_BY_TYPE below, so this can be empty
   // and everything still behaves exactly as before.
-  let _lifeByChoice = null;
+  let _lifeByChoice = null;   // asset_type -> useful life (only the types that set one)
+  let _knownTypes = null;     // every asset_type in the admin list, life or not
   async function loadUsefulLives() {
     if (_lifeByChoice) return _lifeByChoice;
     const map = {};
+    const known = {};
     try {
       const { data, error } = await client()
         .from("app_choices")
@@ -178,12 +179,14 @@
         .eq("category", "asset_type");
       if (!error) {
         for (const r of data || []) {
+          known[r.value] = true;
           const n = parseFloat(r.useful_life);
           if (n > 0) map[r.value] = n;
         }
       }
     } catch (e) { /* offline or column missing - the JS map still covers it */ }
     _lifeByChoice = map;
+    _knownTypes = known;
     return map;
   }
 
@@ -192,8 +195,12 @@
     const str = (v) => (v === null || v === undefined ? "" : String(v).trim());
     const typeRaw = str(row.asset_type);
     const configured = _lifeByChoice && _lifeByChoice[typeRaw];
-    // keep any known type verbatim (incl. admin-added types); unknown → Other
-    const type = typeRaw && (configured || USEFUL_LIFE_BY_TYPE[typeRaw]) ? typeRaw : "Other";
+    // Known = in the admin list (app_choices.asset_type) or in the built-in
+    // map. A type an admin added but left the years box blank for is still
+    // known: it must render verbatim and just take the 3-year default, not
+    // collapse into "Other" the way it did when only useful_life marked a
+    // type as known (ADR-005). Unknown strings still become "Other".
+    const type = typeRaw && (_knownTypes && _knownTypes[typeRaw] || USEFUL_LIFE_BY_TYPE[typeRaw]) ? typeRaw : "Other";
     let price = extra.purchase_price === null || extra.purchase_price === undefined || extra.purchase_price === ""
       ? NaN
       : parseFloat(String(extra.purchase_price).replace(/[^0-9.-]/g, ""));
@@ -411,7 +418,12 @@
         estimatePendingCount: pending.length,
         fullyDepreciated,
         expensedThisYear: Math.round(expensedThisYear * 100) / 100,
-        missingPurchase: it.filter((i) => !i.purchaseDate).length,
+        // Two gaps that used to share one number. No purchase date means no
+        // age and no depreciation curve; no purchase price means the totals
+        // themselves understate the estate. Reporting only the date gap read
+        // "healthy" on an estate where 90 of 231 assets had no price.
+        missingDate: it.filter((i) => !i.purchaseDate).length,
+        missingPrice: it.filter((i) => !(i.purchasePrice > 0)).length,
       },
       finance: {
         annualDepreciation: Math.round(annualDep * 100) / 100,
@@ -427,7 +439,9 @@
       dataHealth: {
         missingSerial: it.filter((i) => !i.serial).length,
         missingTag: it.filter((i) => !i.tag).length,
-        missingPurchase: it.filter((i) => !i.purchaseDate).length,
+        // same split as totals: date and price are separate gaps (see there)
+        missingDate: it.filter((i) => !i.purchaseDate).length,
+        missingPrice: it.filter((i) => !(i.purchasePrice > 0)).length,
         unverified,
       },
       items: it,
@@ -496,37 +510,40 @@
     throw sbError(err);
   }
 
-  async function updateAsset(id, patch) {
-    const row = fieldsToRow(patch);
-    // extra is a jsonb blob: merge server-side so a partial patch (e.g. only
-    // Condition) doesn't wipe purchase_date and the other extras.
-    if (row.extra && Object.keys(row.extra).length) {
-      const { error: rpcErr } = await client().rpc("asset_extra_merge", {
-        p_item_id: String(id),
-        p_patch: row.extra,
-      });
-      if (rpcErr) throw sbError(rpcErr)
-      delete row.extra;
-    }
-    if (!Object.keys(row).length) return { ok: true };
-    // .select() so a write that changes nothing is visible: PostgREST answers
-    // 204 with zero rows and no error when RLS filters the row out (read-only
-    // role, expired session, wrong item_id), which the UI used to report as
-    // "Saved ✓".
-    const { data, error } = await client()
-      .from("assets")
-      .update(row)
-      .eq("item_id", String(id))
-      .select("item_id");
+  // Single write path for every asset change — edit, bin, restore. One
+  // update_asset call commits the column patch and the extra merge together
+  // (migration 0040); the old two-step (merge RPC, then a PostgREST PATCH)
+  // could leave the extra half durable while telling the caller it failed.
+  //   row    - DB column names, e.g. {status:"Available"} / {deleted_at:null}
+  //   fields - the caller's SharePoint-named patch, used only for the friendly
+  //            23505 tag/serial messages; pass null to let 23505 through raw.
+  async function writeAsset(id, row, fields) {
+    const p_extra = row.extra && Object.keys(row.extra).length ? row.extra : {};
+    delete row.extra;
+    const { data, error } = await client().rpc("update_asset", {
+      p_item_id: String(id),
+      p_row: row,
+      p_extra,
+    });
     if (error) {
-      const friendly = uniqueViolationError(error, patch);
+      const friendly = fields ? uniqueViolationError(error, fields) : null;
       if (friendly) throw friendly;
+      // The database's own 23514 (value not in the admin list) and 42501 (not
+      // allowed to edit / only an admin may bin) messages are already written
+      // for the user; everything else gets the "Supabase …" wrapper.
+      if (error.code === "23514" || error.code === "42501") throw new Error(String(error.message || "Change refused"));
       throw sbError(error)
     }
-    if (!data || !data.length) {
+    // updated:0 is the old 204-with-no-rows case — a refused write or an
+    // item_id that is not there, which the UI used to report as "Saved ✓".
+    if (!data || !Number(data.updated)) {
       throw new Error("Nothing was saved — your role cannot edit assets, or this asset no longer exists.");
     }
     return { ok: true };
+  }
+
+  async function updateAsset(id, patch) {
+    return writeAsset(id, fieldsToRow(patch), patch);
   }
 
   // Soft delete — moves to recycle bin (restorable). The outbox/audit
@@ -534,23 +551,18 @@
   // Admin-only since 0036: the guard trigger refuses a non-admin transition of
   // deleted_at (0020 only covered the hard delete path).
   async function deleteAsset(id) {
-    return updateAsset(id, { _softDelete: true });
+    return writeAsset(id, { deleted_at: new Date().toISOString() }, null);
   }
 
   async function restoreAsset(id) {
-    const { data, error } = await client()
-      .from("assets")
-      .update({ deleted_at: null })
-      .eq("item_id", String(id))
-      .select("item_id");
-    if (error) {
-      if (error.code === "23505" && /assets_live_tag_unique_idx/i.test(String(error.message || ""))) {
+    try {
+      return await writeAsset(id, { deleted_at: null }, null);
+    } catch (e) {
+      if (e && e.code === "23505" && /assets_live_tag_unique_idx/i.test(String(e.message || ""))) {
         throw new Error("Can't restore: that asset tag has been reissued to another asset since this one was binned. Re-tag one of them first.");
       }
-      throw sbError(error)
+      throw e;
     }
-    if (!data || !data.length) throw new Error("Nothing was restored — your role cannot restore assets, or this asset no longer exists.");
-    return { ok: true };
   }
 
   async function purgeAsset(id) {
@@ -635,22 +647,24 @@
   }
 
   // ---------- Forced password change (manual-password onboarding) ----------
-  async function mustChangePassword() {
-    const s = await getSession();
-    if (!s || !s.user) return false;
+  // Error-safe on purpose: a failed read logs and returns false, because a
+  // transient profiles hiccup must never lock someone out of the app. Every
+  // page that shows app content calls this once after auth — consulting it
+  // only on the password sign-in branch let a temporary password survive a
+  // magic-link arrival or an already-open session.
+  async function needsPasswordChange() {
     try {
+      const s = await getSession();
+      if (!s || !s.user) return false;
       const { data, error } = await client()
         .from("profiles")
         .select("must_change_password")
         .eq("id", s.user.id)
         .single();
-      // Fails open by design (a transient read error must not lock someone out
-      // of the app) — but it must not be silent, or a forced password change
-      // can be skipped without anyone noticing.
-      if (error) console.warn("[auth] could not read must_change_password:", error.message);
+      if (error) throw error;
       return !!(data && data.must_change_password);
     } catch (e) {
-      console.warn("[auth] could not read must_change_password:", e && e.message);
+      console.warn("[auth] could not read must_change_password:", (e && e.message) || e);
       return false;
     }
   }
@@ -692,17 +706,33 @@
   // ---------- IT documents (Supabase Storage, admin-only write) ----------
   // Flat bucket, no per-item subfolders (unlike asset-images) -- these are
   // general reference forms, not tied to one asset. Write is gated by
-  // is_admin() at the RLS level (0025_it_documents_storage.sql); read is
-  // public same as asset-images (ADR-002 convention).
+  // is_admin() at the RLS level (0025_it_documents_storage.sql); the bucket is
+  // private, so every read is a 1-hour signed URL (an unsigned getPublicUrl
+  // link 400s).
   async function listItDocuments() {
     const { data, error } = await client().storage.from("it-documents").list("", { sortBy: { column: "created_at", order: "desc" } });
     if (error) throw new Error(error.message);
-    return (data || []).filter((f) => f.id).map((f) => ({
-      name: f.name,
-      size: f.metadata && f.metadata.size,
-      updatedAt: f.updated_at,
-      publicUrl: client().storage.from("it-documents").getPublicUrl(f.name).data.publicUrl,
-    }));
+    const files = (data || []).filter((f) => f.id);
+    if (!files.length) return [];
+    // One bulk sign for the whole folder — N calls would be N round trips —
+    // and the response keeps the order of the paths it was given.
+    const signed = await client().storage.from("it-documents").createSignedUrls(files.map((f) => f.name), 3600);
+    if (signed.error) throw new Error(signed.error.message);
+    const urlByName = new Map((signed.data || []).map((s) => [s.path, s.signedUrl || null]));
+    const failed = files.filter((f) => !urlByName.get(f.name)).length;
+    if (failed) console.warn("[documents] " + failed + " of " + files.length + " could not be signed");
+    return files.map((f) => {
+      const url = urlByName.get(f.name) || null;
+      return {
+        name: f.name,
+        size: f.metadata && f.metadata.size,
+        updatedAt: f.updated_at,
+        url,
+        // kept as the same signed link: admin's documents table reads
+        // publicUrl, and a stale getPublicUrl value would now be a dead URL
+        publicUrl: url,
+      };
+    });
   }
   async function uploadItDocument(file) {
     const path = Date.now() + "_" + file.name.replace(/[^\w.\-]+/g, "_");
@@ -867,7 +897,7 @@
     currentUserEmail,
     popAuthNotice,
     signOut,
-    mustChangePassword,
+    needsPasswordChange,
     completePasswordChange,
     uploadAssetImage,
     attachAssetImage,

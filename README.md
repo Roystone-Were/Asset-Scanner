@@ -74,7 +74,7 @@ Roles stack: most staff hold several. Two things worth knowing:
 | `api/sharepoint-sync.js` | Drains the outbox into SharePoint. Service role, keyed |
 | `api/admin-users.js` | Invite, roles, activation, password reset. Verifies the caller is an admin |
 | `supabase/migrations/` | Schema and RLS, numbered and applied in order |
-| `scripts/` | Migration runner, backfills, e2e and debug tools |
+| `scripts/` | Migration runner (with ledger), backfills, e2e tools, `check-syntax.mjs` (parses every page's inline script), `check-guards.mjs` (asserts the security posture against the database), `reconcile-mirror.mjs` (SP ↔ Supabase drift) |
 | `backfill/` | Work lists for filling gaps. CSVs stay local, never committed |
 | `docs/` | Runbook, what-it-does, exec briefing, ADRs |
 | `*.ps1` | PowerShell automation against SharePoint (cert auth) |
@@ -90,7 +90,10 @@ Three ways to scan, all in `/assets`:
 
 - **Scan button:** opens the camera sheet. A hit jumps to that asset's card.
 - **Walk mode:** keeps the camera running for stock takes, counting hits and
-  misses with flash, beep and vibrate feedback.
+  misses with flash, beep and vibrate feedback. Pick a branch to scope the pass:
+  the counters, the found/missing totals and the CSV export all follow it, the
+  pass survives a reload (resume within 12 h), and the codes that missed are
+  collected so the walk ends with a list, not just a number.
 - **USB wedge scanner:** works anywhere on the page with no button. Fast
   keystroke bursts ending in Enter are classified as a scan, except while
   typing in a field.
@@ -143,7 +146,9 @@ Numbered SQL in `supabase/migrations/`, applied through the Management API:
 node scripts/apply-migration.mjs supabase/migrations/00NN_name.sql
 ```
 
-The runner prints `HTTP 201` on success. On Windows it may follow that with a
+The runner prints `HTTP 201` on success and records the file in
+`schema_migrations`, so "applied" is a fact rather than a memory
+(`node scripts/apply-migration.mjs --list` shows the ledger). On Windows it may follow that with a
 libuv assertion during teardown; the migration has already applied.
 
 ## Local development
@@ -185,10 +190,14 @@ sync worker and the PowerShell scripts. Browsers never touch Microsoft.
 
 **SharePoint mirror.** Every insert, update and delete queues one row in
 `sharepoint_sync` and fires an immediate HTTP call to the worker, with a
-`pg_cron` sweep every 5 minutes as backstop. A row stops retrying after 5
-attempts and shows as `failed` in **Admin > Sync health**, which is read only;
-requeue with `requeue_failed_sync_rows()`. Bulk inserts are worth doing in
-chunks so Microsoft Graph is not hit with a burst.
+`pg_cron` sweep every 5 minutes as backstop. A row that fails 5 times is parked
+as `failed`; the 15-minute sweep revives it until it has had 20 attempts, after
+which it waits for a person. **Admin > Sync health** lists failures with the
+asset they belong to, how many attempts they have had, a per-row Retry and a
+Requeue failed, and it polls while open. Binning an asset removes its row from
+the SharePoint list (restoring re-creates it), so the mirror always shows what
+the register shows. `node scripts/reconcile-mirror.mjs` compares the two stores
+and exits non-zero on drift — run it after anything that looks suspicious.
 
 **Data health.** `Health-Check.ps1`, run monthly by
 `.github/workflows/data-health.yml`, reports duplicate serials, missing tags

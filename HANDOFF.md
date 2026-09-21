@@ -19,7 +19,7 @@
 | What's the current live state (counts, env vars, runbooks)? | `docs/IT_Manager_Handoff.md` |
 | What does the app do, for a non-technical reader? | `docs/APP_WHAT_IT_DOES.md` |
 | What do I show an exec? | `docs/Exec_Briefing_2026-09-04.md` (the 2026-08-26 one is superseded, kept for the record) |
-| Why is it built this way? | `docs/decisions/ADR-001..005` |
+| Why is it built this way? | `docs/decisions/ADR-001..007` |
 | What happened, in order, during the migration? | `PROGRESS.md` |
 | Tenant/Entra/SharePoint specifics, history, this session's narrative | This file |
 | What should be built next (feature roadmap, not infra)? | `asset-management-how-we-achieve-this.md` |
@@ -190,7 +190,7 @@ it's just no longer used by any browser code (see §1):
 | `Add-BarcodeColumn.ps1` / `Remove-BarcodeColumn.ps1` | REMOVED 2026-09-14 (`Barcode` column gone since Aug 2026; history in git). |
 | `generate-cert.ps1` | Created the client cert. `ocr.ps1` — Windows OCR helper for screenshots. |
 | `labels/` | REMOVED 2026-09-14 (deprecated QR label generator; local `assets.json` snapshot stays on disk, gitignored; history in git). |
-| `docs/` | `APP_WHAT_IT_DOES.md`, `Exec_Briefing_2026-09-04.md`, `IT_Manager_Handoff.md`, `decisions/ADR-001..005`. |
+| `docs/` | `APP_WHAT_IT_DOES.md`, `Exec_Briefing_2026-09-04.md`, `IT_Manager_Handoff.md`, `decisions/ADR-001..007`. |
 | `references/session-aug25-2026-session2.md` | Prior session notes. |
 | `README.md` | Setup/deploy docs. `PROGRESS.md` | Migration log. `HANDOFF.md` | This file. |
 
@@ -345,3 +345,52 @@ Full detail in `PROGRESS.md`. What a tenant-side reader needs:
   reports the still-missing serial index; `scripts/check-syntax.mjs` parses
   every page's inline script and is run before each push (adding it to CI needs
   a token with the `workflow` scope).
+
+## 13. Audit remediation — 2026-09-20/21
+
+The same audit that produced §12 also listed every defect it found. What
+followed is the fix pass; detail in `PROGRESS.md`, decisions in ADR-006/007.
+
+**Four migrations (0038–0041), all applied and recorded in `schema_migrations`:**
+
+- A migration ledger, so "applied" is a row rather than a memory — 0030 had
+  reported HTTP 201 for a week while the index it was meant to create did not
+  exist. That skip is now visible on every run of `scripts/check-guards.mjs`;
+  the index itself is still blocked by the three duplicate serial groups
+  (item 10 of §9).
+- Choice validation: `status`/`asset_type`/`location`/`department` must exist in
+  `app_choices` (with `Available` as the status default). Every vocabulary
+  drift of the last month cost a data migration; typos can no longer be typed in.
+- `deleted_at` joined the audit trigger, so binning and restoring an asset now
+  leaves a trail. `item_id` allocation is monotonic and locked (purging the
+  highest id used to re-issue it, handing a new asset the previous one's
+  history and repair costs). Event authorship comes from the JWT and cannot be
+  rewritten.
+- One-transaction writes: `update_asset()` replaced the two-step edit (extra
+  merge, then column patch) that could save half an edit, and
+  `set_user_roles()` replaced the per-checkbox DELETE+INSERT that could empty
+  an account's roles entirely.
+- Mirror policy (ADR-007): a failed row is revived every 15 minutes until it has
+  had 20 attempts, then waits for a person; binned assets are removed from the
+  SharePoint list and re-created on restore; a Graph 404 self-heals instead of
+  poisoning the row; deletes carry their identity in `payload` (the FK nulls
+  `asset_id` the moment the row is written); `done` outbox rows are pruned at
+  90 days, `asset_history` is kept.
+- Storage: `it-documents` is private (signed links in `/admin`), and both
+  buckets are size- and MIME-limited.
+
+**Application side:** a temporary password is now enforced on every page (it
+previously survived a magic-link arrival); audit passes survive a reload and end
+with a list of the codes that missed; delete and bulk-return offer Undo; the
+detail card refreshes after a save; scanning writes one verification per asset
+per pass; `super_admin` is a real role in the `/admin` grid again (one tick used
+to delete it); a failed password reset reports failure; deleting a user no
+longer leaves a sign-in-capable account `/admin` cannot see; Sync health names
+the asset, retries and requeues; a new **Audit** tab records every admin action;
+`scripts/reconcile-mirror.mjs` reports SharePoint ↔ Supabase drift and cleared
+four real orphan items on its first run.
+
+**Verification:** 29/29 migration probes, 10/10 real-API probes, 27/27 view-only
+e2e, 59/59 unit tests, the mirror e2e against production, and the workstreams'
+own browser runs (admin and register sequences in headless Chromium).
+`reconcile-mirror.mjs` now reports the two stores in agreement.

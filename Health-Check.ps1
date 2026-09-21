@@ -52,9 +52,12 @@ $rows = foreach ($i in $items) {
   $tag = Get-FieldV $f 'Asset Tag'
   if (-not $tag) { $tag = $f['Title'] }
   $serial = [string](Get-FieldV $f 'Serial Number')
-  # Placeholder-only serials ("-", "—", "N/A", spaces) count as missing -
-  # otherwise six rows with "-" read as one big duplicate-serial group.
-  if ($serial -match '^[-—.\s]*$' -or $serial -match '^(n/?a)$') { $serial = '' }
+  # Placeholder-only serials ("0000", "-", "—", ".", "N/A", spaces) carry no
+  # identity and count as missing — otherwise a pile of "0000" rows reads as
+  # real serials here while the register and migration 0030 treat them as
+  # placeholders, and the two reports cannot be reconciled. Keep this rule
+  # identical to Xana.isPlaceholderSerial in scanner-app/logic.js.
+  if ($serial -match '^(0{2,}|[-—.\s]*|n/?a)$') { $serial = '' }
   [pscustomobject]@{
     id       = [int]$i.Id
     tag      = [string]$tag

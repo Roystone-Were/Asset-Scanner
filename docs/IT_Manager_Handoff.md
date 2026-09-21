@@ -38,7 +38,7 @@ Phones/desktop ──supabase-js──▶ Supabase Postgres (SOURCE OF TRUTH)
 | `/assets` | `assets/index.html` | asset_viewer, scanner, admin, super_admin | Register, detail, scan, people/offboarding, add |
 | `/dashboard` | `summary/index.html` | dashboard_viewer, admin, super_admin | KPIs, depreciation, health |
 | `/admin` | `admin/index.html` | admin, super_admin | Users, choices, sync health, documents |
-| `/login` | `login/index.html` | public | Sign-in, `must_change_password` flow |
+| `/login` | `login/index.html` | public | Legacy shim — redirects to `/`, which hosts sign-in and the `must_change_password` flow |
 | `/scan` | `vercel.json` 308 | — | Permanent redirect to `/assets` |
 
 API (serverless, service-role, never exposed to browser):
@@ -62,7 +62,7 @@ API (serverless, service-role, never exposed to browser):
 | `choice_usage` | view: how many assets use each choice value, drives the delete warning | inherits caller RLS |
 | `app_config` | misc config incl. `sync_worker_key` | service-role |
 
-Migrations live in `supabase/migrations/0001..0029`, applied via `scripts/apply-migration.mjs`.
+Migrations live in `supabase/migrations/0001..0040`, applied via `scripts/apply-migration.mjs`, which since 0038 records each run in `schema_migrations` (`node scripts/apply-migration.mjs --list`).
 ⚠️ The DB pooler password contains `#` — **percent-encode as `%23`** in `SUPABASE_DB_URL` or clients fail silently.
 
 ---
@@ -159,7 +159,7 @@ Base64 for the secret:
 
 - **Source of truth = Supabase Postgres.** Free tier: enable/verify **Point-in-Time Recovery** or schedule logical dumps (`pg_dump` via pooler) — confirm current backup posture on the Supabase dashboard; free tier has limited retention.
 - **SharePoint mirror is NOT a backup** — it's field-mapped (subset of columns), so it can't fully reconstruct `assets`/`extra`.
-- **Recovery drill (do once, document):** create a throwaway Supabase project → apply migrations `0001..0029` in order → restore a `pg_dump` → verify row counts. Time it. That's your RTO.
+- **Recovery drill (do once, document):** create a throwaway Supabase project → apply every file in `supabase/migrations/` in order → restore a `pg_dump` → verify row counts. Time it. That's your RTO.
 - **RPO** depends on backup schedule; if using only Supabase free-tier daily backups, RPO ≈ 24h.
 
 ---
@@ -174,4 +174,4 @@ Base64 for the secret:
 
 ---
 
-*Reconciled 2026-09-04 against repo state: migrations 0001-0029, api/sharepoint-sync.js, api/admin-users.js, .github/workflows/. Update this file when infra changes.*
+*Reconciled 2026-09-20 against repo state: migrations 0001-0040, api/sharepoint-sync.js, api/admin-users.js, .github/workflows/, scripts/check-guards.mjs. Update this file when infra changes.*
