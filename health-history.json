@@ -28,5 +28,15 @@
     "noSerial": 13,
     "stale": 37,
     "dupSerials": 4
+  },
+  {
+    "generated": "2026-10-01T12:50:29Z",
+    "totalAssets": 231,
+    "clean": 170,
+    "score": 74,
+    "untagged": 0,
+    "noSerial": 33,
+    "stale": 34,
+    "dupSerials": 3
   }
 ]
